@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.2.22 — 2026-07-09
+AI plays get a showcase; the finished board is browsable. No rule changes.
+
+**Opponent plays: card first, result second**
+- When an AI spends an action or rent card, it no longer just happens. The card rises from their panel to centre stage at 1.5×, wearing a gold name tag ("Bazza"), holds for ~0.8s so you can read it, then flies to the pile — and only then does the consequence reach you. A visual lock delays every downstream human-facing step (No Deal prompts, payment mode, the AI's own next play) until the showcase lands, so cause always precedes effect. AI No Deal counters get the same treatment, making interrupt chains fully readable as a card-for-card exchange.
+
+**The win overlay is dismissible**
+- ✕ (or tap outside the card) closes the results and returns you to the final table, fully browsable: inspect sets, open opponent POVs, review the play pile, hold-inspect your remaining hand (hold now works post-game). A gold "Results" pill sits top-right to bring the summary back any time.
+
+**Tests** — 26/26 PASS, 12-run soak; interaction flows 12/12 and drop matrix clean from the repo (showcase timing verified compatible with all chains).
+
 ## v0.2.21 — 2026-07-09
 Win overlay, readable bank, touch polish. No rule changes.
 

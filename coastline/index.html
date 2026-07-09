@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.21
+  Version: 0.2.22
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.21</title>
+<title>Coastline — v0.2.22</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -385,6 +385,29 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .cardw.paysel .card{outline:3px solid var(--warning-amber)}
 #handwrap.dimmed{opacity:.35;pointer-events:none}
 
+/* ---------- AI play showcase ---------- */
+.showcase{position:fixed;z-index:69;pointer-events:none;will-change:transform,opacity;width:102px;height:150px}
+.showcase .card{width:100%;height:100%}
+.scname{
+  position:absolute;top:-26px;left:50%;transform:translateX(-50%);
+  font-family:'Lilita One',cursive;font-size:13px;color:var(--table-night);
+  background:linear-gradient(180deg,#E3C588,var(--gold-money));border-radius:10px;padding:3px 12px;
+  white-space:nowrap;box-shadow:0 2px 6px rgba(8,12,10,.4);
+}
+/* ---------- win dismiss + results pill ---------- */
+#winclose{
+  position:absolute;top:10px;right:12px;font-size:16px;width:30px;height:30px;
+  border-radius:50%;background:rgba(255,255,255,.1);color:var(--text-ivory);
+}
+.wincard{position:relative}
+#winpill{
+  position:fixed;top:calc(54px + env(safe-area-inset-top));right:16px;z-index:59;display:none;
+  font-family:'Lilita One',cursive;font-size:13px;color:var(--table-night);
+  background:linear-gradient(180deg,#E3C588,var(--gold-money));border-radius:18px;padding:7px 14px;
+  box-shadow:0 4px 10px rgba(8,12,10,.45);
+}
+#winpill.show{display:block;animation:promptin .25s ease}
+
 /* ---------- error toast ---------- */
 .errtoast{
   position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
@@ -523,7 +546,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.21</span>
+    <span class="ver">v0.2.22</span>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
   </div>
@@ -577,8 +600,11 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 <div id="inspect" onclick="closeInspect()"></div>
 
-<div id="winscreen">
+<div id="winpill" onclick="reopenWin()">Results</div>
+
+<div id="winscreen" onclick="if(event.target===this)closeWin()">
   <div class="wincard">
+    <button id="winclose" onclick="closeWin()">✕</button>
     <h1 id="wintitle"></h1>
     <p id="winsub"></p>
     <div id="winstats"></div>
@@ -797,6 +823,50 @@ const NEWIDS = new Set();
 function zonePop(sel){ const z=$(sel); if(!z||!z.classList)return; z.classList.remove('zonepop'); void z.offsetWidth; z.classList.add('zonepop'); }
 function flashOpp(idx){ const o=document.querySelectorAll('#opponents .opp')[idx-1]; if(o){ o.classList.add('hit'); setTimeout(()=>o.classList.remove('hit'),700); } }
 function aiDelay(){ return 600 + Math.random()*550; }
+let VISLOCK = 0;
+function visWait(){ return Math.max(0, VISLOCK - Date.now()); }
+function visDefer(fn){ const w = visWait(); if(w < 30) fn(); else setTimeout(fn, w); }
+/* AI showcase: the played card takes centre stage, then flies to the pile */
+function aiShowcase(card, oppIdx){
+  const els = document.querySelectorAll('#opponents .opp');
+  const oppEl = els && els.length ? els[oppIdx-1] : null;
+  if(!oppEl || !oppEl.getBoundingClientRect || !document.body || !document.body.appendChild) return;
+  const r = oppEl.getBoundingClientRect();
+  oppEl.classList.add('aiplay');
+  setTimeout(()=>{ if(oppEl.classList) oppEl.classList.remove('aiplay'); }, 500);
+  const HOLD = 780, FLY = 320;
+  VISLOCK = Date.now() + HOLD + FLY + 180;
+  const f = document.createElement('div');
+  f.className = 'showcase';
+  f.innerHTML = `<div class="scname">${G.players[oppIdx].name}</div>${staticCardHTML(card)}`;
+  f.style.left = (r.left + r.width/2 - 51)+'px';
+  f.style.top = (r.top + r.height - 20)+'px';
+  f.style.transform = 'scale(.32)';
+  f.style.opacity = '0';
+  document.body.appendChild(f);
+  sfx('tick');
+  requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
+    if(!f.style) return;
+    const cx = (window.innerWidth||390)/2 - 51;
+    const cy = (window.innerHeight||760)*0.32 - 75;
+    f.style.transition = 'transform .3s cubic-bezier(.2,1.2,.4,1), opacity .2s, left .3s cubic-bezier(.2,1.2,.4,1), top .3s cubic-bezier(.2,1.2,.4,1)';
+    f.style.left = cx+'px'; f.style.top = cy+'px';
+    f.style.transform = 'scale(1.5)';
+    f.style.opacity = '1';
+  }); });
+  setTimeout(()=>{
+    if(!f.style){ if(f.remove) f.remove(); return; }
+    const pileR = rectOf(document.querySelector('#playpile'));
+    if(pileR){
+      f.style.transition = `transform ${FLY}ms cubic-bezier(.25,.8,.25,1), left ${FLY}ms, top ${FLY}ms, opacity ${FLY}ms`;
+      f.style.left = (pileR.left + (pileR.width||0)/2 - 51)+'px';
+      f.style.top = (pileR.top + (pileR.height||0)/2 - 75)+'px';
+      f.style.transform = 'scale(.14)';
+      f.style.opacity = '.15';
+    }
+    setTimeout(()=>{ if(f.remove) f.remove(); sfx('drop'); }, FLY+40);
+  }, HOLD);
+}
 let prevComplete = new Set();
 const logs = [];
 function log(msg){
@@ -1339,7 +1409,7 @@ document.addEventListener('click', e=>{
 const DRAG = { pend:null, active:false, card:null, clone:null, srcW:null, px0:0, py0:0, zones:[], over:null };
 let SUPPRESSTAP = false;
 document.getElementById('hand').addEventListener('pointerdown', e=>{
-  if(!isMyTurn() || G.over || document.querySelector('#overlay.show')) return;
+  if((!isMyTurn() && !G.over) || document.querySelector('#overlay.show')) return;
   if(MODE.type && MODE.type!=='discard') return;
   const w = e.target.closest ? e.target.closest('.cardw') : null;
   if(!w) return;
@@ -1372,6 +1442,7 @@ document.addEventListener('pointermove', e=>{
     const dx = e.clientX-DRAG.pend.x, dy = e.clientY-DRAG.pend.y;
     const dist = Math.hypot(dx,dy);
     if(dist > 8) clearTimeout(HOLDT);
+    if(G.over){ if(dist > 8){ unpress(); DRAG.pend = null; } return; } // post-game: hold-inspect only
     if(MODE.type){ if(dist > 10){ unpress(); DRAG.pend = null; } return; } // modes: taps only
     // raised card: already committed to it — any direction picks it up
     if(DRAG.pend.raised && dist > 6){ startDrag(e); return; }
@@ -1411,7 +1482,7 @@ document.addEventListener('pointerup', e=>{
   if(DRAG.pend && !DRAG.active){
     const pend = DRAG.pend; DRAG.pend = null;
     const dist = Math.hypot(e.clientX-pend.x, e.clientY-pend.y);
-    if(dist < 8){
+    if(dist < 8 && !G.over){
       toggleSelect(pend.c.id);           // instant response on finger lift
       SUPPRESSTAP = true;                 // swallow the trailing click
       setTimeout(()=>{ SUPPRESSTAP=false; }, 400);
@@ -1640,7 +1711,7 @@ function startTurn(){
   banner(p.isAI ? p.name.toUpperCase()+"'S TURN" : 'YOUR TURN', p.isAI ? null : 'var(--gold-money)');
   if(!p.isAI){ sfx('tick'); haptic(8); }
   renderAll();
-  if(p.isAI) setTimeout(()=>aiStep(p), aiDelay());
+  if(p.isAI) setTimeout(()=>aiStep(p), Math.max(aiDelay(), visWait()+150));
 }
 function usePlay(){
   G.playsLeft--;
@@ -1665,6 +1736,14 @@ function checkAllWin(){
     }
   }
   return false;
+}
+function closeWin(){
+  $('#winscreen').classList.remove('show');
+  $('#winpill').classList.add('show');
+}
+function reopenWin(){
+  $('#winpill').classList.remove('show');
+  $('#winscreen').classList.add('show');
 }
 $('#endturn').onclick = ()=>{ if(isMyTurn() && !DRAG.active) endTurn(); };
 function endTurn(){
@@ -1898,12 +1977,14 @@ function resolveBlock(defIdx, atkIdx, desc, cb){
     if(!hasNoDeal(p)) return cb(count%2===1);
     if(p.isAI){
       if(Math.random() < (count===0?0.7:0.85)){
-        takeNoDeal(p); log(p.name+' played No Deal!');
+        const nd = takeNoDeal(p); log(p.name+' played No Deal!');
+        if(aIdx>0) aiShowcase(nd, aIdx);
         renderAll();
-        setTimeout(()=>chain(bIdx,aIdx,count+1), 700);
+        setTimeout(()=>chain(bIdx,aIdx,count+1), Math.max(700, visWait()+200));
       } else cb(count%2===1);
       return;
     }
+    visDefer(()=>{
     sfx('alert'); haptic([10,50,10]);
     const nds = p.hand.filter(x=>x.t==='action'&&x.kind==='nodeal').length;
     const msg = count===0
@@ -1915,6 +1996,7 @@ function resolveBlock(defIdx, atkIdx, desc, cb){
         <button class="optbtn primary" onclick="window._jsn(true)">Play No Deal! ${count===0?'— cancel it':'— counter back'}</button>
         <button class="optbtn" onclick="window._jsn(false)">Let it happen</button>
       </div>`, true);
+    });
     window._jsn = (use)=>{
       closeSheet();
       if(use){ takeNoDeal(p); log('You played No Deal!'); renderAll(); chain(bIdx,aIdx,count+1); }
@@ -1968,8 +2050,8 @@ function requestPayment(payerIdx, amount, receiverIdx, done){
     if(receiverIdx===0){ sfx('coin'); zonePop('#mybank'); }
     return done();
   }
-  // human payer: pick straight from your table and bank
-  enterPayMode(amount, receiverIdx, done);
+  // human payer: pick straight from your table and bank (after any showcase lands)
+  visDefer(()=>enterPayMode(amount, receiverIdx, done));
 }
 function processQueue(idxs, perFn, done){
   const q=[...idxs];
@@ -2085,7 +2167,7 @@ function spendAI(c,p){ // for consumed action/rent cards: hand -> discard
   if(i>-1) p.hand.splice(i,1);
   G.discard.push(c); G.playsLeft--;
   tableDrop(c, p.name);
-  aiPlayVis(c);
+  aiShowcase(c, G.turn);
 }
 function playFromHandAI(c,p){ // for cards that stay in play (props, banked, buildings)
   const i=p.hand.findIndex(x=>x.id===c.id);
@@ -2121,7 +2203,7 @@ function aiWildColor(p,c){
 function aiStep(p){
   if(G.over) return;
   const idx=G.turn;
-  const next=()=>{ if(G.over) return; renderAll(); setTimeout(()=>aiStep(p),aiDelay()); };
+  const next=()=>{ if(G.over) return; renderAll(); setTimeout(()=>aiStep(p), Math.max(aiDelay(), visWait()+150)); };
   if(G.playsLeft<=0) return endTurn();
 
   // 1. plain property
