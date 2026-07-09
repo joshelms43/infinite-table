@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.4.5 — 2026-07-09
+Trainer hotfix: the other side of the eval-scope trap. No gameplay changes.
+
+- v0.4.4 fixed the worker side (engine consts invisible *outside* the eval) — this releases the main-thread side of the same trap: the page does `eval(trainer-logic)` and calls the helpers from outside it, and in a direct eval function *declarations* leak to the caller but `const`/`let` do **not**. `cfg`, `pct`, `clone` and `shareOf` were const arrows, so every render crashed with "cfg is not defined" (games kept playing; the dashboard died and dispatch eventually starved). All shared-logic helpers are now function declarations, in both tests/trainer.body.js and the page — still verbatim twins.
+- The lesson is now enforced, not remembered: `npm run test:trainer` gained a third part that evals the page's trainer-logic block in a function scope and asserts every helper the main script touches survives to the outside (12 API checks + a working-smoke), alongside the worker-boot simulation and the bit-parity run. 20/20 PASS. A const sneaking back into the shared block fails CI-style before it can ship.
+
+**Tests** — 33/33 PASS, flows 12/12, drops clean, trainer sanity 6/6, trainer parity 20/20.
+
+
 ## v0.4.4 — 2026-07-09
 Trainer hotfix + spectator dashboard. No gameplay changes, no efficiency cost.
 

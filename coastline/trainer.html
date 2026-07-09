@@ -211,7 +211,7 @@ const DEFAULTS = {
 };
 const GENE_MIN = 0.01;
 const CONFIRM_SEED_BASE = 10000000; // confirmation seeds never overlap search seeds
-const cfg = S => Object.assign({}, DEFAULTS, S.config||{});
+function cfg(S){ return Object.assign({}, DEFAULTS, S.config||{}); } // function decl — must survive direct eval on the page's main thread
 
 function mulberry32(seed){
   let s = (seed>>>0) + 0x9E3779B9;
@@ -236,8 +236,8 @@ function clusterStat(perSeedValues){ // seed-clustered mean ± 95% CI
   const v = xs.reduce((a,x)=>a+(x-m)*(x-m),0)/(n-1);
   return { m, ci: 1.96*Math.sqrt(v/n), n };
 }
-const pct = x => (x*100).toFixed(1)+'%';
-const clone = w => JSON.parse(JSON.stringify(w));
+function pct(x){ return (x*100).toFixed(1)+'%'; }
+function clone(w){ return JSON.parse(JSON.stringify(w)); }
 function sampleCandidate(mean, sigma, gen, k){ // deterministic in (gen,k) — resume-safe
   const rand = mulberry32(0x5EED ^ (gen*2654435761>>>0) ^ (k*40503));
   const g = {};
@@ -273,7 +273,7 @@ function migrate(S, logFn){ // v1 (pre-rung) -> v2: keep the run, restart the op
   return S;
 }
 function evalRec(genome){ return {genome, active:true, seedsDone:0, cW:0, kW:0, shares:[]}; }
-const shareOf = rec => clusterStat(rec.shares);
+function shareOf(rec){ return clusterStat(rec.shares); }
 function commitBlock(S, rec, res){ // apply one seed block's result (in seed order)
   rec.cW += res.cW; rec.kW += res.kW;
   rec.shares.push((res.cW+res.kW)>0 ? res.cW/(res.cW+res.kW) : null);

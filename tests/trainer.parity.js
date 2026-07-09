@@ -92,5 +92,25 @@ if(ready){
   check('block replay is deterministic', !!r1 && !!r2 && r1.cW===r2.cW && r1.kW===r2.kW);
 }
 
+/* ---------- part 3: main-thread eval scope (the v0.4.4 regression) ----------
+   The page's main script does `eval(trainer-logic)` and then calls the helpers from
+   OUTSIDE the eval. In a direct eval, function declarations leak to the caller's
+   scope but const/let do NOT — so every helper the main script touches must be a
+   function declaration. cfg/pct/clone/shareOf were const arrows once; every page
+   load crashed in render() with "cfg is not defined". */
+const MAIN_API = ['cfg','pct','clone','shareOf','advance','needsGames','makeCommitBuffer','migrate','freshState','evalRec','commitBlock','sampleCandidate'];
+const mainScope = (function(){
+  eval(logic);
+  const out = {};
+  MAIN_API.forEach(n=>{ try{ out[n] = eval('typeof '+n); }catch(e){ out[n]='error'; } });
+  let smoke = false;
+  try{ smoke = typeof cfg({}).LAMBDA==='number' && pct(0.5)==='50.0%' && typeof shareOf({shares:[0.5,0.5]}).m==='number'; }catch(e){}
+  return {out, smoke};
+})();
+MAIN_API.forEach(n=>{
+  check("main-thread eval exposes '"+n+"' (function declaration, not const)", mainScope.out[n]==='function');
+});
+check('main-thread helpers work outside the eval (cfg/pct/shareOf smoke)', mainScope.smoke);
+
 console.log(fails===0 ? 'ALL TRAINER PARITY TESTS PASS' : 'FAILURES: '+fails);
 process.exit(fails===0?0:1);
