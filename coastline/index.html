@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.3.0
+  Version: 0.3.1
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.3.0</title>
+<title>Coastline — v0.3.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -596,7 +596,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.3.0</span>
+    <span class="ver">v0.3.1</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -2390,8 +2390,8 @@ function doTakeover(fromIdx,toIdx,color){
 
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
-const SUPABASE_URL = '';   // <- paste project URL
-const SUPABASE_ANON = '';  // <- paste anon public key
+const SUPABASE_URL = 'https://spkhqgzgnzeeizxrycjq.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwa2hxZ3pnbnplZWl6eHJ5Y2pxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1ODE1MzEsImV4cCI6MjA5OTE1NzUzMX0.dMdqx-KJ7uXEKwln2SSdCDi-N9QBRo5aSJyQTjL8Pv4';
 
 const NET = {
   mode: 'off',           // 'off' | 'lobby-host' | 'joining' | 'host' | 'client'

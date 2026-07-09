@@ -1,5 +1,10 @@
 # Coastline — Changelog
 
+## v0.3.1 — 2026-07-09
+Online is live: Supabase project keys wired (anon public key — safe to ship client-side; rooms are pure Realtime channels, no database access to protect).
+
+**Tests** — 41/41 PASS.
+
 ## v0.3.0 — 2026-07-09
 Online multiplayer. Host-authoritative, Supabase Realtime, 2-4 humans.
 
