@@ -1,5 +1,23 @@
 # Coastline — Changelog
 
+## v0.4.8 — 2026-07-09
+Strength experiment logged: turn-sequence planning (roadmap item 2) is a NULL — measured, not vibes. No behaviour changes; the code lives on branch `seqplan-experiment`, unmerged per the measurement standard.
+
+**What was built**
+A beam-search turn planner inside the AI section: clone the position, apply each candidate's expected effect silently (payments value-split, JSN-discounted), search ordered sequences up to the remaining plays, execute only the first play, re-plan. Three iterations, each ladder-tested against v0.4.7 with paired seeds:
+
+1. **Positional-evaluator scoring (V): 42.8% ± 3.0pp — significantly worse** (n=1,002). An uncalibrated hand-built evaluator loses to the tuned greedy heuristics; depth cannot rescue a worse judge.
+2. **Sum-of-tuned-evs scoring: 45.7% ± 2.8pp — still worse** (n=1,002). Diagnosis via a 15-game disagreement trace: the heuristic evs are not additive rewards, so the search *games* them — banking cards to shrink the hand so payday's low-hand bonus fires, reordering ties to harvest state-dependent bumps. Goodhart inside the search. (A real bug fell out too: the move-dedup key collapsed all dual rents/wilds into one, making the planner sometimes play the wrong rent card — deviation rate dropped 6.0%→0.7% once fixed.)
+3. **Guarded override — greedy by default, deviate only for a physically real combo** (a sequence containing a rent whose charge grew vs the root position, clearing the best greedy-first sequence by a margin): **exploratory 50.6% ± 0.7pp (n=3,000), then a pre-committed fresh-seed confirmation: 49.9% ± 0.8pp (n=3,000) — null.** The exploratory lean was winner's curse; the two-stage protocol caught it, same as the trainer's promotion gate.
+
+**What this buys the roadmap**
+- Within-turn ordering is close to value-neutral in Coastline at this level: greedy-with-re-evaluation already captures nearly all of it (the profitable reordering fires on ~0.7% of decisions and washes out in the luck). Item 2 is now measured and closed — future sessions shouldn't re-explore it.
+- The strength gaps must live elsewhere: opponent-response awareness (item 3), defence quality (payments/JSN, item 6), and information exploitation via determinized rollouts (item 4) — the sim layer built here (state clone, expected-effect apply, silent fast play) is exactly the plumbing ISMCTS needs, waiting on the branch.
+- Methodology note for the future: at 0.7% behavioural divergence the paired ladder resolves ±0.7pp with just 3,000 games — tiny true effects are measurable, and still weren't there.
+
+**Tests** — on this (unchanged) engine: 33/33 PASS, flows 12/12, drops clean, trainer sanity 6/6, trainer parity 27/27. The branch additionally carries the planner's combo-ordering assertions (35/35 there).
+
+
 ## v0.4.7 — 2026-07-09
 Trainer: fix the overnight slowdown — an O(n²) leak in the engine logger. No gameplay changes.
 
