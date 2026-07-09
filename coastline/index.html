@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.28
+  Version: 0.2.29
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.28</title>
+<title>Coastline — v0.2.29</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -557,7 +557,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.28</span>
+    <span class="ver">v0.2.29</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -620,7 +620,6 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <h1 id="wintitle"></h1>
     <p id="winsub"></p>
     <div id="winstats"></div>
-    <button onclick="openReview()" style="background:linear-gradient(180deg,#E3C588,var(--money-gold));color:var(--table-night);box-shadow:0 3px 10px rgba(151,112,44,.4)">Game review</button>
     <button onclick="location.reload()">Play again</button>
   </div>
 </div>
@@ -706,7 +705,6 @@ const G = {
 function newGame(){
   G.deck = shuffle(buildDeck());
   G.discard = [];
-  G.review = [];
   G.players = [
     {name:'You',   isAI:false, hand:[], bank:[], props:{}, bldg:{}},
     {name:'Bazza', isAI:true,  hand:[], bank:[], props:{}, bldg:{}},
@@ -1441,7 +1439,6 @@ document.addEventListener('click', e=>{
     if(zone.el.classList){ zone.el.classList.add('snapped'); setTimeout(()=>zone.el.classList&&zone.el.classList.remove('snapped'),300); }
     haptic(12);
     playFlight(played, srcRect, zone.el, 4);
-    recordHumanPlay(played, zone);
     zone.act();
     return;
   }
@@ -1519,7 +1516,6 @@ function doDrop(zone){
   haptic(14);
   finishDrag(true);
   playFlight(played, srcRect, zone.el, tilt);
-  recordHumanPlay(played, zone);
   zone.act();
 }
 document.addEventListener('pointerup', e=>{
@@ -1599,56 +1595,7 @@ function nearestZone(cx, cy, maxDist){
   }
   return best;
 }
-let REVIEW_SNAP = null;
-function snapReview(c){
-  try{
-    if(!isMyTurn() || G.playsLeft<=0) { REVIEW_SNAP=null; return; }
-    REVIEW_SNAP = { cardId: c.id, cands: brainCandidates(me(), 0, ()=>{}).map(x=>({ev:x.ev, label:x.label||'', cardId:x.cardId, mode:x.mode})) };
-  }catch(e){ REVIEW_SNAP=null; }
-}
-function recordHumanPlay(card, zone){
-  try{
-    if(!REVIEW_SNAP || REVIEW_SNAP.cardId!==card.id || !isMyTurn()) return;
-    const mode = (zone && zone.el && zone.el.id==='mybank') ? 'bank' : 'play';
-    const mine = REVIEW_SNAP.cands.filter(x=>x.cardId===card.id && x.mode===mode);
-    const chosen = mine.length ? mine.reduce((a,b)=>a.ev>b.ev?a:b) : {ev:0.4, label:cardName(card)+(mode==='bank'?' (banked)':'')};
-    const best = REVIEW_SNAP.cands.reduce((a,b)=>a.ev>b.ev?a:b, {ev:0.4, label:'—'});
-    G.review.push({ t:G.turnCount, chosen:chosen.label, ce:+Math.min(chosen.ev,20).toFixed(1), best:best.label, be:+Math.min(best.ev,20).toFixed(1), win:best.ev>=1000&&chosen.ev>=1000 });
-    REVIEW_SNAP = null;
-  }catch(e){}
-}
-function classifyMove(m){
-  if(m.win || m.ce >= m.be-0.05) return ['Best','var(--success-green)'];
-  const r = m.ce/Math.max(0.1,m.be);
-  if(r>=0.7) return ['Good','var(--text-ivory)'];
-  if(r>=0.4) return ['Inaccuracy','var(--warning-amber)'];
-  if(r>=0.15) return ['Mistake','var(--primary-coral)'];
-  return ['Blunder','var(--danger-red)'];
-}
-function gameAccuracy(){
-  if(!G.review.length) return null;
-  const s = G.review.reduce((a,m)=>a+Math.min(1, m.ce/Math.max(0.1,m.be)), 0);
-  return Math.round(100*s/G.review.length);
-}
-function openReview(){
-  const acc = gameAccuracy();
-  const rows = G.review.map(m=>{
-    const [cls,colr] = classifyMove(m);
-    return `<div style="border-bottom:1px solid var(--line-soft);padding:8px 0">
-      <div style="display:flex;justify-content:space-between;gap:10px">
-        <span style="font-weight:800;font-size:13px">${m.chosen}</span>
-        <span style="font-weight:800;font-size:12px;color:${colr};flex:0 0 auto">${cls}</span>
-      </div>
-      ${cls!=='Best'?`<div class="sub" style="margin-top:2px">Best: ${m.best} (${m.be} vs ${m.ce}) · turn ${m.t}</div>`:`<div class="sub" style="margin-top:2px">turn ${m.t}</div>`}
-    </div>`;
-  }).join('');
-  openSheet(`<h3>Game review</h3>
-    <div class="sub">${acc===null?'No recorded moves this game.':`Accuracy: <b style="color:var(--money-gold)">${acc}%</b> · ${G.review.length} plays evaluated by the engine`}</div>
-    <div style="max-height:46vh;overflow-y:auto;margin-top:6px">${rows||''}</div>
-    <button class="optbtn" onclick="closeSheet()">Close</button>`);
-}
 function buildZones(c){
-  snapReview(c);
   DRAG.zones = [];
   const free = G.playsLeft > 0;
   const add = (el, act, hint) => { if(!el) return; el.classList.add('droppable'); DRAG.zones.push({ el, act, hint, rect: inflate(el.getBoundingClientRect(), 22) }); };

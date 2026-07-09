@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.2.29 — 2026-07-09
+Review parked; engine-project handoff.
+
+- The game-review recording and UI (v0.2.28) are removed pending a dedicated engine-strength project — review will return once the engine is strong enough to be a trustworthy judge. The valuable piece stays: brainCandidates(player) remains the shared, metadata-carrying evaluator (with test coverage), which is exactly the hook the engine project builds on.
+- New: docs/ENGINE_PROJECT.md — the full project prompt for the "strongest Monopoly Deal engine" chat: codebase map, everything already learned (including the 10k-game null tuning result and harness quirks), the strength roadmap (benchmark ladder → sequence search → danger terms → determinized Monte Carlo → opponent pools), and the measurement standard for what counts as a real improvement.
+
+**Tests** — 33/33 PASS.
+
 ## v0.2.28 — 2026-07-09
 Game review foundations — the engine now judges your play, chess.com style.
 

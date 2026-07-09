@@ -120,24 +120,15 @@ G.turn = 2; G.playsLeft = 3; G.over = false;
 aiStep(sharp);
 T('AI takes the winning line instantly', G.over===true && completeColors(sharp).length===3);
 
-// ===== REVIEW ENGINE assertions =====
+// (review assertions parked with the feature; brainCandidates evaluator coverage below)
 newGame();
 G.turn=0; G.playsLeft=3;
 const hum = G.players[0];
 hum.hand = [{id:96001,t:'money',v:5},{id:96002,t:'prop',color:'teal',name:'T',v:3}];
 hum.props={}; hum.bldg={}; hum.bank=[];
 const cands = brainCandidates(hum, 0, ()=>{});
-T('evaluator scores human options (bank + play present)',
+T('shared evaluator scores any player (bank + play candidates)',
   cands.some(x=>x.mode==='bank'&&x.cardId===96001) && cands.some(x=>x.mode==='play'&&x.cardId===96002) && cands.every(x=>x.ev>0));
-REVIEW_SNAP = { cardId: 96001, cands: [
-  {ev:5, label:'Bank $5M', cardId:96001, mode:'bank'},
-  {ev:8, label:'Play Teal', cardId:96002, mode:'play'},
-]};
-recordHumanPlay({id:96001}, {el:{id:'mybank'}});
-T('human play recorded with best-vs-chosen', G.review.length===1 && G.review[0].ce===5 && G.review[0].be===8);
-const cls = classifyMove(G.review[0]);
-T('classification thresholds sane (5/8 -> Inaccuracy)', cls[0]==='Inaccuracy');
-T('accuracy computed', gameAccuracy()===Math.round(100*(5/8)));
 
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
