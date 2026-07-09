@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.26
+  Version: 0.2.27
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.26</title>
+<title>Coastline — v0.2.27</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -557,7 +557,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.26</span>
+    <span class="ver">v0.2.27</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -2093,7 +2093,8 @@ function requestPayment(payerIdx, amount, receiverIdx, done){
     payer.bank.forEach(c=>items.push({c, v:c.v, pen:0, bank:true}));
     propList(payer).forEach(x=>{
       const n=countIn(payer,x.color), size=COLORS[x.color].size;
-      let pen = isComplete(payer,x.color) ? 9 : (n===size-1 ? 5 : 2.5);
+      const PW = wOf(payer);
+      let pen = isComplete(payer,x.color) ? PW.pay_complete : (n===size-1 ? PW.pay_near : PW.pay_base);
       if(x.card.t!=='prop') pen += 2; // wilds are flexible — keep them
       if(x.card.t==='prop'){
         const rn=countIn(receiver,x.color);
@@ -2276,6 +2277,19 @@ function aiWildColor(p,c){
   return best;
 }
 /* ================= AI BRAIN: card counting + EV decisions ================= */
+const AI_W = {
+  pg_complete: 9, pg_near: 5, pg_base: 2.4,
+  wild_dead: 0.35,
+  tk_base: 10, tk_val: 0.4, tk_hold: 0.5,
+  rent_eff: 0.9, hike_cost: 2.2,
+  sw_gain: 0.9, sw_loss: 0.6, sw_v: 0.25,
+  swap_min: 1.5,
+  pd_base: 4.6, pd_low: 1.5, pd_high: 2.5,
+  bank_v: 0.25,
+  jsn_burn: 2.5, jsn_margin: 0.5,
+  pay_complete: 9, pay_near: 5, pay_base: 2.5,
+};
+function wOf(q){ return (q && q.tuneW) || AI_W; }
 function keyOf(c){
   if(c.t==='money') return 'm'+c.v;
   if(c.t==='prop') return 'p:'+c.color;
@@ -2323,10 +2337,11 @@ function colorSupply(p, color, selfIdx){
   return (un.m['p:'+color]||0) + p.hand.filter(c=>c.t==='prop'&&c.color===color).length;
 }
 function progressGain(p, color){
+  const W = wOf(p);
   const n = countIn(p,color), size = COLORS[color].size;
   if(n>=size) return 0;
-  if(n===size-1) return completeColors(p).length>=2 ? 1000 : 9;
-  return n===size-2 ? 5 : 2.4;
+  if(n===size-1) return completeColors(p).length>=2 ? 1000 : W.pg_complete;
+  return n===size-2 ? W.pg_near : W.pg_base;
 }
 function liquidOf(q){ return payAssetsTotal(q); }
 function threatOf(t){
@@ -2337,7 +2352,7 @@ function threatOf(t){
 }
 function jsnAdjusted(ev, defIdx, selfIdx){
   const pj = pHoldsAtLeastOne('a:nodeal', defIdx, selfIdx);
-  return ev*(1-pj) + 2.5*pj; // forcing out their No Deal has value too
+  return ev*(1-pj) + wOf(G.players[selfIdx]).jsn_burn*pj; // forcing out their No Deal has value too
 }
 function aiShouldJSN(p, defIdx, atkIdx, desc, count){
   if(!p.hand.some(x=>x.t==='action'&&x.kind==='nodeal')) return false;
@@ -2350,7 +2365,7 @@ function aiShouldJSN(p, defIdx, atkIdx, desc, count){
   const attackerNearWin = completeColors(G.players[atkIdx]).length>=2;
   if(desc==='Hostile Takeover') return true; // never surrender a set unprotested
   if(attackerNearWin && (desc==='Sneaky Swipe'||desc==='Rent')) return true;
-  return loss*(1-pCounter) - jsnValue*0.6 > 0.5;
+  return loss*(1-pCounter) - jsnValue*0.6 > wOf(p).jsn_margin;
 }
 function keepScore(c, p){
   if(c.t==='action'){
@@ -2390,7 +2405,7 @@ function aiStep(p){
     const col = aiWildColor(p,c);
     if(col && (c.t==='wild' || countIn(p,col)>0)){
       const need = COLORS[col].size - countIn(p,col) - 1;
-      const odds = colorSupply(p,col,idx) >= need ? 1 : 0.35;
+      const odds = colorSupply(p,col,idx) >= need ? 1 : wOf(p).wild_dead;
       add(progressGain(p,col)*odds*0.95, ()=>{
         playFromHandAI(c,p); addProp(p,c,col);
         log(p.name+' played a wild into '+COLORS[col].label+'.');
@@ -2410,8 +2425,8 @@ function aiStep(p){
     if(best){
       const winNow = completeColors(p).length>=2;
       const urgent = completeColors(G.players[best.t]).length>=2;
-      let ev = winNow ? 1000 : jsnAdjusted(10 + best.val*0.4, best.t, idx);
-      if(!winNow && !urgent && G.turnCount<4) ev *= 0.5; // hold it early
+      let ev = winNow ? 1000 : jsnAdjusted(wOf(p).tk_base + best.val*wOf(p).tk_val, best.t, idx);
+      if(!winNow && !urgent && G.turnCount<4) ev *= wOf(p).tk_hold; // hold it early
       add(ev, ()=>{
         spendAI(tk,p); renderAll();
         log(p.name+' launched a Hostile Takeover on '+(best.t===0?'your':G.players[best.t].name+"'s")+' '+COLORS[best.col].label+' set!');
@@ -2434,10 +2449,10 @@ function aiStep(p){
     const targets = c.t==='rentall'
       ? [enemies.slice().sort((a,b)=>liquidOf(G.players[b])-liquidOf(G.players[a]))[0]]
       : enemies;
-    const collect = amt => targets.reduce((s,t)=>s+jsnAdjusted(Math.min(amt, liquidOf(G.players[t]))*0.9, t, idx), 0);
+    const collect = amt => targets.reduce((s,t)=>s+jsnAdjusted(Math.min(amt, liquidOf(G.players[t]))*wOf(p).rent_eff, t, idx), 0);
     const hike = p.hand.find(x=>x.t==='action'&&x.kind==='hike');
     add(collect(bo.r), ()=>runRent(c,bo,targets,null));
-    if(hike && G.playsLeft>=2) add(collect(bo.r*2)-2.2, ()=>runRent(c,bo,targets,hike));
+    if(hike && G.playsLeft>=2) add(collect(bo.r*2)-wOf(p).hike_cost, ()=>runRent(c,bo,targets,hike));
   });
   function runRent(c,bo,targets,hike){
     let amount = bo.r;
@@ -2462,7 +2477,7 @@ function aiStep(p){
       const q=G.players[t];
       const myGain = x.card.t==='prop' ? progressGain(p,x.color) : 3;
       const theirLoss = (countIn(q,x.color)===COLORS[x.color].size-1 ? 4 : 1.5) + countIn(q,x.color)*0.6;
-      const ev = jsnAdjusted(myGain*0.9 + theirLoss*0.6 + x.card.v*0.25, t, idx);
+      const ev = jsnAdjusted(myGain*wOf(p).sw_gain + theirLoss*wOf(p).sw_loss + x.card.v*wOf(p).sw_v, t, idx);
       if(!best||ev>best.ev) best={t,x,ev};
     }));
     if(best) add(best.ev, ()=>{
@@ -2490,7 +2505,7 @@ function aiStep(p){
         const theirGain = countIn(q,mx.color)===COLORS[mx.color].size-1 ? 6 : 1.5;
         const theirLoss = countIn(q,x.color)===COLORS[x.color].size-1 ? 4 : 1.5;
         const net = myGain - myLoss + theirLoss - theirGain;
-        if(net>1.5){
+        if(net>wOf(p).swap_min){
           const ev = jsnAdjusted(net, t, idx);
           if(!best||ev>best.ev) best={t,x,mx,ev};
         }
@@ -2543,7 +2558,7 @@ function aiStep(p){
 
   // payday — draw equity, hand-size aware
   const pd = p.hand.find(c=>c.t==='action'&&c.kind==='payday');
-  if(pd) add(4.6 + (p.hand.length<=3?1.5:0) - (p.hand.length>=7?2.5:0), ()=>{
+  if(pd) add(wOf(p).pd_base + (p.hand.length<=3?wOf(p).pd_low:0) - (p.hand.length>=7?wOf(p).pd_high:0), ()=>{
     spendAI(pd,p); const a=draw(),b=draw(); if(a)p.hand.push(a); if(b)p.hand.push(b);
     log(p.name+' played Payday.'); next();
   });
@@ -2562,7 +2577,7 @@ function aiStep(p){
 
   // banking — money, then spare cards
   const mn = [...p.hand].filter(c=>c.t==='money').sort((a,b)=>b.v-a.v)[0];
-  if(mn) add(0.8 + mn.v*0.25, ()=>{ playFromHandAI(mn,p); p.bank.push(mn); log(p.name+' banked some money.'); next(); });
+  if(mn) add(0.8 + mn.v*wOf(p).bank_v, ()=>{ playFromHandAI(mn,p); p.bank.push(mn); log(p.name+' banked some money.'); next(); });
   const spare = [...p.hand].filter(c=>(c.t==='action'&&c.kind!=='nodeal')||c.t==='rent'||c.t==='rentall').sort((a,b)=>keepScore(a,p)-keepScore(b,p))[0];
   if(spare) add((G.playsLeft<3?0.7:0.45) + spare.v*0.08, ()=>{ playFromHandAI(spare,p); p.bank.push(spare); log(p.name+' banked a card.'); next(); });
 

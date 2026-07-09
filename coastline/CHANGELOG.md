@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.2.27 — 2026-07-09
+AI genome + self-play trainer. Default play unchanged (deliberately — see below).
+
+**Genome extraction**
+- All 22 judgment constants in the AI brain (set-progress values, Deal Breaker hold factor, rent efficiency, JSN margins, payment penalties, etc.) now live in one AI_W object, threaded per-player via tuneW — any player can run any genome, which is what makes self-play training possible.
+
+**Self-play trainer (tests/train.js)**
+- Evolutionary loop: mutants play full headless games (~40ms each) against the reigning champion with seat rotation, champion replaced only above a win-rate threshold, checkpointed every generation. `npm run train` / `npm run train:validate`.
+
+**The honest result**
+- ~13 generations, 10,000+ games: the evolved genome validated at 34.3% ± 4.5pp against defaults over 420 games — statistically flat. Per-generation "improvements" were winner's-curse noise. Conclusion: the strength came from the v0.2.26 structure (counting, EV, exact payments); the constants were already near a local optimum, and Deal's luck swamps ±30% weight changes in mirror matches. Defaults therefore retained.
+- What finding real gains would take (documented for future sessions): paired-seat variance reduction, 1,000+ games per evaluation, CMA-ES over naive mutation, and/or training against exploitable styles rather than mirrors.
+
+**Tests** — 32/32 PASS with the genome refactor.
+
 ## v0.2.26 — 2026-07-09
 Expert AI: card counting, probability, and EV decisions. Bazza and Shaz got smart.
 
