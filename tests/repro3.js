@@ -1,7 +1,7 @@
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const errors = [];
-const dom = new JSDOM(fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8'), { runScripts:'dangerously', pretendToBeVisual:true, url:'https://localhost/' });
+const dom = new JSDOM(fs.readFileSync(require('path').join(__dirname,'..','coastline','index.html'),'utf8'), { runScripts:'dangerously', pretendToBeVisual:true, url:'https://localhost/' });
 const win = dom.window;
 win.addEventListener('error', e => errors.push((e.message||'?')+':'+(e.lineno||'?')));
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
