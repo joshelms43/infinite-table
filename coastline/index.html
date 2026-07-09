@@ -3210,6 +3210,279 @@ function brainCandidates(p, idx, next){
 
   return C;
 }
+/* ---------- turn-sequence planning (v0.5.0): beam search over ordered plays ----------
+   The greedy picker chooses the best SINGLE play three times; it cannot see combos —
+   complete-the-set THEN charge its (higher) rent, wild-then-complete ordering, hike
+   timing. planTurn() clones the position, applies each candidate's EXPECTED effect
+   silently, and beam-searches ordered sequences up to the remaining plays.
+   Sequences are scored with THE SAME tuned ev formulas the greedy picker uses
+   (progressGain, jsnAdjusted-style No Deal discounting, rent vs real liquidity, the
+   AI_W genome throughout) — each move's ev is just recomputed in the SIMULATED state
+   where it would be played, and the sequence score is the sum. At depth 1 this is
+   exactly the greedy choice, so planning can only differ where ordering matters.
+   aiStep executes the FIRST play of the best sequence then re-plans; execution goes
+   through the interactive candidate closures above — selection changes, rules never.
+   Engine helpers (countIn, rentFor, propList, completeColors, payAssetsTotal,
+   progressGain, keepScore, aiWildColor) are pure over a player object, so cloned
+   players run through the real scoring code. */
+const BEAM_W = 6, SEQ_DEPTH = 3, EV_GATE = 0.4; // EV_GATE mirrors the greedy add() threshold
+
+function simClone(players){ return JSON.parse(JSON.stringify(players)); }
+function simAddProp(q, card, color){ if(!q.props[color]) q.props[color]=[]; q.props[color].push(card); }
+function simTakeCard(q, id){ const i=q.hand.findIndex(c=>c.id===id); return i>-1 ? q.hand.splice(i,1)[0] : null; }
+function simPay(q, rcv, amount){ // expected payment: bank ascending, then props (incomplete colours first) ascending
+  let owed = amount;
+  [...q.bank].sort((a,b)=>a.v-b.v).forEach(c=>{
+    if(owed<=0) return;
+    const i=q.bank.findIndex(x=>x.id===c.id);
+    if(c.v <= owed){ q.bank.splice(i,1); rcv.bank.push(c); owed -= c.v; }
+    else { // expected-value sim may split a note — real payments can't, but whole-card
+           // transfers here would erase the value differences ordering decisions hinge on
+      q.bank[i] = {t:'money', v:+(c.v-owed).toFixed(2), id:String(c.id)+'r'};
+      rcv.bank.push({t:'money', v:+owed.toFixed(2), id:String(c.id)+'p'});
+      owed = 0;
+    }
+  });
+  if(owed>0){
+    const order = propList(q).filter(x=>!isComplete(q,x.color)).sort((a,b)=>a.card.v-b.card.v)
+      .concat(propList(q).filter(x=>isComplete(q,x.color)).sort((a,b)=>a.card.v-b.card.v));
+    for(const x of order){
+      if(owed<=0) break;
+      const arr = q.props[x.color]; const i = arr ? arr.findIndex(c=>c.id===x.card.id) : -1;
+      if(i>-1){
+        arr.splice(i,1); if(!arr.length) delete q.props[x.color];
+        if(x.card.t==='prop') simAddProp(rcv, x.card, x.color); else rcv.bank.push(x.card);
+        owed -= Math.max(1, x.card.v);
+      }
+    }
+  }
+}
+// Moves carry the greedy picker's own ev, recomputed against the simulated position.
+function simMoves(sim, idx){
+  const me = sim.players[idx], W = wOf(me), moves = [];
+  const enemies = sim.players.map((_,i)=>i).filter(i=>i!==idx);
+  const pj = t => pHoldsAtLeastOne('a:nodeal', t, idx); // No Deal odds from the counting layer
+  const jsnLite = (ev, t) => ev*(1-pj(t)) + W.jsn_burn*pj(t); // mirrors jsnAdjusted
+  const liq = q => payAssetsTotal(q);
+  const add = (ev, mv) => { if(ev > EV_GATE){ mv.ev = ev; moves.push(mv); } };
+  const seen = new Set();
+  const hike = me.hand.find(x=>x.t==='action'&&x.kind==='hike');
+
+  me.hand.forEach(c=>{
+    if(c.t==='phantom') return;
+    // one representative per card kind — but rent/wild kinds must keep their colour
+    // pairs distinct (keyOf collapses all dual rents to 'r:pair', which made the
+    // planner evaluate only the FIRST rent card in hand and sometimes play the wrong one)
+    const kk = (c.t==='rent'||c.t==='wild') ? c.t+':'+c.colors.join(',') : keyOf(c);
+    if(seen.has(kk)) return; seen.add(kk);
+
+    if(c.t==='prop') add(progressGain(me, c.color), { cardId:c.id, mode:'play', plays:1,
+      apply(s,q){ simTakeCard(q,c.id); simAddProp(q, JSON.parse(JSON.stringify(c)), c.color); } });
+
+    if(c.t==='wild'||c.t==='wildall'){
+      const col = aiWildColor(me, c);
+      if(col && (c.t==='wild' || countIn(me,col)>0)){
+        const need = COLORS[col].size - countIn(me,col) - 1;
+        const odds = colorSupply(me, col, idx) >= need ? 1 : W.wild_dead;
+        add(progressGain(me,col)*odds*0.95, { cardId:c.id, mode:'play', plays:1,
+          apply(s,q){ simTakeCard(q,c.id); simAddProp(q, JSON.parse(JSON.stringify(c)), col); } });
+      }
+    }
+
+    if(c.t==='rent'||c.t==='rentall'){
+      const cols = c.t==='rent' ? c.colors : Object.keys(me.props);
+      let bo = null;
+      cols.forEach(col=>{ const r = rentFor(me,col); if(r>0 && (!bo||r>bo.r)) bo = {col, r}; });
+      if(bo){
+        const targets = c.t==='rentall'
+          ? [enemies.slice().sort((a,b)=>liq(sim.players[b])-liq(sim.players[a]))[0]]
+          : enemies;
+        const collect = amt => targets.reduce((s,t)=>s+jsnLite(Math.min(amt, liq(sim.players[t]))*W.rent_eff, t), 0);
+        const mkApply = mult => function(s,q){
+          simTakeCard(q,c.id); if(mult>1 && hike) simTakeCard(q,hike.id);
+          const cs = c.t==='rent' ? c.colors : Object.keys(q.props);
+          let best = 0; cs.forEach(col=>{ best = Math.max(best, rentFor(q,col)); });
+          if(s.__rr && best > (s.__rr[c.id]||0) + 0.01) this.__boost = true; // an earlier play grew this rent — the real combo
+          targets.forEach(t=>{
+            const exp = Math.min(best*mult, liq(s.players[t])) * W.rent_eff * (1-pj(t));
+            simPay(s.players[t], q, exp);
+          });
+        };
+        add(collect(bo.r), { cardId:c.id, mode:'play', plays:1, hike:false, apply: mkApply(1) });
+        if(hike) add(collect(bo.r*2)-W.hike_cost, { cardId:c.id, mode:'play', plays:2, hike:true, apply: mkApply(2) });
+      }
+    }
+
+    if(c.t==='action'){
+      if(c.kind==='takeover'){
+        let best = null;
+        enemies.forEach(t=>completeColors(sim.players[t]).forEach(col=>{
+          const val = (sim.players[t].props[col]||[]).reduce((sm,x)=>sm+x.v,0) + rentFor(sim.players[t],col)*0.5;
+          if(!best||val>best.val) best = {t,col,val};
+        }));
+        if(best){
+          const winNow = completeColors(me).length>=2;
+          const urgent = completeColors(sim.players[best.t]).length>=2;
+          let ev = winNow ? 1000 : jsnLite(W.tk_base + best.val*W.tk_val, best.t);
+          if(!winNow && !urgent && G.turnCount<4) ev *= W.tk_hold;
+          add(ev, { cardId:c.id, mode:'play', plays:1,
+            apply(s,q){
+              simTakeCard(q,c.id);
+              const from = s.players[best.t];
+              (from.props[best.col]||[]).splice(0).forEach(card=>simAddProp(q,card,best.col));
+              delete from.props[best.col];
+              if(from.bldg && from.bldg[best.col]){ q.bldg[best.col] = from.bldg[best.col]; delete from.bldg[best.col]; }
+            } });
+        }
+      }
+      if(c.kind==='swipe'){
+        let best = null;
+        enemies.forEach(t=>{
+          const tp = sim.players[t];
+          propList(tp).filter(x=>!isComplete(tp,x.color)).forEach(x=>{
+            const myGain = x.card.t==='prop' ? progressGain(me, x.color) : 3;
+            const theirLoss = (countIn(tp,x.color)===COLORS[x.color].size-1 ? 4 : 1.5) + countIn(tp,x.color)*0.6;
+            const ev = jsnLite(myGain*W.sw_gain + theirLoss*W.sw_loss + x.card.v*W.sw_v, t);
+            if(!best||ev>best.ev) best = {t,x,ev};
+          });
+        });
+        if(best) add(best.ev, { cardId:c.id, mode:'play', plays:1,
+          apply(s,q){
+            simTakeCard(q,c.id);
+            const tp = s.players[best.t], arr = tp.props[best.x.color];
+            const i = arr ? arr.findIndex(cc=>cc.id===best.x.card.id) : -1;
+            if(i>-1){ arr.splice(i,1); if(!arr.length) delete tp.props[best.x.color]; simAddProp(q, best.x.card, best.x.color); }
+          } });
+      }
+      if(c.kind==='swap'){
+        let best = null;
+        const mine = propList(me).filter(x=>!isComplete(me,x.color) && x.card.t==='prop');
+        enemies.forEach(t=>{
+          const tp = sim.players[t];
+          propList(tp).filter(x=>!isComplete(tp,x.color) && x.card.t==='prop').forEach(x=>{
+            mine.forEach(mx=>{
+              const myGain = progressGain(me, x.color);
+              const myLoss = countIn(me,mx.color)===COLORS[mx.color].size-1 ? 6 : 2;
+              const theirGain = countIn(tp,mx.color)===COLORS[mx.color].size-1 ? 6 : 1.5;
+              const theirLoss = countIn(tp,x.color)===COLORS[x.color].size-1 ? 4 : 1.5;
+              const net = myGain - myLoss + theirLoss - theirGain;
+              if(net>W.swap_min){
+                const ev = jsnLite(net, t);
+                if(!best||ev>best.ev) best = {t,x,mx,ev};
+              }
+            });
+          });
+        });
+        if(best) add(best.ev, { cardId:c.id, mode:'play', plays:1,
+          apply(s,q){
+            simTakeCard(q,c.id);
+            const tp = s.players[best.t];
+            const ta = tp.props[best.x.color]; const ti = ta?ta.findIndex(cc=>cc.id===best.x.card.id):-1;
+            const ma = q.props[best.mx.color]; const mi = ma?ma.findIndex(cc=>cc.id===best.mx.card.id):-1;
+            if(ti>-1 && mi>-1){
+              ta.splice(ti,1); if(!ta.length) delete tp.props[best.x.color];
+              ma.splice(mi,1); if(!ma.length) delete q.props[best.mx.color];
+              simAddProp(q, best.x.card, best.x.color);
+              simAddProp(tp, best.mx.card, best.mx.color);
+            }
+          } });
+      }
+      if(c.kind==='favour'){
+        const t = enemies.slice().sort((a,b)=>liq(sim.players[b])-liq(sim.players[a]))[0];
+        add(jsnLite(Math.min(5, liq(sim.players[t]))*0.85, t), { cardId:c.id, mode:'play', plays:1,
+          apply(s,q){ simTakeCard(q,c.id); simPay(s.players[t], q, Math.min(5, liq(s.players[t]))*0.85*(1-pj(t))); } });
+      }
+      if(c.kind==='shout'){
+        const ev = enemies.reduce((s,t)=>s+jsnLite(Math.min(2, liq(sim.players[t]))*0.85, t), 0);
+        add(ev, { cardId:c.id, mode:'play', plays:1,
+          apply(s,q){ simTakeCard(q,c.id); enemies.forEach(t=>simPay(s.players[t], q, Math.min(2, liq(s.players[t]))*0.85*(1-pj(t)))); } });
+      }
+      if(c.kind==='payday') add(W.pd_base + (me.hand.length<=3?W.pd_low:0) - (me.hand.length>=7?W.pd_high:0),
+        { cardId:c.id, mode:'play', plays:1,
+          apply(s,q){ simTakeCard(q,c.id); q.hand.push({t:'phantom',v:0,id:-1},{t:'phantom',v:0,id:-2}); } });
+      if(c.kind==='granny'){
+        const col = completeColors(me).find(cc=>cc!=='black' && !(me.bldg[cc]&&me.bldg[cc].granny));
+        if(col) add(3.8, { cardId:c.id, mode:'play', plays:1,
+          apply(s,q){ const c2 = completeColors(q).find(cc=>cc!=='black' && !(q.bldg[cc]&&q.bldg[cc].granny));
+            simTakeCard(q,c.id); if(c2){ if(!q.bldg[c2]) q.bldg[c2]={}; q.bldg[c2].granny = {t:'action',kind:'granny',v:3}; } } });
+      }
+      if(c.kind==='resort'){
+        const col = completeColors(me).find(cc=>me.bldg[cc]&&me.bldg[cc].granny&&!me.bldg[cc].resort);
+        if(col) add(4.2, { cardId:c.id, mode:'play', plays:1,
+          apply(s,q){ const c2 = completeColors(q).find(cc=>q.bldg[cc]&&q.bldg[cc].granny&&!q.bldg[cc].resort);
+            simTakeCard(q,c.id); if(c2) q.bldg[c2].resort = {t:'action',kind:'resort',v:4}; } });
+      }
+    }
+  });
+
+  // banking, exactly as the greedy picker offers it: best money note + worst spare
+  const mn = [...me.hand].filter(c=>c.t==='money').sort((a,b)=>b.v-a.v)[0];
+  if(mn) add(0.8 + mn.v*W.bank_v, { cardId:mn.id, mode:'bank', plays:1,
+    apply(s,q){ simTakeCard(q,mn.id); q.bank.push(JSON.parse(JSON.stringify(mn))); } });
+  const spare = [...me.hand].filter(c=>(c.t==='action'&&c.kind!=='nodeal')||c.t==='rent'||c.t==='rentall')
+    .sort((a,b)=>keepScore(a,me)-keepScore(b,me))[0];
+  if(spare) add((sim.playsLeft<3?0.7:0.45) + spare.v*0.08, { cardId:spare.id, mode:'bank', plays:1,
+    apply(s,q){ simTakeCard(q,spare.id); q.bank.push(JSON.parse(JSON.stringify(spare))); } });
+
+  return moves;
+}
+function rentRootMap(me){ // each rent card's best charge at the ROOT position
+  const m = {};
+  me.hand.forEach(c=>{
+    if(c.t!=='rent' && c.t!=='rentall') return;
+    const cols = c.t==='rent' ? c.colors : Object.keys(me.props);
+    let r = 0; cols.forEach(col=>{ r = Math.max(r, rentFor(me,col)); });
+    m[c.id] = r;
+  });
+  return m;
+}
+function beamFrom(root, rootMoves, idx, restrict){
+  let beam = [{ sim: root, first: null, acc: 0, boosted: false, done: false }];
+  const depth = Math.min(SEQ_DEPTH, root.playsLeft);
+  for(let d=0; d<depth; d++){
+    const grown = [];
+    for(const node of beam){
+      if(node.done){ grown.push(node); continue; }
+      let moves = d===0 ? rootMoves : simMoves(node.sim, idx);
+      if(d===0 && restrict) moves = moves.filter(mv=>mv.cardId===restrict.cardId && mv.mode===restrict.mode && !mv.hike===!restrict.hike);
+      let expanded = 0;
+      moves.forEach(mv=>{
+        if(mv.plays > node.sim.playsLeft) return;
+        const s2 = { players: simClone(node.sim.players), playsLeft: node.sim.playsLeft - mv.plays, __rr: root.__rr };
+        mv.__boost = false;
+        mv.apply(s2, s2.players[idx]);
+        expanded++;
+        grown.push({ sim: s2, first: node.first || {cardId:mv.cardId, mode:mv.mode, hike:!!mv.hike},
+                     acc: node.acc + mv.ev, boosted: node.boosted || mv.__boost, done: false });
+      });
+      if(!expanded) grown.push({ sim: node.sim, first: node.first, acc: node.acc, boosted: node.boosted, done: true });
+    }
+    if(!grown.length) break;
+    grown.sort((a,b)=>b.acc-a.acc);
+    beam = grown.slice(0, BEAM_W);
+  }
+  return beam[0] || null;
+}
+function planTurn(idx){
+  /* Greedy is the default; the plan may override ONLY for a physically real combo:
+     a sequence containing a rent whose charge is HIGHER than that card could charge
+     at the root (i.e. an earlier play grew the rent), and only when it clearly beats
+     the best greedy-first sequence. Everything else — reorderings that merely
+     harvest state-dependent heuristic bonuses (payday hand-size terms, tie shuffles)
+     — is Goodhart bait and gets ignored. */
+  const root = { players: simClone(G.players), playsLeft: G.playsLeft };
+  root.__rr = rentRootMap(root.players[idx]);
+  const rootMoves = simMoves(root, idx);
+  if(!rootMoves.length) return null;
+  const g = rootMoves.slice().sort((a,b)=>b.ev-a.ev)[0];
+  const gKey = { cardId:g.cardId, mode:g.mode, hike:!!g.hike };
+  const full = beamFrom(root, rootMoves, idx, null);
+  if(!full || !full.first) return gKey;
+  const same = full.first.cardId===gKey.cardId && full.first.mode===gKey.mode && !full.first.hike===!gKey.hike;
+  if(same || !full.boosted) return gKey;
+  const forced = beamFrom(root, rootMoves, idx, gKey);
+  return (full.acc - (forced ? forced.acc : -1e9) > 0.8) ? full.first : gKey;
+}
 function aiStep(p){
   if(G.over) return;
   const idx = G.turn;
@@ -3218,7 +3491,16 @@ function aiStep(p){
   const C = brainCandidates(p, idx, next);
   if(!C.length) return endTurn();
   C.sort((a,b)=>b.ev-a.ev);
-  C[0].run();
+  let choice = C[0];
+  try{
+    const first = planTurn(idx);
+    if(first){
+      const m = C.find(c=>c.cardId===first.cardId && c.mode===first.mode &&
+                          (!first.hike === !/\+ Hike/.test(c.label||'')));
+      if(m) choice = m;
+    }
+  }catch(e){ /* the planner must never break play — greedy fallback */ }
+  choice.run();
 }
 
 /* ================= BOOT ================= */

@@ -131,6 +131,28 @@ T('shared evaluator scores any player (bank + play candidates)',
   cands.some(x=>x.mode==='bank'&&x.cardId===96001) && cands.some(x=>x.mode==='play'&&x.cardId===96002) && cands.every(x=>x.ev>0));
 
 
+// ===== turn-sequence planning: combo ordering the greedy picker cannot see =====
+// Complete coral set (rent 6) + teal at 2/3 + a coral/teal dual rent + the completing
+// teal prop. Greedy prefers the immediate coral rent (EV ~10.8 > progress 9) and only
+// then completes teal; the planner completes teal FIRST and charges its higher rent (7).
+newGame();
+G.turn = 1; G.playsLeft = 3;
+const SP = G.players[1];
+SP.hand = [ {id:98001,t:'prop',color:'teal',name:'T3',v:3}, {id:98002,t:'rent',colors:['coral','teal'],v:1} ];
+SP.props = {}; SP.bldg = {}; SP.bank = [];
+addProp(SP,{id:98003,t:'prop',color:'teal',name:'T1',v:3},'teal');
+addProp(SP,{id:98004,t:'prop',color:'teal',name:'T2',v:3},'teal');
+addProp(SP,{id:98005,t:'prop',color:'coral',name:'C1',v:2},'coral');
+addProp(SP,{id:98006,t:'prop',color:'coral',name:'C2',v:2},'coral');
+addProp(SP,{id:98007,t:'prop',color:'coral',name:'C3',v:2},'coral');
+G.players[0].hand = []; G.players[0].props = {}; G.players[0].bldg = {}; G.players[0].bank = [{id:98010,t:'money',v:10}];
+G.players[2].hand = []; G.players[2].props = {}; G.players[2].bldg = {}; G.players[2].bank = [{id:98011,t:'money',v:10}];
+const greedyPick = brainCandidates(SP,1,()=>{}).sort((a,b)=>b.ev-a.ev)[0];
+T('combo position: greedy baseline grabs the immediate rent', greedyPick && greedyPick.cardId===98002);
+const planned = planTurn(1);
+T('sequence planner completes the set before charging its higher rent', !!planned && planned.cardId===98001 && planned.mode==='play');
+
+
 // ===== NET protocol =====
 newGame();
 G.players[1].bank=[{id:97001,t:'money',v:5}];
