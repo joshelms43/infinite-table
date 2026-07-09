@@ -157,6 +157,11 @@ NET.onStart({ roster:[{key:'k0',name:'Josh'},{key:'k1',name:'Josh'},{key:'k2',na
 T('client seat resolved by key, not name', NET.seat===2 && MYSEAT===2 && G.players.length===3 && G.players.every(p=>!p.isAI));
 NET.mode='off'; NET.tx=null; MYSEAT=0;
 
+
+// elo maths mirror (server RPC uses the same formula)
+T('elo: equal ratings -> +16', eloDelta(1000,1000)===16);
+T('elo: favourite beating underdog gains little', eloDelta(1400,1000)<8 && eloDelta(1000,1400)>24);
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

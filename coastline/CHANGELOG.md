@@ -1,5 +1,29 @@
 # Coastline — Changelog
 
+## v0.4.0 — 2026-07-09
+Accounts, friends, invites, stats, Elo — plus the two remaining live-game bugs (folded into this release; v0.3.4 is the engine ladder below).
+
+**v0.3.4 fixes (from Josh's 10-game session)**
+- "YOUR TURN for either person's turn": the turn banner fired for any non-AI turn, so the host saw YOUR TURN on every human's turn and clients saw none. Banners are now strictly local-seat (gold YOUR TURN for you, name banners for others), and clients get them from state transitions with a chime + haptic on their own.
+- "Can still act while opponent pays": the v0.3.3 gate only blocked client intents — the host's own local actions bypassed it. New netBusy() blocks local play, End Turn, and card interaction on any seat while a payment/interrupt ask is outstanding.
+
+**Accounts (zero-friction)**
+- Anonymous Supabase auth on load — no signup, no email. A profile row is created with your name, a 6-letter friend code, Elo 1000, and W/L counters. Your name edits sync to your profile.
+- New supabase/schema.sql (one paste into the Supabase SQL Editor): profiles, friends, matches, and an atomic record_match RPC — RLS on everything.
+
+**The professional home**
+- Profile card: gold avatar, name, W-L record, tap-to-copy friend code, and a brass Elo chip. Sectioned layout (PLAY / FRIENDS) with letterspaced labels, consistent card surfaces, and the token design system throughout. Offline shows a graceful placeholder; Solo never requires any of it.
+
+**Friends & invites**
+- Add mates by friend code; your list shows names + Elo with an Invite button per friend. Invites travel over each user's personal realtime channel: the friend gets a toast anywhere in the app — Join drops them straight into your lobby (auto-hosting a room first if you weren't). No polling, no tables.
+
+**Stats & Elo**
+- The host records each finished online game via the record_match RPC: match history row + atomic multi-player Elo (K=32, winner vs each loser pairwise, floor 100) + games/wins counters. Solo games don't touch ratings. Client-side eloDelta mirror is assertion-tested against the formula.
+
+**Setup (Josh, two minutes)** — Supabase dashboard: (1) SQL Editor → paste supabase/schema.sql → Run. (2) Authentication → Sign In / Providers → enable Anonymous. Done.
+
+**Tests** — engine suite 44/44 (elo assertions added), flows 12/12, drop matrix 38/38. Identity paths are guarded and inert offline/headless; live behaviour needs the schema applied and real devices — expect a shake-out round like v0.3.x had.
+
 ## v0.3.4 — 2026-07-09
 Benchmark ladder — the engine-strength measurement foundation (strength roadmap item 1). No gameplay changes.
 
@@ -15,7 +39,6 @@ Benchmark ladder — the engine-strength measurement foundation (strength roadma
 - Dispatch proof: a deliberately crippled brain (picks its worst candidate) collapses — solo 0.0%, healthy side 66.7% solo (12 games; degenerate worst-move games churn too long for large samples, which is all this check needed).
 - **v0.3.3 vs v0.2.26 (922a14a): 1,002 paired games over 167 seeds — play-identical (share 50.0% ± 0.0pp, both solos exactly 33.3%).** Every seed's winner seat is invariant across seat assignments, i.e. the brains chose the same moves everywhere. Two facts confirmed: the AI section is textually unchanged v0.2.29→v0.3.3 and behaviorally unchanged v0.2.26→v0.2.29 (the genome/evaluator work was behavior-preserving), and the multiplayer work (v0.3.0–v0.3.3) did not perturb offline AI play. The baseline to beat is this single lineage brain, and the first real strength change (turn-sequence planning) now has a trustworthy referee.
 - Throughput: ~14ms/game headless — a full 1,002-game pairing runs in ~14s.
-
 
 ## v0.3.3 — 2026-07-09
 First live-network fixes, from the first real two-tab game.
