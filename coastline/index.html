@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.20
+  Version: 0.2.21
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.20</title>
+<title>Coastline — v0.2.21</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -247,15 +247,23 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 /* ---------- win ---------- */
 #winscreen{
   position:fixed;inset:0;z-index:60;display:none;
-  background:var(--table-night);
-  flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;
+  background:rgba(10,15,12,.72);backdrop-filter:blur(3px);
+  flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
 }
-#winscreen.show{display:flex}
-#winscreen h1{font-family:'Lilita One',cursive;font-size:36px;color:var(--gold-money);text-shadow:0 4px 14px rgba(0,0,0,.4)}
-#winscreen p{font-weight:700;opacity:.85;max-width:340px;line-height:1.45}
+#winscreen.show{display:flex;animation:fadein .25s ease}
+.wincard{
+  background:linear-gradient(180deg,var(--felt-highlight),var(--table-deep) 72%);
+  border:1px solid var(--line);border-radius:20px;padding:26px 28px 24px;
+  box-shadow:0 20px 50px rgba(8,12,10,.6);max-width:340px;
+  display:flex;flex-direction:column;gap:10px;align-items:center;
+  animation:winpop .35s cubic-bezier(.2,1.3,.4,1);
+}
+@keyframes winpop{from{transform:scale(.85) translateY(14px);opacity:0}}
+#winscreen h1{font-family:'Lilita One',cursive;font-size:34px;color:var(--gold-money);text-shadow:0 4px 14px rgba(0,0,0,.4)}
+#winscreen p{font-weight:700;opacity:.85;max-width:300px;line-height:1.45}
 #winstats{font-size:12px;font-weight:700;opacity:.55}
 #winscreen button{
-  font-family:'Lilita One',cursive;font-size:16px;color:#fff;border-radius:12px;padding:13px 30px;margin-top:10px;
+  font-family:'Lilita One',cursive;font-size:16px;color:#fff;border-radius:12px;padding:13px 30px;margin-top:8px;
   background:linear-gradient(180deg,var(--coral),var(--coral-deep));
   box-shadow:0 4px 12px rgba(188,79,55,.45), inset 0 1px 0 rgba(255,255,255,.25);
 }
@@ -368,9 +376,11 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 #pbgo:disabled{opacity:.4}
 .tcard{transition:transform .15s}
 .tcard.pickable{outline:2.5px solid var(--money-gold);outline-offset:-1px;border-radius:11px;cursor:pointer}
+.tcard.pickable:active{transform:scale(.96)}
 .tcard.paysel{transform:translateY(-6px)}
 .tcard.paysel .card{outline:3px solid var(--warning-amber)}
 .note{transition:transform .15s}
+.note[onclick]:active{transform:scale(.94)}
 .note.paysel{outline:3px solid var(--warning-amber);transform:translateY(-4px)}
 .cardw.paysel .card{outline:3px solid var(--warning-amber)}
 #handwrap.dimmed{opacity:.35;pointer-events:none}
@@ -513,7 +523,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.20</span>
+    <span class="ver">v0.2.21</span>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
   </div>
@@ -568,10 +578,12 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <div id="inspect" onclick="closeInspect()"></div>
 
 <div id="winscreen">
-  <h1 id="wintitle"></h1>
-  <p id="winsub"></p>
-  <div id="winstats"></div>
-  <button onclick="location.reload()">Play again</button>
+  <div class="wincard">
+    <h1 id="wintitle"></h1>
+    <p id="winsub"></p>
+    <div id="winstats"></div>
+    <button onclick="location.reload()">Play again</button>
+  </div>
 </div>
 
 
@@ -871,7 +883,7 @@ function renderAll(){
     setStackHTML(p, color, cards, boardTap(color), boardOpts)
   ).join('') || '';
   const payMode = MODE.type==='pay';
-  $('#mybank').innerHTML = p.bank.map((c,i)=>`<span class="note ${c.t!=='money'?'notealt':''} ${payMode&&MODE.sel.has(c.id)?'paysel':''}" title="${cardName(c)}" style="z-index:${i+1};${i>0?'margin-left:-30px;':''}" ${payMode?`onclick="payToggle(${c.id})"`:''}><b>$${c.v}M</b></span>`).join('')
+  $('#mybank').innerHTML = p.bank.map((c,i)=>`<span class="note ${c.t!=='money'?'notealt':''} ${payMode&&MODE.sel.has(c.id)?'paysel':''}" title="${cardName(c)}" style="z-index:${i+1};${i>0?'margin-left:-14px;':''}" ${payMode?`onclick="payToggle(${c.id})"`:''}><b>$${c.v}M</b></span>`).join('')
     + `<span class="banktotal" style="margin-left:10px">$${bankTotal(p)}M</span>`;
   const hw = $('#handwrap');
   if(hw && hw.classList) hw.classList.toggle('dimmed', MODE.type==='pay' || MODE.type==='minepick');
@@ -1643,10 +1655,12 @@ function checkAllWin(){
       $('#wintitle').textContent = p===me() ? 'You win' : p.name+' wins';
       $('#winsub').textContent = 'Three complete sets: ' + completeColors(p).map(c=>COLORS[c].label).join(', ');
       $('#winstats').textContent = 'Round '+G.turnCount+' · '+G.players.map(x=>x.name+' $'+bankTotal(x)+'M').join(' · ');
-      $('#winscreen').classList.add('show');
-      sfx(p===me()?'win':'alert');
-      haptic(p===me()?[12,60,12,60,24]:20);
-      if(p===me()) confetti();
+      setTimeout(()=>{
+        $('#winscreen').classList.add('show');
+        sfx(p===me()?'win':'alert');
+        haptic(p===me()?[12,60,12,60,24]:20);
+        if(p===me()) confetti();
+      }, 700);
       return true;
     }
   }
@@ -1835,7 +1849,7 @@ function renderPOV(idx){
   if(picking && MODE.mode==='takeover')
     povOpts = { dimIncomplete:true, setPick:(color)=>`event.stopPropagation();povPickSet('${color}')` };
   const stacks = Object.entries(p.props).map(([color,cards])=>setStackHTML(p,color,cards,'',povOpts)).join('');
-  const notes = p.bank.map((c,i)=>`<span class="note ${c.t!=='money'?'notealt':''}" style="z-index:${i+1};${i>0?'margin-left:-30px;':''}"><b>$${c.v}M</b></span>`).join('');
+  const notes = p.bank.map((c,i)=>`<span class="note ${c.t!=='money'?'notealt':''}" style="z-index:${i+1};${i>0?'margin-left:-14px;':''}"><b>$${c.v}M</b></span>`).join('');
   $('#pov').innerHTML = `
     <div class="povhdr">
       <span class="povname">${p.name}'s ${picking?'table':'seat'}</span>

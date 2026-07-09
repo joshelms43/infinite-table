@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.2.21 — 2026-07-09
+Win overlay, readable bank, touch polish. No rule changes.
+
+**Win happens at the table**
+- Winning no longer cuts to a separate screen. The final play lands, the table sits for a ~0.7s beat, then a floating result card rises over a blurred, darkened view of the finished board — winner, winning sets, round count, and every bank total, with confetti falling over the real table. Play again button unchanged.
+
+**Bank you can read**
+- Note overlap halved (-30px → -14px): every note's value is visible even in a fat stack of $10Ms. Applies to your bank and opponent banks (POV/inspection share the component). Notes squash on press when they're tappable (pay mode).
+
+**Touch**
+- Pickable table cards (steal/swap/pay targeting) now compress on press like everything else — one consistent touch language across hand, notes, and board.
+- CSS-integrity guard extended to cover the new win card.
+
+**Tests** — 26/26 PASS, 12-run soak clean.
+
 ## v0.2.20 — 2026-07-09
 Hotfix: v0.2.19 shipped with a large chunk of the stylesheet missing.
 
