@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.24
+  Version: 0.2.25
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.24</title>
+<title>Coastline — v0.2.25</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -557,7 +557,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.24</span>
+    <span class="ver">v0.2.25</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -657,12 +657,12 @@ const ACTIONS = {
   takeover:{n:'Hostile Takeover', d:'Steal a complete set from any player', v:5, c:2},
   nodeal:  {n:'No Deal!',         d:'Cancel an action played against you',  v:4, c:3},
   swipe:   {n:'Sneaky Swipe',     d:'Steal a property (not from a complete set)', v:3, c:3},
-  swap:    {n:'Swap Meet',        d:'Swap one of your properties with another player\'s', v:3, c:4},
+  swap:    {n:'Swap Meet',        d:'Swap one of your properties with another player\'s', v:3, c:3},
   favour:  {n:'Call In a Favour', d:'One player pays you $5M', v:3, c:3},
   shout:   {n:'Shout a Round',    d:'Every player pays you $2M', v:2, c:3},
   payday:  {n:'Payday',           d:'Draw 2 extra cards', v:1, c:10},
   granny:  {n:'Granny Flat',      d:'+$3M rent on a complete set (not Transport)', v:3, c:3},
-  resort:  {n:'Beach Resort',     d:'+$4M rent on a set with a Granny Flat', v:4, c:3},
+  resort:  {n:'Beach Resort',     d:'+$4M rent on a set with a Granny Flat', v:4, c:2},
   hike:    {n:'Rent Hike',        d:'Play with a Rent card to double it', v:1, c:2},
 };
 const MONEY = [[1,6],[2,5],[3,3],[4,3],[5,2],[10,1]];

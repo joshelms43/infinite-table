@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.2.25 — 2026-07-09
+Deck finalised against the internally consistent official list: 106 playing cards.
+
+- The previous source's action itemization contradicted its own header (summed 36 vs claimed 34); the corrected list is consistent: 34 actions + 13 rent = 47, itemized 2 Deal Breaker / 3 Just Say No / 3 Sly Deal / 3 Forced Deal / 3 Debt Collector / 3 Birthday / 10 Pass Go / 3 House / 2 Hotel / 2 Double Rent.
+- Accordingly: Swap Meet reverted 4 → 3, Beach Resort reverted 3 → 2. The 9th dual wild from v0.2.23 stays (both sources agree on 11 wildcards).
+- Final deck: 28 properties + 11 wilds + 13 rent + 20 money + 34 actions = 106 playing cards; the physical deck's 4 rule cards remain the in-app Rules sheet (? button). Total canon: 110.
+
+**Tests** — suite asserts the exact itemization: 26/26 PASS, 10-run soak clean.
+
 ## v0.2.24 — 2026-07-09
 Final single-player polish pass. No rule changes. Next stop: multiplayer.
 
