@@ -191,6 +191,10 @@ function seedBlock(seed, cand, champ){ // 6 paired games on one seed
   }
   return {cW, kW};
 }
+// engine log() is presentation-only but does logs.unshift() on a NEVER-trimmed array
+// (O(n) per call, ~30 calls/game) — over an overnight run that's an O(n^2) slowdown.
+// Rebinding here works because the core shares the engine's eval scope.
+log = function(){};
 self.onmessage = function(e){
   const m = e.data;
   if(m.type!=='block') return;
@@ -462,7 +466,9 @@ function makeScheduler(env){
   const NAMES = ['Davo','Robbo','Muzza','Gazza','Tezza','Wazza','Jacko','Thommo','Smitty','Deano','Johnno','Stevo','Macca','Chooka','Bluey','Dazza','Kezza','Rusty','Snowy','Boof','Curly','Spud','Wombat','Tiny'];
   const nameOf = (gen,k)=> k<NAMES.length ? NAMES[(k + gen*7) % NAMES.length] : ('#'+(k+1));
 
-  function logLine(s){ const el = $id('log'); el.textContent += '\n'+s; el.scrollTop = el.scrollHeight; }
+  function logLine(s){ const el = $id('log'); el.textContent += '\n'+s;
+    if(el.textContent.length > 40000) el.textContent = el.textContent.slice(-30000); // overnight cap
+    el.scrollTop = el.scrollHeight; }
   function fatal(msg){ $id('fatal').style.display='block'; $id('fatal').textContent = 'ENGINE ERROR: '+msg; $id('runbadge').textContent='error'; }
   const isRunning = ()=> !!(sched && sched.isRunning());
 
@@ -556,10 +562,12 @@ function makeScheduler(env){
   }
 
   /* speed ticker + stall watchdog — always honest, even when nothing moves */
+  let lastTickT = Date.now();
   setInterval(()=>{
     if(!S) return;
-    speed = Math.round((S.totalGames - lastTickGames)/2).toLocaleString();
-    lastTickGames = S.totalGames;
+    const now = Date.now(); // real elapsed — background tabs throttle timers, so never assume 2s
+    speed = Math.round((S.totalGames - lastTickGames)/Math.max(0.5,(now-lastTickT)/1000)).toLocaleString();
+    lastTickGames = S.totalGames; lastTickT = now;
     render(true);
   }, 2000);
   setInterval(()=>{

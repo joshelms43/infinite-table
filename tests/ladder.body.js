@@ -31,6 +31,9 @@
      with --seeds a..b --out FILE, then aggregate with --report FILE.
 */
 (function(){
+  // engine log() accumulates into a never-trimmed array (O(n^2) over long runs);
+  // presentation-only, rebind to a no-op for headless play (same eval scope).
+  log = function(){};
   const cp = require('child_process');
   const lpath = require('path');
   const ROOT = lpath.join(__dirname, '..');

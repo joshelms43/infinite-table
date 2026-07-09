@@ -1,5 +1,15 @@
 # Coastline — Changelog
 
+## v0.4.7 — 2026-07-09
+Trainer: fix the overnight slowdown — an O(n²) leak in the engine logger. No gameplay changes.
+
+- The engine's log() does `logs.unshift(msg)` on an array that is never trimmed or reset, plus rebuilds a 120-row HTML string, on every call — and a game logs ~30 lines. Fine in the UI (games are minutes long); lethal headless: after 100k games the array holds ~3M entries and every unshift walks all of them, so games/sec fades the longer the trainer runs. All three headless drivers (trainer worker core, tests/trainer.body.js, tests/ladder.body.js) now rebind log() to a no-op — presentation-only, zero effect on outcomes, verified by the unchanged bit-parity checks.
+- Regression-proofed: the parity fingerprint now records the logs array's growth across thousands of headless games and fails if it ever moves again. 27/27 PASS.
+- Dashboard honesty fixes: the games/sec ticker divides by real elapsed time (background tabs throttle timers, which silently inflated the reading), and the page log panel self-trims so an overnight run can't grow the DOM without bound.
+
+**Tests** — 33/33 PASS, flows 12/12, drops clean, trainer sanity 6/6, ladder sanity 4/4, trainer parity 27/27.
+
+
 ## v0.4.6 — 2026-07-09
 Trainer: pool scheduler extracted, hardened, and end-to-end tested — fixes the 0 games/sec freeze. No gameplay changes.
 

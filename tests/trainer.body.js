@@ -230,6 +230,9 @@
      ================================================================ */
 
   /* ---------- game runner (engine-scope; the worker owns this in the browser) ---------- */
+  // engine log() does logs.unshift() on a never-trimmed array — O(n^2) over long runs.
+  // Presentation-only, so headless drivers rebind it to a no-op (same eval scope).
+  log = function(){};
   const pump = ()=>{ let n=0; while(timers.length && n<20000){ const f=timers.shift(); try{f();}catch(e){} n++; } };
   const trueRandom = Math.random;
   function playGame(seed, genomes){

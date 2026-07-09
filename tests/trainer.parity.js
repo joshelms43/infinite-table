@@ -38,6 +38,7 @@ const timers=[]; global.setTimeout=(fn)=>{timers.push(fn); return timers.length;
 const wcoreFns = coreSrc.replace(/self\.onmessage[\s\S]*$/, ''); // strip worker plumbing, keep playGame/seedBlock
 const browserFingerprint = eval(engine + '\n;\n' + wcoreFns + '\n;\n' + logic + `
 ;(function(){
+  const logs0 = (typeof logs==='undefined' ? -1 : logs.length); // BOOT logs a line or two during engine eval — only growth during play matters
   const S = freshState(AI_W, ${JSON.stringify(TINY)});
   let guard = 0;
   while(S.gen<=3 && guard++<100000){
@@ -51,7 +52,10 @@ const browserFingerprint = eval(engine + '\n;\n' + wcoreFns + '\n;\n' + logic + 
     jobs.reverse().forEach(j=>{ cb.push(j.idx, seedBlock(j.seed, need.rec.genome, S.champion)); }); // worst-case order
   }
   advance(S, ()=>{});
-  return JSON.stringify({gen:S.gen, history:S.history, mean:S.mean, sigma:S.sigma, champion:S.champion, totalGames:S.totalGames});
+  // logsLen guards the O(n^2) engine-logger leak: headless drivers rebind log() to a
+  // no-op, so the never-trimmed logs array must stay empty across thousands of games.
+  return JSON.stringify({gen:S.gen, history:S.history, mean:S.mean, sigma:S.sigma, champion:S.champion, totalGames:S.totalGames,
+                         logsGrowth: (typeof logs==='undefined' ? -1 : logs.length - logs0)});
 })();`);
 
 try{ fs.unlinkSync(TMP); }catch(e){}
@@ -60,6 +64,7 @@ cp.execSync('node '+JSON.stringify(path.join(ROOT,'tests','trainer.js'))+
   {cwd:ROOT, stdio:'ignore'});
 const N = JSON.parse(fs.readFileSync(TMP,'utf8'));
 const B = JSON.parse(browserFingerprint);
+check('engine logger stays silent across thousands of headless games (O(n^2) leak regression)', B.logsGrowth===0);
 check('page shared-logic (reverse-order commits) matches node trainer bit-for-bit over 3 generations',
   JSON.stringify(B.history)===JSON.stringify(N.history) && JSON.stringify(B.mean)===JSON.stringify(N.mean) &&
   Math.abs(B.sigma-N.sigma)<1e-12 && JSON.stringify(B.champion)===JSON.stringify(N.champion) &&
