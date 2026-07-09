@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.2.30 — 2026-07-09
+Back to pure game: engine research moves to its own repo. Plus a fresh feel pass.
+
+**Repo split**
+- Trainer scripts and docs/ENGINE_PROJECT.md removed from infinite-table — the strongest-engine work gets a dedicated repository (the project prompt is delivered separately for it). This repo keeps the strong in-game AI (v0.2.26 brain: counting, EV, exact payments) and the full test suites. Review returns when the engine repo produces a judge worth trusting.
+
+**Feel & smoothness**
+- Hand fan arc: cards now sit with a subtle rotation (±4°) and dip toward the edges, like a hand actually held — raising a card straightens it as it lifts.
+- New bank notes pop in with a spring instead of appearing mid-stack silently.
+- Deck pill turns warning-amber below 10 cards — you can feel the reshuffle coming.
+- Overscroll containment on the hand, table, and POV: no more page pull-to-refresh or scroll-chaining fighting your gestures mid-drag.
+- App fades in composed on load; header icon buttons squish on press; opponent panels transition their turn-glow smoothly; POV hand backs stagger in card by card.
+
+**Tests** — 33/33 PASS, 6-run soak clean.
+
 ## v0.2.29 — 2026-07-09
 Review parked; engine-project handoff.
 

@@ -5,9 +5,7 @@
   "scripts": {
     "test": "node tests/test.js",
     "test:drops": "node tests/repro2.js",
-    "test:flows": "node tests/repro3.js",
-    "train": "node tests/train.js 5 champion.json",
-    "train:validate": "BODY=validate.body.js node tests/train.js"
+    "test:flows": "node tests/repro3.js"
   },
   "devDependencies": { "jsdom": "^24.0.0" }
 }

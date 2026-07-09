@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.29
+  Version: 0.2.30
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.29</title>
+<title>Coastline — v0.2.30</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -54,9 +54,11 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{
+  animation:appin .35s ease;
   font-family:'Nunito Sans',system-ui,sans-serif;color:var(--foam);
   background:var(--table);
-  min-height:100dvh;display:flex;flex-direction:column;overscroll-behavior:none;
+  min-height:100dvh;
+  overscroll-behavior:none;display:flex;flex-direction:column;overscroll-behavior:none;
 }
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 button:focus-visible,[onclick]:focus-visible{outline:2px solid var(--gold-money);outline-offset:2px}
@@ -69,7 +71,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .logo .wave{color:var(--c-teal)}
 .ver{font-size:10.5px;opacity:.5;font-weight:700}
 .hdr-right{display:flex;gap:6px;align-items:center}
-.icon-btn{
+.icon-btn{transition:transform .1s;
   font-size:15px;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
   background:rgba(255,255,255,.07);border:1px solid var(--line-soft);
 }
@@ -77,7 +79,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 /* ---------- opponents ---------- */
 #opponents{display:flex;gap:8px;padding:4px 16px 8px}
-.opp{
+.opp{transition:box-shadow .3s ease, opacity .3s ease;
   flex:1;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.1)), var(--table-deep);
   border:1px solid var(--line-soft);border-radius:14px;padding:9px 10px 8px;
   box-shadow:0 2px 8px rgba(8,12,10,.3);transition:box-shadow .25s, transform .12s;cursor:pointer;
@@ -103,6 +105,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 /* ---------- table strip ---------- */
 #tablestrip{display:flex;align-items:center;gap:8px;padding:2px 16px 8px;font-size:12px}
+.pill.low{border-color:var(--warning-amber);color:var(--warning-amber)}
 .pill{
   display:inline-block;font-size:10.5px;font-weight:800;background:rgba(255,255,255,.07);
   border:1px solid var(--line-soft);border-radius:20px;padding:3px 9px;white-space:nowrap;
@@ -153,7 +156,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 #endturn:active{transform:translateY(1px)}
 #endturn:disabled{opacity:.3;box-shadow:none}
-#hand{display:flex;overflow-x:auto;padding:48px 16px 10px;margin-top:-30px}
+#hand{display:flex;overflow-x:auto;padding:48px 16px 10px;margin-top:-30px;overscroll-behavior:contain}
 #hand.few{justify-content:center}
 .cardw{flex:0 0 102px;width:102px;position:relative;touch-action:pan-x;transition:transform .26s cubic-bezier(.34,1.56,.64,1)}
 .cardw.pressed{z-index:40!important}
@@ -163,6 +166,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
   transition:transform .07s ease, box-shadow .07s ease;
 }
 .cardw.hidden-src{visibility:hidden}
+.cardw .card{rotate:var(--fan,0deg);translate:0 var(--fanY,0px)}
+.cardw.raised .card{rotate:0deg;translate:0 0}
 .cardw.raised{z-index:60!important;transform:translateY(-30px)}
 .cardw.part-l{transform:translateX(-9px)}
 .cardw.part-r{transform:translateX(9px)}
@@ -344,7 +349,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .fanrow{display:flex;align-items:center;padding:4px 2px 8px;overflow-x:auto}
 
 /* ---------- your table: cascading property stacks ---------- */
-#myprops,.tablespread{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:12px;align-items:flex-start;padding:4px 2px 8px;min-height:170px}
+#myprops,.tablespread{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:12px;align-items:flex-start;padding:4px 2px 8px;min-height:170px;overscroll-behavior:contain}
 .tablespread{min-height:0}
 .tset{padding:0;border:none;background:none;flex:0 0 106px}
 .tset .tstack{position:relative;width:102px;margin:0 auto;border-radius:12px}
@@ -389,8 +394,12 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .note{transition:transform .15s}
 .note[onclick]:active{transform:scale(.94)}
 .note.paysel{outline:3px solid var(--warning-amber);transform:translateY(-4px)}
+.note.notein{animation:notein .3s cubic-bezier(.2,1.3,.4,1)}
+@keyframes notein{from{transform:translateY(10px) scale(.6);opacity:0}}
 .cardw.paysel .card{outline:3px solid var(--warning-amber)}
 #handwrap.dimmed{opacity:.35;pointer-events:none}
+
+@keyframes appin{from{opacity:0}}
 
 /* ---------- AI play showcase ---------- */
 .showcase{position:fixed;z-index:69;pointer-events:none;will-change:transform,opacity;width:102px;height:150px}
@@ -437,12 +446,13 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .povname{font-family:'Lilita One',cursive;font-size:21px;color:var(--text-ivory)}
 .povsub{font-size:10.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;opacity:.45}
 .povopps{display:flex;gap:8px;padding:6px 16px 8px}
-.povbody{flex:1;overflow-y:auto;padding:4px 16px 6px;display:flex;flex-direction:column;gap:12px}
+.povbody{flex:1;overflow-y:auto;padding:4px 16px 6px;display:flex;flex-direction:column;gap:12px;overscroll-behavior:contain}
 .povhand{
   display:flex;overflow-x:auto;padding:14px 16px calc(14px + env(safe-area-inset-bottom));
   background:linear-gradient(to top, rgba(10,15,12,.55), transparent);
 }
-.povcardback{flex:0 0 102px;width:102px;height:150px}
+.povcardback{flex:0 0 102px;width:102px;height:150px;animation:povin .28s both}
+@keyframes povin{from{opacity:0;transform:translateY(14px)}}
 
 /* ---------- fullscreen card inspect ---------- */
 #inspect{position:fixed;inset:0;background:var(--scrim);z-index:90;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .16s ease}
@@ -557,7 +567,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.29</span>
+    <span class="ver">v0.2.30</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -885,6 +895,7 @@ function aiShowcase(card, oppIdx){
 }
 let prevComplete = new Set();
 let PREVBANK = -1;
+let PREVBANKN = -1;
 const logs = [];
 function log(msg){
   logs.unshift(msg);
@@ -974,6 +985,7 @@ function renderAll(){
   clearSelection();
   $('#opponents').innerHTML = G.players.slice(1).map((p,i)=>oppPanelHTML(i+1, true)).join('');
   $('#deckcount').textContent = 'Deck '+G.deck.length;
+  if($('#deckcount').classList) $('#deckcount').classList.toggle('low', G.deck.length<10);
   updatePile(false);
   $('#turnbadge').textContent = G.over ? 'Game over' : (isMyTurn()? 'Your turn' : cur().name+"'s turn");
   const p = me();
@@ -993,6 +1005,12 @@ function renderAll(){
     const el = document.querySelector('#mybank .banktotal');
     if(el && el.classList) el.classList.add('pop');
   }
+  if(typeof PREVBANKN==='number' && p.bank.length>PREVBANKN){
+    const notes=document.querySelectorAll('#mybank .note');
+    const last=notes && notes.length ? notes[notes.length-1] : null;
+    if(last && last.classList) last.classList.add('notein');
+  }
+  PREVBANKN = p.bank.length;
   PREVBANK = bt;
   renderHand(p);
   $('#playsleft').innerHTML = 'Plays ' + [0,1,2].map(i=>`<span class="playdot ${isMyTurn()&&i<G.playsLeft?'on':''}"></span>`).join('');
@@ -1064,6 +1082,12 @@ function renderHand(p){
     w.style.zIndex = i+1;
     w.style.marginLeft = i>0 ? (-ov+'px') : '0px';
     if(w.classList) w.classList.toggle('paysel', MODE.type==='discard' && MODE.sel && MODE.sel.has(c.id));
+    if(w.style && w.style.setProperty){
+      const fm=(hand.length-1)/2, foff=i-fm;
+      const fdeg=Math.max(-4,Math.min(4, foff*(8/Math.max(hand.length-1,1))));
+      w.style.setProperty('--fan', fdeg.toFixed(2)+'deg');
+      w.style.setProperty('--fanY', (Math.abs(foff)*1.3).toFixed(1)+'px');
+    }
     if(w !== hand.children[i]) hand.insertBefore(w, hand.children[i]||null);
     seen.add(String(c.id));
   });
@@ -1972,7 +1996,7 @@ function renderPOV(idx){
   const others = G.players.map((q,i)=>i).filter(i=>i!==idx);
   const n = p.hand.length;
   const ov = n<=6 ? 40 : Math.min(62, 40 + (n-6)*3.5);
-  const backs = p.hand.map((_,i)=>`<div class="povcardback" style="z-index:${i+1};${i>0?`margin-left:-${ov}px;`:''}"><div class="cardback"><span>C</span></div></div>`).join('');
+  const backs = p.hand.map((_,i)=>`<div class="povcardback" style="z-index:${i+1};${i>0?`margin-left:-${ov}px;`:''}animation-delay:${i*18}ms"><div class="cardback"><span>C</span></div></div>`).join('');
   let povOpts = null;
   const picking = MODE.type==='povpick' && MODE.tIdx===idx;
   if(picking && (MODE.mode==='swipe' || MODE.mode==='swapTheirs'))
