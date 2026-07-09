@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.30
+  Version: 0.3.0
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.30</title>
+<title>Coastline — v0.3.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -401,6 +401,35 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 @keyframes appin{from{opacity:0}}
 
+/* ---------- home / lobby ---------- */
+#home{
+  position:fixed;inset:0;z-index:82;background:var(--table);
+  display:flex;align-items:center;justify-content:center;padding:24px;
+  opacity:0;pointer-events:none;transition:opacity .25s ease;
+}
+#home.show{opacity:1;pointer-events:auto}
+.homecard{display:flex;flex-direction:column;gap:12px;width:min(340px,100%);text-align:center}
+.homelogo{font-family:'Lilita One',cursive;font-size:38px;letter-spacing:1px}
+.hometag{font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;opacity:.4;margin-bottom:10px}
+#homename,#joincode{
+  background:rgba(255,255,255,.06);border:1px solid var(--line-soft);border-radius:12px;
+  color:var(--text-ivory);font-family:'Nunito Sans',sans-serif;font-weight:800;font-size:15px;
+  padding:12px 14px;text-align:center;outline:none;
+}
+#joincode{width:90px;text-transform:uppercase;letter-spacing:3px;flex:0 0 auto}
+.joinrow{display:flex;gap:8px}
+.homebtn{
+  font-family:'Lilita One',cursive;font-size:15px;color:var(--text-ivory);
+  background:var(--felt-highlight);border:1px solid var(--line-soft);border-radius:12px;padding:13px;
+}
+.homebtn.primary{background:linear-gradient(180deg,var(--coral),var(--coral-deep));border:none;color:#fff;
+  box-shadow:0 4px 12px rgba(188,79,55,.4), inset 0 1px 0 rgba(255,255,255,.25)}
+.homebtn:disabled{opacity:.35}
+.homebtn:active{transform:scale(.97)}
+.lobbycode{font-family:'Lilita One',cursive;font-size:44px;letter-spacing:10px;color:var(--money-gold)}
+#lobbyseats{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.lobbyseat{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;background:rgba(255,255,255,.05);border-radius:12px;padding:9px 12px}
+
 /* ---------- AI play showcase ---------- */
 .showcase{position:fixed;z-index:69;pointer-events:none;will-change:transform,opacity;width:102px;height:150px}
 .showcase .card{width:100%;height:100%}
@@ -567,7 +596,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.30</span>
+    <span class="ver">v0.3.0</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -621,6 +650,29 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <div id="pov" onclick="closePOV()"></div>
 
 <div id="inspect" onclick="closeInspect()"></div>
+
+<div id="home" class="show">
+  <div class="homecard">
+    <div class="homelogo"><span style="color:var(--money-gold)">COAST</span>LINE</div>
+    <div class="hometag">Sunshine Coast property scramble</div>
+    <div id="homemain">
+      <input id="homename" maxlength="12" placeholder="Your name" autocomplete="off">
+      <button class="homebtn primary" onclick="closeHome()">Play solo — vs Bazza &amp; Shaz</button>
+      <button class="homebtn" onclick="NET.hostGame()">Host online game</button>
+      <div class="joinrow">
+        <input id="joincode" maxlength="4" placeholder="CODE" autocomplete="off">
+        <button class="homebtn" style="flex:1" onclick="NET.joinGame()">Join</button>
+      </div>
+    </div>
+    <div id="homelobby" style="display:none">
+      <div class="sub" style="letter-spacing:1px">ROOM CODE</div>
+      <div id="lobbycode" class="lobbycode"></div>
+      <div id="lobbyseats"></div>
+      <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start game</button>
+      <div id="lobbywait" class="sub"></div>
+    </div>
+  </div>
+</div>
 
 <div id="winpill" onclick="reopenWin()">Results</div>
 
@@ -846,17 +898,17 @@ function confetti(){
 }
 const NEWIDS = new Set();
 function zonePop(sel){ const z=$(sel); if(!z||!z.classList)return; z.classList.remove('zonepop'); void z.offsetWidth; z.classList.add('zonepop'); }
-function flashOpp(idx){ const o=document.querySelectorAll('#opponents .opp')[idx-1]; if(o){ o.classList.add('hit'); setTimeout(()=>o.classList.remove('hit'),700); } }
+function flashOpp(idx){ const o=document.querySelector(`#opponents .opp[data-idx="${idx}"]`); if(o){ o.classList.add('hit'); setTimeout(()=>o.classList.remove('hit'),700); } }
 function aiDelay(){ return 600 + Math.random()*550; }
 let VISLOCK = 0;
 function visWait(){ return Math.max(0, VISLOCK - Date.now()); }
 function visDefer(fn){ const w = visWait(); if(w < 30) fn(); else setTimeout(fn, w); }
 /* AI showcase: the played card takes centre stage, then flies to the pile */
 function aiShowcase(card, oppIdx){
-  const els = document.querySelectorAll('#opponents .opp');
-  const oppEl = els && els.length ? els[oppIdx-1] : null;
+  const oppEl = document.querySelector(`#opponents .opp[data-idx="${oppIdx}"]`);
   if(!oppEl || !oppEl.getBoundingClientRect || !document.body || !document.body.appendChild) return;
   const r = oppEl.getBoundingClientRect();
+  if(!r || r.left===undefined || isNaN(+r.left)) return;
   oppEl.classList.add('aiplay');
   setTimeout(()=>{ if(oppEl.classList) oppEl.classList.remove('aiplay'); }, 500);
   const quick = card.t==='action' && (card.kind==='payday' || card.kind==='hike');
@@ -950,8 +1002,9 @@ function startOppSelect(text, filter, cb){
 }
 function applySelectable(){
   if(!SELECT.active) return;
-  document.querySelectorAll('#opponents .opp').forEach((el,i)=>{
-    if(SELECT.filter(i+1)) el.classList.add('selectable');
+  document.querySelectorAll('#opponents .opp').forEach(el=>{
+    const si = +el.getAttribute('data-idx');
+    if(!isNaN(si) && SELECT.filter(si)) el.classList.add('selectable');
   });
 }
 function endOppSelect(){
@@ -960,9 +1013,12 @@ function endOppSelect(){
   hidePrompt();
 }
 
-function me(){ return G.players[0]; }
+let MYSEAT = 0;
+function me(){ return G.players[MYSEAT]; }
 function cur(){ return G.players[G.turn]; }
-function isMyTurn(){ return G.turn===0 && !G.over; }
+function isMyTurn(){ return G.turn===MYSEAT && !G.over; }
+function nameOf(i){ return i===MYSEAT ? 'You' : G.players[i].name; }
+function seatViewOrder(){ return G.players.map((_,i)=>i).filter(i=>i!==MYSEAT); }
 
 /* ----- hand sorting ----- */
 const COLOR_ORDER = Object.keys(COLORS);
@@ -983,7 +1039,7 @@ function sortHand(p){ p.hand.sort((a,b)=>sortKey(a)-sortKey(b) || a.id-b.id); }
 function renderAll(){
   if(DRAG.active || DRAG.pend) cancelDrag(true);
   clearSelection();
-  $('#opponents').innerHTML = G.players.slice(1).map((p,i)=>oppPanelHTML(i+1, true)).join('');
+  $('#opponents').innerHTML = seatViewOrder().map(i=>oppPanelHTML(i, true)).join('');
   $('#deckcount').textContent = 'Deck '+G.deck.length;
   if($('#deckcount').classList) $('#deckcount').classList.toggle('low', G.deck.length<10);
   updatePile(false);
@@ -1027,12 +1083,14 @@ function renderAll(){
   prevComplete = nowC;
   if(POVIDX!=null) renderPOV(POVIDX);
   applySelectable();
+  if(NET.mode==='host') NET.pushState();
 }
 let HAND_MINE = null;
 function oppPanelHTML(idx, clickable){
   const p = G.players[idx];
-  const label = idx===0 ? 'You' : p.name;
-  const av = idx===0 ? 'var(--action-info)' : (idx===1 ? 'var(--c-orange)' : 'var(--c-purple)');
+  const label = idx===MYSEAT ? 'You' : p.name;
+  const avs = ['var(--action-info)','var(--c-orange)','var(--c-purple)','var(--c-teal)'];
+  const av = idx===MYSEAT ? 'var(--action-info)' : avs[idx%avs.length];
   const sets = Object.entries(p.props).map(([color,cards])=>{
     const done = isComplete(p,color);
     return `<span class="chipset" title="${COLORS[color].label} ${cards.length}/${COLORS[color].size}">${cards.map(()=>`<span class="chip ${done?'done-mark':''}" style="background:${COLORS[color].hex}"></span>`).join('')}${p.bldg[color]?`<span class="opp-bldg">${p.bldg[color].granny?'⌂':''}${p.bldg[color].resort?'✦':''}</span>`:''}</span>`;
@@ -1297,6 +1355,10 @@ function payAutoM(){
 }
 function payConfirm(){
   if(MODE.type!=='pay') return;
+  if(NET.mode==='client'){
+    NET.reply('pay', { ids: [...MODE.sel] });
+    MODE.type=null; MODE.sel=null; hidePrompt(); renderAll(); return;
+  }
   const payer=me(), receiver=G.players[MODE.receiverIdx], amount=MODE.amount, done=MODE.done;
   payer.bank.filter(c=>MODE.sel.has(c.id)).forEach(c=>transferBank(payer,receiver,c));
   propList(payer).filter(x=>MODE.sel.has(x.card.id)).forEach(x=>transferProp(payer,receiver,x.card));
@@ -1318,6 +1380,10 @@ function updateDiscardHUD(){
 }
 function discardConfirm(){
   if(MODE.type!=='discard') return;
+  if(NET.mode==='client'){
+    NET.reply('discard', { ids: [...MODE.sel] });
+    MODE.type=null; MODE.sel=null; hidePrompt(); renderAll(); return;
+  }
   const p=me();
   [...MODE.sel].forEach(id=>{ const i=p.hand.findIndex(c=>c.id===id); if(i>-1) G.discard.push(p.hand.splice(i,1)[0]); });
   MODE.type=null; MODE.sel=null; hidePrompt();
@@ -1418,6 +1484,11 @@ function tableDrop(c, by){
   updatePile(true);
 }
 function updatePile(landed){
+  if(NET.mode==='client' && NET.pile){
+    const el=$('#playpile');
+    el.innerHTML = `<span class="ppchip"></span><span>${NET.pile.label} · ${NET.pile.n}</span>`;
+    return;
+  }
   const el = $('#playpile');
   if(!el) return;
   const top = TABLEPILE[TABLEPILE.length-1];
@@ -1625,6 +1696,7 @@ function buildZones(c){
   const add = (el, act, hint) => { if(!el) return; el.classList.add('droppable'); DRAG.zones.push({ el, act, hint, rect: inflate(el.getBoundingClientRect(), 22) }); };
   const group = col => document.querySelector(`#myprops .setgroup[data-color="${col}"]`);
   const oppEls = [...document.querySelectorAll('#opponents .opp')];
+  const seatOfEl = el => +el.getAttribute('data-idx');
   let hint = '';
   if(!free && c.t!=='wild' && c.t!=='wildall'){ showPrompt('No plays left — end your turn', false); return; }
   if(c.t==='money'){ add($('#mybank'), ()=>{ sfx('coin'); bankCard(c); }); hint='Tap your bank — bank $'+c.v+'M'; }
@@ -1657,9 +1729,9 @@ function buildZones(c){
     // property area becomes the action play zone for non-building actions
     const canPlayHere =
       (k==='payday' || k==='shout' || k==='favour') ||
-      (k==='swipe' && othersOf(0).some(t=>stealTargetsOf(t).length)) ||
-      (k==='takeover' && othersOf(0).some(t=>completeColors(G.players[t]).length)) ||
-      (k==='swap' && propList(me()).some(x=>!isComplete(me(),x.color)) && othersOf(0).some(t=>stealTargetsOf(t).length));
+      (k==='swipe' && othersOf(MYSEAT).some(t=>stealTargetsOf(t).length)) ||
+      (k==='takeover' && othersOf(MYSEAT).some(t=>completeColors(G.players[t]).length)) ||
+      (k==='swap' && propList(me()).some(x=>!isComplete(me(),x.color)) && othersOf(MYSEAT).some(t=>stealTargetsOf(t).length));
     if(free && canPlayHere && k!=='granny' && k!=='resort' && k!=='hike' && k!=='nodeal'){
       const props = $('#myprops');
       if(props && props.appendChild){
@@ -1674,10 +1746,10 @@ function buildZones(c){
     }
     if(k==='payday') add($('#deckcount'), ()=>playPayday(c));
     if(k==='shout') add($('#opponents'), ()=>doShout(c));
-    if(k==='favour') oppEls.forEach((el,i)=>add(el, ()=>doFavour(c, i+1)));
-    if(k==='swipe') oppEls.forEach((el,i)=>{ if(stealTargetsOf(i+1).length) add(el, ()=>viewOppSelect(i+1,'swipe',c)); });
-    if(k==='takeover') oppEls.forEach((el,i)=>{ if(completeColors(G.players[i+1]).length) add(el, ()=>viewOppSelect(i+1,'takeover',c)); });
-    if(k==='swap'){ if(propList(me()).some(x=>!isComplete(me(),x.color))) oppEls.forEach((el,i)=>{ if(stealTargetsOf(i+1).length) add(el, ()=>viewOppSelect(i+1,'swapTheirs',c)); }); }
+    if(k==='favour') oppEls.forEach(el=>add(el, ()=>doFavour(c, seatOfEl(el))));
+    if(k==='swipe') oppEls.forEach(el=>{ const si=seatOfEl(el); if(stealTargetsOf(si).length) add(el, ()=>viewOppSelect(si,'swipe',c)); });
+    if(k==='takeover') oppEls.forEach(el=>{ const si=seatOfEl(el); if(completeColors(G.players[si]).length) add(el, ()=>viewOppSelect(si,'takeover',c)); });
+    if(k==='swap'){ if(propList(me()).some(x=>!isComplete(me(),x.color))) oppEls.forEach(el=>{ const si=seatOfEl(el); if(stealTargetsOf(si).length) add(el, ()=>viewOppSelect(si,'swapTheirs',c)); }); }
     if(k==='granny') completeColors(me()).filter(col=>col!=='black' && !(me().bldg[col]&&me().bldg[col].granny)).forEach(col=>add(group(col), ()=>placeBldg(c,col,'granny')));
     if(k==='resort') completeColors(me()).filter(col=>me().bldg[col]&&me().bldg[col].granny&&!me().bldg[col].resort).forEach(col=>add(group(col), ()=>placeBldg(c,col,'resort')));
     if(k==='nodeal') hint = 'No Deal! plays itself when you are attacked';
@@ -1757,12 +1829,15 @@ function playActionVia(c,k){
   if(k==='takeover') return startOppSelect('Tap a player with a complete set', i=>completeColors(G.players[i]).length>0, t=>viewOppSelect(t,'takeover',c));
   if(k==='swap') return startOppSelect('Tap a player to trade with', i=>stealTargetsOf(i).length>0, t=>viewOppSelect(t,'swapTheirs',c));
 }
-function playPayday(c){
-  removeHand(c); G.discard.push(c);
-  tableDrop(c, 'You');
-  const a=draw(),b=draw();
-  if(a){me().hand.push(a);NEWIDS.add(a.id);} if(b){me().hand.push(b);NEWIDS.add(b.id);}
-  sfx('coin'); haptic(10); log('You played Payday.');
+function playPayday(c,by){
+  if(NET.intercept('payday',{id:c.id})) return;
+  const b=(by==null?MYSEAT:by), p=G.players[b];
+  removeHandOf(p,c); G.discard.push(c);
+  tableDrop(c, nameOf(b));
+  NET.evt(b,c);
+  const a=draw(),d=draw();
+  if(a){p.hand.push(a); if(b===MYSEAT) NEWIDS.add(a.id);} if(d){p.hand.push(d); if(b===MYSEAT) NEWIDS.add(d.id);}
+  sfx('coin'); haptic(10); log(nameOf(b)+' played Payday.');
   usePlay(); closeSheet();
 }
 
@@ -1777,7 +1852,8 @@ function startTurn(){
   banner(p.isAI ? p.name.toUpperCase()+"'S TURN" : 'YOUR TURN', p.isAI ? null : 'var(--gold-money)');
   if(!p.isAI){ sfx('tick'); haptic(8); }
   renderAll();
-  if(p.isAI) setTimeout(()=>aiStep(p), Math.max(aiDelay(), visWait()+150));
+  if(p.isAI){ setTimeout(()=>aiStep(p), Math.max(aiDelay(), visWait()+150)); return; }
+  if(NET.mode==='host' && G.turn!==MYSEAT){ NET.pushState(); }
 }
 function usePlay(){
   G.playsLeft--;
@@ -1815,9 +1891,18 @@ function reopenWin(){
 }
 $('#endturn').onclick = ()=>{ if(isMyTurn() && !DRAG.active){ haptic(6); sfx('tick'); endTurn(); } };
 function endTurn(){
+  if(NET.intercept('endturn',{})) return;
   endOppSelect();
   const p = cur();
   if(p.hand.length>7){
+    if(!p.isAI && G.turn!==MYSEAT && NET.mode==='host'){
+      NET.ask(G.turn, {type:'discard', need:p.hand.length-7}, m=>{
+        ((m&&m.ids)||[]).forEach(id=>{ const i=p.hand.findIndex(c=>c.id===id); if(i>-1) G.discard.push(p.hand.splice(i,1)[0]); });
+        while(p.hand.length>7){ p.hand.sort((a,b)=>keepScore(a,p)-keepScore(b,p)); G.discard.push(p.hand.shift()); }
+        finishEnd();
+      });
+      return;
+    }
     if(p.isAI){
       while(p.hand.length>7){
         p.hand.sort((a,b)=>keepScore(a,p)-keepScore(b,p));
@@ -1900,13 +1985,26 @@ function openOptions(c){
 }
 function runOpt(i){ const o=window._opts[i]; if(o&&o.fn){ o.fn(); } }
 function removeHand(c){ const p=me(); const i=p.hand.findIndex(x=>x.id===c.id); if(i>-1)p.hand.splice(i,1); }
-function bankCard(c){ removeHand(c); me().bank.push(c); log('You banked $'+c.v+'M.'); usePlay(); zonePop('#mybank'); closeSheet(); }
-function playProp(c,color){ removeHand(c); addProp(me(),c,color); log('You played '+cardName(c)+' ('+COLORS[color].label+').'); usePlay(); sfx('tick'); zonePop('#myprops'); closeSheet(); }
-function placeBldg(c,color,slot){
-  removeHand(c);
-  if(!me().bldg[color]) me().bldg[color]={};
-  me().bldg[color][slot]=c;
-  log('You added a '+ACTIONS[c.kind].n+' to '+COLORS[color].label+'.');
+function bankCard(c, by){
+  if(NET.intercept('bank',{id:c.id})) return;
+  const b=(by==null?MYSEAT:by); removeHandOf(G.players[b], c); G.players[b].bank.push(c); log(nameOf(b)+' banked $'+c.v+'M.'); usePlay(); if(b===MYSEAT) zonePop('#mybank'); closeSheet(); }
+function removeHandOf(p,c){ const i=p.hand.findIndex(x=>x.id===c.id); if(i>-1) p.hand.splice(i,1); }
+function playProp(c,color,by){
+  if(NET.intercept('prop',{id:c.id,color})) return;
+  const b=(by==null?MYSEAT:by), p=G.players[b];
+  removeHandOf(p,c); addProp(p,c,color);
+  log(nameOf(b)+' played '+cardName(c)+' ('+COLORS[color].label+').');
+  NET.evt(b,c);
+  usePlay(); sfx('tick'); if(b===MYSEAT) zonePop('#myprops'); closeSheet();
+}
+function placeBldg(c,color,slot,by){
+  if(NET.intercept('bldg',{id:c.id,color,slot})) return;
+  const b=(by==null?MYSEAT:by), p=G.players[b];
+  removeHandOf(p,c);
+  if(!p.bldg[color]) p.bldg[color]={};
+  p.bldg[color][slot]=c;
+  log(nameOf(b)+' added a '+ACTIONS[c.kind].n+' to '+COLORS[color].label+'.');
+  NET.evt(b,c);
   usePlay(); sfx('good'); closeSheet();
 }
 function reassignWild(id){
@@ -2060,6 +2158,17 @@ function resolveBlock(defIdx, atkIdx, desc, cb){
       } else cb(count%2===1);
       return;
     }
+    if(aIdx!==MYSEAT && NET.mode==='host'){
+      NET.ask(aIdx, {type:'jsn', desc, count}, m=>{
+        if(m && m.use && hasNoDeal(p)){
+          const nd = takeNoDeal(p); log(G.players[aIdx].name+' played No Deal!');
+          NET.evt(aIdx, nd);
+          renderAll();
+          setTimeout(()=>chain(bIdx,aIdx,count+1), 400);
+        } else cb(count%2===1);
+      });
+      return;
+    }
     visDefer(()=>{
     sfx('alert'); haptic([10,50,10]);
     const nds = p.hand.filter(x=>x.t==='action'&&x.kind==='nodeal').length;
@@ -2149,7 +2258,14 @@ function requestPayment(payerIdx, amount, receiverIdx, done){
     if(receiverIdx===0){ sfx('coin'); zonePop('#mybank'); }
     return done();
   }
-  // human payer: pick straight from your table and bank (after any showcase lands)
+  // human payer
+  if(payerIdx!==MYSEAT && NET.mode==='host'){
+    NET.ask(payerIdx, {type:'pay', amount, recv:receiverIdx}, m=>{
+      NET.applyPaymentIds(payerIdx, receiverIdx, amount, (m&&m.ids)||[]);
+      done();
+    });
+    return;
+  }
   visDefer(()=>enterPayMode(amount, receiverIdx, done));
 }
 function processQueue(idxs, perFn, done){
@@ -2157,25 +2273,31 @@ function processQueue(idxs, perFn, done){
   (function next(){ if(G.over) return; const i=q.shift(); if(i===undefined) return done(); perFn(i,next); })();
 }
 /* ----- human action executions ----- */
-function doFavour(c,targetIdx){
-  spendAction(c);
-  log('You played Call In a Favour on '+G.players[targetIdx].name+'.');
-  resolveBlock(targetIdx,0,'Call In a Favour',blocked=>{
-    if(blocked){ log(G.players[targetIdx].name+' blocked it.'); checkAllWin(); renderAll(); return; }
-    requestPayment(targetIdx,5,0,()=>{ checkAllWin(); renderAll(); flashOpp(targetIdx); sfx('coin'); });
+function doFavour(c,targetIdx,by){
+  if(NET.intercept('favour',{id:c.id,t:targetIdx})) return;
+  const b=(by==null?MYSEAT:by); NET.evt(b,c);
+  spendAction(c,b);
+  log(nameOf(b)+' played Call In a Favour on '+nameOf(targetIdx)+'.');
+  resolveBlock(targetIdx,b,'Call In a Favour',blocked=>{
+    if(blocked){ log(nameOf(targetIdx)+' blocked it.'); checkAllWin(); renderAll(); return; }
+    requestPayment(targetIdx,5,b,()=>{ checkAllWin(); renderAll(); flashOpp(targetIdx); sfx('coin'); });
   });
 }
-function doShout(c){
-  spendAction(c);
-  log('You shouted a round — everyone owes you $2M.');
-  processQueue([1,2],(t,next)=>{
-    resolveBlock(t,0,'Shout a Round',blocked=>{
+function doShout(c,by){
+  if(NET.intercept('shout',{id:c.id})) return;
+  const b=(by==null?MYSEAT:by); NET.evt(b,c);
+  spendAction(c,b);
+  log(nameOf(b)+' shouted a round — everyone owes them $2M.');
+  processQueue(othersOf(b),(t,next)=>{
+    resolveBlock(t,b,'Shout a Round',blocked=>{
       if(blocked){ log(G.players[t].name+' blocked it.'); return next(); }
-      requestPayment(t,2,0,next);
+      requestPayment(t,2,b,next);
     });
   },()=>{ checkAllWin(); renderAll(); });
 }
-function doRent(c,color,targetIdx){
+function doRent(c,color,targetIdx,by){
+  if(NET.intercept('rent',{id:c.id,color,t:targetIdx})) return;
+  const b=(by==null?MYSEAT:by); NET.evt(b,c);
   const base = rentFor(me(),color);
   const hikeCard = me().hand.find(x=>x.t==='action'&&x.kind==='hike');
   if(hikeCard && G.playsLeft>=2){
@@ -2196,7 +2318,7 @@ function execRent(c,color,targetIdx,hikeCard,base){
   const targets = targetIdx!=null ? [targetIdx] : [1,2];
   log('You charged $'+amount+'M '+COLORS[color].label+' rent.');
   processQueue(targets,(t,next)=>{
-    resolveBlock(t,0,'Rent',blocked=>{
+    resolveBlock(t,b,'Rent',blocked=>{
       if(blocked){ log(G.players[t].name+' blocked the rent.'); return next(); }
       requestPayment(t,amount,0,()=>{ flashOpp(t); sfx('coin'); next(); });
     });
@@ -2206,13 +2328,15 @@ function stealTargetsOf(pIdx){ // props not in complete sets
   const p=G.players[pIdx];
   return propList(p).filter(x=>!isComplete(p,x.color));
 }
-function execSwipe(c, tIdx, cardId){
+function execSwipe(c, tIdx, cardId, by){
+  if(NET.intercept('swipe',{id:c.id,t:tIdx,cid:cardId})) return;
+  const b=(by==null?MYSEAT:by); NET.evt(b,c);
   const target = G.players[tIdx];
   const entry = propList(target).find(x=>x.card.id===cardId);
   if(!entry) return;
   spendAction(c);
   log('You played Sneaky Swipe on '+target.name+'.');
-  resolveBlock(tIdx,0,'Sneaky Swipe',blocked=>{
+  resolveBlock(tIdx,b,'Sneaky Swipe',blocked=>{
     if(blocked){ log('Swipe blocked.'); checkAllWin(); renderAll(); return; }
     transferProp(target,me(),entry.card);
     log('You swiped '+cardName(entry.card)+'.');
@@ -2220,23 +2344,27 @@ function execSwipe(c, tIdx, cardId){
     checkAllWin(); renderAll();
   });
 }
-function execTakeoverD(c, tIdx, color){
+function execTakeoverD(c, tIdx, color, by){
+  if(NET.intercept('takeover',{id:c.id,t:tIdx,color})) return;
+  const b=(by==null?MYSEAT:by); NET.evt(b,c);
   spendAction(c);
   log('You launched a Hostile Takeover on '+G.players[tIdx].name+"'s "+COLORS[color].label+' set!');
-  resolveBlock(tIdx,0,'Hostile Takeover',blocked=>{
+  resolveBlock(tIdx,b,'Hostile Takeover',blocked=>{
     if(blocked){ log('Takeover blocked.'); checkAllWin(); renderAll(); return; }
     doTakeover(tIdx,0,color);
     checkAllWin(); renderAll(); flashOpp(tIdx); sfx('good'); haptic([12,50,18]);
   });
 }
-function execSwapFinal(c, tIdx, theirCardId, mineCardId){
+function execSwapFinal(c, tIdx, theirCardId, mineCardId, by){
+  if(NET.intercept('swap',{id:c.id,t:tIdx,cid:theirCardId,mid:mineCardId})) return;
+  const b=(by==null?MYSEAT:by); NET.evt(b,c);
   const target=G.players[tIdx];
   const theirEntry = propList(target).find(x=>x.card.id===theirCardId);
   const mineEntry = propList(me()).find(x=>x.card.id===mineCardId);
   if(!theirEntry||!mineEntry) return;
   spendAction(c);
   log('You proposed a Swap Meet with '+target.name+'.');
-  resolveBlock(tIdx,0,'Swap Meet',blocked=>{
+  resolveBlock(tIdx,b,'Swap Meet',blocked=>{
     if(blocked){ log('Swap blocked.'); checkAllWin(); renderAll(); return; }
     transferProp(me(),target,mineEntry.card);
     transferProp(target,me(),theirEntry.card);
@@ -2259,6 +2387,251 @@ function doTakeover(fromIdx,toIdx,color){
   log(to.name+' took the whole '+COLORS[color].label+' set.');
 }
 </script>
+
+<script>
+/* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
+const SUPABASE_URL = '';   // <- paste project URL
+const SUPABASE_ANON = '';  // <- paste anon public key
+
+const NET = {
+  mode: 'off',           // 'off' | 'lobby-host' | 'joining' | 'host' | 'client'
+  seat: 0, code: null, tx: null, names: [], pile: null,
+  applying: false, pendingAsks: {},
+  myName: (typeof localStorage!=='undefined' && localStorage.getItem && localStorage.getItem('it_name')) || '',
+
+  /* --- executor gate: on a client, local calls become intents --- */
+  intercept(k, a){
+    if(this.mode!=='client' || this.applying) return false;
+    this.tx.send('intent', { seat: this.seat, k, a });
+    clearSelection(); hidePrompt(); closeSheet();
+    showPrompt('Sent — waiting for the table…', false);
+    return true;
+  },
+  reply(type, payload){ this.tx.send('intent', { seat: this.seat, k:'reply', a:Object.assign({rt:type}, payload) }); },
+  evt(seat, card){ if(this.mode==='host' && this.tx && card) this.tx.send('evt', { kind:'play', seat, card }); },
+
+  /* --- host: ask a remote seat for a decision --- */
+  ask(seat, ask, cb){
+    this.pendingAsks[seat] = cb;
+    this.pushState();
+    this.tx.send('ask', { seat, ask });
+  },
+  applyPaymentIds(payerIdx, receiverIdx, amount, ids){
+    const payer=G.players[payerIdx], receiver=G.players[receiverIdx];
+    const idset = new Set(ids);
+    let bankSel = payer.bank.filter(c=>idset.has(c.id));
+    let propSel = propList(payer).filter(x=>idset.has(x.card.id));
+    let tot = bankSel.reduce((s,c)=>s+c.v,0) + propSel.reduce((s,x)=>s+x.card.v,0);
+    if(tot < Math.min(amount, payAssetsTotal(payer))){
+      // invalid or short selection: fall back to a fair smallest-first cover
+      bankSel=[]; propSel=[];
+      let owed=amount;
+      const order=[...payer.bank.map(c=>({c,v:c.v,bank:true})), ...propList(payer).map(x=>({c:x.card,v:x.card.v,bank:false}))].sort((a,b)=>a.v-b.v);
+      for(const o of order){ if(owed<=0)break; if(o.bank) bankSel.push(o.c); else propSel.push({card:o.c}); owed-=o.v; }
+    }
+    bankSel.forEach(c=>transferBank(payer,receiver,c));
+    propSel.forEach(x=>transferProp(payer,receiver,x.card));
+    log(payer.name+' paid $'+amount+'M to '+receiver.name+'.');
+    renderAll();
+  },
+
+  /* --- host: apply a client intent as that seat --- */
+  applyIntent(m){
+    const seat = m.seat, k = m.k, a = m.a || {};
+    if(k==='reply'){
+      const cb = this.pendingAsks[seat];
+      if(cb){ delete this.pendingAsks[seat]; cb(a); }
+      return;
+    }
+    if(G.over || G.turn!==seat) return;   // stale / out-of-turn intents dropped
+    const p = G.players[seat];
+    const findHand = id => p.hand.find(c=>c.id===id);
+    this.applying = true;
+    try{
+      const c = a.id!=null ? findHand(a.id) : null;
+      if(k==='endturn') endTurn();
+      else if(!c) {}
+      else if(k==='bank') bankCard(c, seat);
+      else if(k==='prop') playProp(c, a.color, seat);
+      else if(k==='bldg') placeBldg(c, a.color, a.slot, seat);
+      else if(k==='payday') playPayday(c, seat);
+      else if(k==='shout') doShout(c, seat);
+      else if(k==='favour') doFavour(c, a.t, seat);
+      else if(k==='rent') doRent(c, a.color, a.t, seat);
+      else if(k==='swipe') execSwipe(c, a.t, a.cid, seat);
+      else if(k==='takeover') execTakeoverD(c, a.t, a.color, seat);
+      else if(k==='swap') execSwapFinal(c, a.t, a.cid, a.mid, seat);
+    } finally {
+      this.applying = false;
+    }
+    renderAll();
+  },
+
+  /* --- state sync (public state broadcast; own hand per-seat) --- */
+  serialize(){
+    const top = G.discard.length ? cardName(G.discard[G.discard.length-1]) : 'Pile';
+    return {
+      turn:G.turn, playsLeft:G.playsLeft, turnCount:G.turnCount, over:G.over,
+      deckN:G.deck.length, pile:{ label:top, n:G.discard.length },
+      players:G.players.map(q=>({ name:q.name, isAI:!!q.isAI, handN:q.hand.length, bank:q.bank, props:q.props, bldg:q.bldg })),
+    };
+  },
+  pushState(){
+    if(this.mode!=='host' || !this.tx) return;
+    this.tx.send('state', this.serialize());
+    G.players.forEach((q,i)=>{ if(!q.isAI && i!==MYSEAT) this.tx.send('hand', { seat:i, cards:q.hand }); });
+  },
+  applyState(st){
+    const myHand = (G.players[MYSEAT] && G.players[MYSEAT].hand) || [];
+    G.turn=st.turn; G.playsLeft=st.playsLeft; G.turnCount=st.turnCount;
+    G.deck = new Array(st.deckN);
+    G.discard = new Array(st.pile.n);
+    this.pile = st.pile;
+    G.players = st.players.map((q,i)=>({
+      name:q.name, isAI:q.isAI, bank:q.bank, props:q.props, bldg:q.bldg,
+      hand: i===MYSEAT ? myHand : new Array(q.handN).fill(0).map((_,j)=>({ id:'h'+i+'_'+j, t:'money', v:0 })),
+    }));
+    const wasOver = G.over; G.over = st.over;
+    renderAll();
+    if(st.over && !wasOver){
+      const w = G.players.find(p=>completeColors(p).length>=3);
+      if(w){
+        $('#wintitle').textContent = w===me() ? 'You win' : w.name+' wins';
+        $('#winsub').textContent = 'Three complete sets: ' + completeColors(w).map(c=>COLORS[c].label).join(', ');
+        $('#winstats').textContent = 'Round '+G.turnCount+' · '+G.players.map(x=>x.name+' $'+bankTotal(x)+'M').join(' · ');
+        setTimeout(()=>{ $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); }, 500);
+      }
+    }
+  },
+
+  onMessage(type, m){
+    if(this.mode==='host'){
+      if(type==='intent') this.applyIntent(m);
+      if(type==='hello') this.pushState();
+      return;
+    }
+    if(this.mode==='client'){
+      if(type==='state') this.applyState(m);
+      if(type==='hand' && m.seat===this.seat){
+        if(G.players[this.seat]) G.players[this.seat].hand = m.cards;
+        renderAll();
+      }
+      if(type==='evt' && m.kind==='play' && m.seat!==this.seat && m.card) aiShowcase(m.card, m.seat);
+      if(type==='ask' && m.seat===this.seat){
+        const a = m.ask;
+        if(a.type==='pay') visDefer(()=>enterPayMode(a.amount, a.recv, ()=>{}));
+        if(a.type==='discard'){ MODE.type='discard'; MODE.need=a.need; MODE.sel=new Set(); sfx('alert'); renderAll(); updateDiscardHUD(); }
+        if(a.type==='jsn'){
+          sfx('alert'); haptic([10,50,10]);
+          const nds = me().hand.filter(x=>x.t==='action'&&x.kind==='nodeal').length;
+          openSheet(`<div class="interrupt-flag">Interruption</div>
+            <h3>No Deal!?</h3><div class="sub">${a.desc} was played against you.<br>You hold ${nds} No Deal! card${nds===1?'':'s'}.</div>
+            <div class="optlist">
+              <button class="optbtn primary" onclick="NET.reply('jsn',{use:true});closeSheet()">Play No Deal!</button>
+              <button class="optbtn" onclick="NET.reply('jsn',{use:false});closeSheet()">Let it happen</button>
+            </div>`, true);
+        }
+      }
+      return;
+    }
+    if(type==='start' && (this.mode==='joining')) this.onStart(m, false);
+  },
+
+  /* --- lobby --- */
+  makeCode(){ const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c=''; for(let i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)]; return c; },
+  async connect(code, hosting){
+    if(!SUPABASE_URL || !SUPABASE_ANON){
+      alert('Online needs Supabase keys pasted into the config at the top of this file (SUPABASE_URL / SUPABASE_ANON). Solo works without them.');
+      return false;
+    }
+    if(!window.supabase){
+      await new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; sc.onload=res; sc.onerror=()=>rej(new Error('supabase cdn failed')); document.head.appendChild(sc); });
+    }
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    const ch = sb.channel('room-'+code, { config:{ broadcast:{ self:false }, presence:{ key: this.myName+'-'+Math.random().toString(36).slice(2,6) } } });
+    const self = this;
+    this.tx = {
+      send(type, payload){ ch.send({ type:'broadcast', event:type, payload }); },
+      track(meta){ ch.track(meta); },
+      presence(){ return ch.presenceState(); },
+    };
+    ['state','hand','evt','ask','intent','start','hello'].forEach(ev=>{
+      ch.on('broadcast', { event:ev }, (msg)=>self.onMessage(ev, msg.payload));
+    });
+    ch.on('presence', { event:'sync' }, ()=>self.renderLobby());
+    await new Promise(res=>ch.subscribe(st=>{ if(st==='SUBSCRIBED') res(); }));
+    this.code = code;
+    return true;
+  },
+  async hostGame(){
+    this.myName = (($('#homename')&&$('#homename').value)||'Host').slice(0,12) || 'Host';
+    if(typeof localStorage!=='undefined' && localStorage.setItem) localStorage.setItem('it_name', this.myName);
+    const code = this.makeCode();
+    if(!(await this.connect(code, true))) return;
+    this.mode = 'lobby-host';
+    this.tx.track({ name:this.myName, host:true, joined:Date.now() });
+    $('#homemain').style.display='none'; $('#homelobby').style.display='';
+    $('#lobbycode').textContent = code;
+    this.renderLobby();
+  },
+  async joinGame(){
+    this.myName = (($('#homename')&&$('#homename').value)||'Guest').slice(0,12) || 'Guest';
+    if(typeof localStorage!=='undefined' && localStorage.setItem) localStorage.setItem('it_name', this.myName);
+    const code = (($('#joincode')&&$('#joincode').value)||'').toUpperCase().trim();
+    if(code.length!==4){ alert('Enter the 4-letter room code.'); return; }
+    if(!(await this.connect(code, false))) return;
+    this.mode = 'joining';
+    this.tx.track({ name:this.myName, host:false, joined:Date.now() });
+    $('#homemain').style.display='none'; $('#homelobby').style.display='';
+    $('#lobbycode').textContent = code;
+    const st=$('#lobbystart'); if(st&&st.style) st.style.display='none';
+    $('#lobbywait').textContent = 'Waiting for the host to start…';
+    this.renderLobby();
+  },
+  lobbySeats(){
+    const pres = this.tx ? this.tx.presence() : {};
+    const list = [];
+    Object.values(pres).forEach(arr=>arr.forEach(mm=>list.push(mm)));
+    list.sort((a,b)=>((b.host?1:0)-(a.host?1:0)) || (a.joined-b.joined));
+    return list.slice(0,4);
+  },
+  renderLobby(){
+    const el = $('#lobbyseats'); if(!el || !this.tx) return;
+    const seats = this.lobbySeats();
+    el.innerHTML = seats.map((mm,i)=>`<div class="lobbyseat"><span class="avatar" style="background:${i===0?'var(--money-gold)':'var(--felt-highlight)'}">${(mm.name||'?')[0]}</span>${mm.name}${mm.host?' · host':''}</div>`).join('')
+      + (seats.length<2 ? '<div class="sub" style="opacity:.5">Waiting for players… share the code</div>' : '');
+    const st = $('#lobbystart'); if(st && this.mode==='lobby-host') st.disabled = seats.length<2;
+  },
+  startOnline(){
+    if(this.mode!=='lobby-host') return;
+    const seats = this.lobbySeats();
+    if(seats.length<2) return;
+    const names = seats.map(mm=>mm.name);
+    this.tx.send('start', { names });
+    this.onStart({ names }, true);
+  },
+  onStart(m, hosting){
+    const names = m.names;
+    if(hosting){ this.mode='host'; this.seat=0; MYSEAT=0; }
+    else {
+      this.mode='client';
+      this.seat = Math.max(0, names.indexOf(this.myName));
+      MYSEAT = this.seat;
+    }
+    newGame();
+    G.players = names.map(n=>({ name:n, isAI:false, hand:[], bank:[], props:{}, bldg:{} }));
+    G.deck = shuffle(buildDeck());
+    for(let i=0;i<5;i++) G.players.forEach(p=>p.hand.push(draw()));
+    G.turn = 0; G.playsLeft = 0; G.turnCount = 1; G.over = false;
+    closeHome();
+    log('Online game — '+names.join(', ')+'. First to 3 sets wins.');
+    if(hosting){ renderAll(); this.pushState(); setTimeout(startTurn, 800); }
+    else renderAll();
+  },
+};
+function closeHome(){ const h=$('#home'); if(h&&h.classList) h.classList.remove('show'); }
+</script>
+
 <script>
 /* ================= AI ================= */
 function spendAI(c,p){ // for consumed action/rent cards: hand -> discard
@@ -2615,6 +2988,7 @@ function aiStep(p){
 
 /* ================= BOOT ================= */
 newGame();
+if($('#homename') && $('#homename').value!==undefined) $('#homename').value = NET.myName || '';
 INITDEAL = true;
 me().hand.forEach(c=>NEWIDS.add(c.id));
 renderAll();

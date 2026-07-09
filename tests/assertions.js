@@ -130,6 +130,26 @@ const cands = brainCandidates(hum, 0, ()=>{});
 T('shared evaluator scores any player (bank + play candidates)',
   cands.some(x=>x.mode==='bank'&&x.cardId===96001) && cands.some(x=>x.mode==='play'&&x.cardId===96002) && cands.every(x=>x.ev>0));
 
+
+// ===== NET protocol =====
+newGame();
+G.players[1].bank=[{id:97001,t:'money',v:5}];
+addProp(G.players[2], {id:97002,t:'prop',color:'teal',name:'x',v:3},'teal');
+const st = NET.serialize();
+T('serialize captures public state, hands as counts only', st.players.length===3 && st.players[1].bank[0].v===5 && st.players[2].props.teal.length===1 && st.players.every(q=>typeof q.handN==='number' && q.hand===undefined));
+const savedSeat=MYSEAT; MYSEAT=1; NET.mode='client';
+G.players[1].hand=[{id:97003,t:'money',v:2}];
+NET.applyState(JSON.parse(JSON.stringify(st)));
+T('applyState: own hand kept, other hands are placeholders', G.players[1].hand[0].id===97003 && G.players[0].hand.every(c=>String(c.id).indexOf('h')===0) && bankTotal(G.players[1])===5);
+const sent=[]; NET.tx={ send:(t,p)=>sent.push({t,p}) };
+const handN=G.players[1].hand.length, bankN=G.players[1].bank.length;
+bankCard(G.players[1].hand[0]);
+T('client intercept: intent sent, no local mutation', sent.length===1 && sent[0].t==='intent' && sent[0].p.k==='bank' && G.players[1].hand.length===handN && G.players[1].bank.length===bankN);
+NET.mode='host'; MYSEAT=0; G.turn=1; G.playsLeft=3; G.over=false;
+NET.applyIntent({seat:1,k:'bank',a:{id:97003}});
+T('host applyIntent executes as that seat', G.players[1].bank.some(c=>c.id===97003));
+NET.mode='off'; MYSEAT=savedSeat; NET.tx=null;
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

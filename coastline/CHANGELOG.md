@@ -1,5 +1,28 @@
 # Coastline — Changelog
 
+## v0.3.0 — 2026-07-09
+Online multiplayer. Host-authoritative, Supabase Realtime, 2-4 humans.
+
+**Home screen**
+- The game now opens on a home card: name entry (persisted), Play Solo (unchanged single-player vs Bazza & Shaz), Host online game, or Join with a 4-letter room code. Lobby shows live presence; host starts at 2-4 players.
+
+**Architecture — host-authoritative**
+- The host runs the real engine; clients never mutate state. Every player-action executor gained a client gate: on a client it serialises to an intent and sends it; the host validates (turn/ownership), executes it as that seat, and broadcasts. Cheat-resistant by construction — clients only ever hold their own hand.
+- State sync: public state (turn, plays, banks, tables, buildings, deck/pile counts, hand *counts*) broadcast after every host render; each player's actual cards sent per-seat. Clients hard-apply, so any divergence self-heals.
+- Remote decisions: payments, No Deal calls, and hand-limit discards route as asks — the remote player gets the exact same direct-manipulation UI (pay from their board, tap-to-discard, interrupt sheet), and their reply resolves the host's pending chain. Invalid/short payment replies fall back to a fair smallest-first cover.
+- Plays by other humans showcase exactly like AI plays (card rises centre-stage with their name tag) — the v0.2.22 showcase was quietly the multiplayer spectating system all along.
+- Transport: Supabase Realtime broadcast + presence only — zero database tables; a room is just a channel named by its code. supabase-js loads lazily from CDN only when Online is chosen; Solo works fully offline.
+
+**Prerequisite refactor (seat abstraction)**
+- MYSEAT replaces every "human = seat 0" assumption: me()/isMyTurn(), opponent row (renders everyone-but-you, panels addressed by absolute seat), targeting, selection, showcases. All attack/payment/placement executors take an actor seat. Solo is behaviourally identical (MYSEAT=0).
+
+**Config**
+- SUPABASE_URL / SUPABASE_ANON constants at the top of the online script block — paste project URL + anon key to go live. Without them, Online politely explains itself and Solo is unaffected.
+
+**Known v1 boundaries** — host leaving ends the game (no host migration); hand messages are technically sniffable via devtools (fine for mates, per-seat channels later); remote rent skips the Double-Rent add-on prompt; online seats are all-human (no mixed AI seats yet).
+
+**Tests** — 4 new protocol assertions (serialize privacy, applyState hand-keeping, client intercept purity, host intent execution): 41/41 PASS; solo interaction flows 12/12 from the repo.
+
 ## v0.2.30 — 2026-07-09
 Back to pure game: engine research moves to its own repo. Plus a fresh feel pass.
 
