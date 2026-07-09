@@ -1,5 +1,25 @@
 # Coastline — Changelog
 
+## v0.4.3 — 2026-07-09
+Trainer efficiency pass: successive-halving rungs + a browser worker pool. Roughly 8–10× more search per overnight run at the same statistical bar. No gameplay changes.
+
+**Successive-halving rungs (both trainers)**
+- Generations grew from 8 to 12 candidates, but every candidate now starts with a cheap 16-seed screen (96 games); only the top 4 advance to the full 50-seed evaluation. Losers stop early — 1,968 games per generation instead of 2,400 while exploring 50% more of the genome space (~45% cheaper per candidate). Selection quality is preserved where it matters: survivors are ranked on full evals, and the CI-gated promotion path (confirmation on 1,002 fresh paired games, CI must exclude 50%) is untouched. Rungs buy more search per hour, never a lower bar.
+- Config now lives in the state file (a run keeps its parameters even if defaults change later) and can be overridden at start: `node tests/trainer.js --state s.json --config '{"LAMBDA":16,"RUNG_SEEDS":[12,50]}'`. New `--gens N` cap. v1 state files are migrated on load (champion, history and ES state survive; the open generation restarts).
+
+**Worker pool (coastline/trainer.html)**
+- The page now boots one engine worker per CPU core (hardwareConcurrency − 1) and schedules seed blocks across them. Games are pure functions of (seed, genomes), so parallelism is a pure wall-clock multiplier — results are buffered and committed in seed order, keeping the state file bit-identical to a sequential run. Pause drains in-flight games before checkpointing.
+- Live dashboard gains pool size and games/sec; export/import unchanged and still interchangeable with the node trainer.
+
+**Verification**
+- Trainer sanity extended to 6 checks: exact self-eval null, deterministic sampling, checkpoint/resume bit-identity across two full generations including rung cuts, rung cuts keep screen leaders, v1-state migration.
+- Parity test: the browser page's shared-logic block, driven the way the pool drives it — including worst-case reverse-order block completion through the commit buffer — reproduces a `node tests/trainer.js` run bit-for-bit over 3 full generations (identical history, mean, sigma, champion, game counts). One real bug found and fixed by this test: the node driver's generation cap was checked before advance instead of after, playing one stray block past the cap.
+- All suites green on v0.4.2 (AI section verified identical v0.4.1→v0.4.2): 33/33, flows 12/12, drops clean.
+
+**What efficiency can and can't buy (setting expectations)**
+- These are search-throughput improvements inside the 22-gene constant space, which ~10k games of tuning already showed is near a local optimum. If a real constants-level edge exists, an overnight pooled run now has the budget to find and *confirm* it — but per the project roadmap, the next real strength jumps live in structure (turn-sequence planning, exposure terms, determinized rollouts), which the ladder is ready to referee.
+
+
 ## v0.4.2 — 2026-07-09
 Security hardening, prompted by Supabase's anonymous-auth warning ("anonymous users get the authenticated role — review your RLS").
 

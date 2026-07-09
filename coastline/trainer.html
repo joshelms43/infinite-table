@@ -1,13 +1,12 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — genome trainer (browser twin of tests/trainer.js)
-  Open this page from the deployed site (it fetches index.html for the engine),
-  press Start, and leave the tab open overnight. The engine runs full speed in a
-  Web Worker; the run checkpoints to localStorage after every batch, so closing or
-  crashing the tab loses at most a couple of seconds of games. Export/Import state
-  is byte-compatible with `node tests/trainer.js --state FILE`.
-  Keep the machine awake (the page requests a screen wake lock while running) and
-  run ONE trainer tab at a time — two tabs would fight over the same checkpoint.
+  v2: WORKER POOL. One engine per CPU core; games are pure functions of
+  (seed, genomes), so parallel results commit in seed order and the state file
+  stays bit-identical to a sequential run — exports load straight into
+  `node tests/trainer.js --state FILE` and vice versa (v1 states are migrated).
+  Open this page from the deployed site, press Start, leave the tab overnight.
+  Checkpoints to localStorage continuously; ONE trainer tab at a time.
 -->
 <html lang="en">
 <head>
@@ -15,7 +14,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Coastline — Trainer</title>
 <style>
-  :root{ --bg:#101820; --card:#1a2430; --line:#2a3644; --ink:#e8eef4; --dim:#8fa1b3; --gold:#f4c95d; --coral:#ff6b6b; --mint:#4ecdc4; }
   *{ box-sizing:border-box; margin:0; }
   body{ background:#101820; color:#e8eef4; font:15px/1.5 "Nunito Sans",system-ui,sans-serif; padding:20px; max-width:900px; margin:0 auto; }
   h1{ font-size:22px; margin:4px 0 2px; } h1 em{ color:#f4c95d; font-style:normal; }
@@ -39,7 +37,7 @@
 </head>
 <body>
 <h1>Coastline <em>Trainer</em></h1>
-<div class="sub">Paired-seed evolution with CI-gated promotion — the browser twin of <code>tests/trainer.js</code>. One tab at a time; keep the machine awake overnight.</div>
+<div class="sub">Paired-seed ES · successive-halving rungs · CI-gated promotion · worker pool. Browser twin of <code>tests/trainer.js</code> — one tab at a time; keep the machine awake overnight.</div>
 
 <div class="card">
   <div class="row">
@@ -50,6 +48,7 @@
     <button id="champbtn" class="sec">Export champion</button>
     <button id="resetbtn" class="sec">Reset run</button>
     <span id="wakebadge" class="badge">wake lock off</span>
+    <span id="poolbadge" class="badge">booting…</span>
     <span id="runbadge" class="badge">loading engine…</span>
   </div>
   <input type="file" id="importfile" accept=".json,application/json" style="display:none">
@@ -69,7 +68,7 @@
 
 <div class="card">
   <table>
-    <thead><tr><th>gen</th><th>best share (search, 300 games)</th><th>confirmation (1,002 fresh games)</th><th>outcome</th></tr></thead>
+    <thead><tr><th>gen</th><th>best share (survivor eval)</th><th>confirmation (1,002 fresh games)</th><th>outcome</th></tr></thead>
     <tbody id="hist"></tbody>
   </table>
 </div>
@@ -78,8 +77,7 @@
 
 <script type="text/plain" id="worker-boot">
 /* Worker bootstrap: headless stubs mirroring tests/trainer.js, then boot-eval of
-   engine + core in one direct-eval scope (consts must be shared). */
-const realSetTimeout = self.setTimeout.bind(self);
+   engine + worker core in one direct-eval scope (consts must be shared). */
 const el = () => new Proxy({classList:{add(){},remove(){},toggle(){}},style:{}},{
   get(t,k){ if(k in t) return t[k]; return ()=>{}; },
   set(){ return true; }
@@ -94,7 +92,7 @@ self.onmessage = function(e){
   if(e.data.type!=='boot') return;
   try{
     eval(e.data.engine + '\n;\n' + e.data.core);
-    self.postMessage({type:'ready'});
+    self.postMessage({type:'ready', AI_W: AI_W});
   }catch(err){
     self.postMessage({type:'fatal', msg:String((err&&err.message)||err)});
   }
@@ -102,14 +100,8 @@ self.onmessage = function(e){
 </script>
 
 <script type="text/plain" id="worker-core">
-/* Trainer core. playGame/seedBlock/stats/sampling/trainStep are VERBATIM copies of
-   tests/trainer.body.js — change them there first, then mirror here. State JSON is
-   interchangeable between this page and `node tests/trainer.js --state FILE`. */
-const LAMBDA = 8, MU = 4, SEARCH_SEEDS = 50, CONFIRM_SEEDS = 167;
-const SIGMA0 = 0.15, SIGMA_MIN = 0.03, SIGMA_MAX = 0.5;
-const GENE_MIN = 0.01;
-const CONFIRM_SEED_BASE = 10000000;
-
+/* Worker core: plays seed blocks on demand. playGame/seedBlock are VERBATIM copies
+   of tests/trainer.body.js — change them there first, then mirror here. */
 function mulberry32(seed){
   let s = (seed>>>0) + 0x9E3779B9;
   return function(){
@@ -119,16 +111,10 @@ function mulberry32(seed){
     return ((t ^ (t>>>14))>>>0) / 4294967296;
   };
 }
-function gauss(rand){
-  let u = 0, v = 0;
-  while(u===0) u = rand();
-  while(v===0) v = rand();
-  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
-}
 const pump = ()=>{ let n=0; while(timers.length && n<20000){ const f=timers.shift(); try{f();}catch(e){} n++; } };
 const trueRandom = Math.random;
 function playGame(seed, genomes){
-  timers.length = 0;
+  timers.length = 0; // drain BOOT/previous-game callbacks — determinism depends on this
   Math.random = mulberry32(seed);
   newGame();
   G.players[0].isAI = true;
@@ -140,7 +126,7 @@ function playGame(seed, genomes){
   if(!G.over) return -1;
   return G.players.findIndex(p=>completeColors(p).length>=3);
 }
-function seedBlock(seed, cand, champ){
+function seedBlock(seed, cand, champ){ // 6 paired games on one seed
   let cW = 0, kW = 0;
   for(const solo of [cand, champ]){
     const fill = solo===cand ? champ : cand;
@@ -153,7 +139,43 @@ function seedBlock(seed, cand, champ){
   }
   return {cW, kW};
 }
-function clusterStat(perSeedValues){
+self.onmessage = function(e){
+  const m = e.data;
+  if(m.type!=='block') return;
+  const res = seedBlock(m.seed, m.cand, m.champ);
+  self.postMessage({type:'res', id:m.id, cW:res.cW, kW:res.kW});
+};
+</script>
+
+<script type="text/plain" id="trainer-logic">
+/* SHARED LOGIC — VERBATIM copy of the marked block in tests/trainer.body.js.
+   Edit there first, then mirror here. */
+const DEFAULTS = {
+  LAMBDA: 12, MU: 4,
+  RUNG_SEEDS: [16, 50], RUNG_KEEP: [4],
+  CONFIRM_SEEDS: 167,
+  SIGMA0: 0.15, SIGMA_MIN: 0.03, SIGMA_MAX: 0.5,
+};
+const GENE_MIN = 0.01;
+const CONFIRM_SEED_BASE = 10000000; // confirmation seeds never overlap search seeds
+const cfg = S => Object.assign({}, DEFAULTS, S.config||{});
+
+function mulberry32(seed){
+  let s = (seed>>>0) + 0x9E3779B9;
+  return function(){
+    s |= 0; s = (s + 0x6D2B79F5)|0;
+    let t = Math.imul(s ^ (s>>>15), 1|s);
+    t = (t + Math.imul(t ^ (t>>>7), 61|t)) ^ t;
+    return ((t ^ (t>>>14))>>>0) / 4294967296;
+  };
+}
+function gauss(rand){ // Box–Muller
+  let u = 0, v = 0;
+  while(u===0) u = rand();
+  while(v===0) v = rand();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+function clusterStat(perSeedValues){ // seed-clustered mean ± 95% CI
   const xs = perSeedValues.filter(x=>x!=null);
   const n = xs.length;
   if(n<2) return { m:NaN, ci:NaN, n };
@@ -162,138 +184,185 @@ function clusterStat(perSeedValues){
   return { m, ci: 1.96*Math.sqrt(v/n), n };
 }
 const pct = x => (x*100).toFixed(1)+'%';
-const GENES = Object.keys(AI_W);
 const clone = w => JSON.parse(JSON.stringify(w));
-function sampleCandidate(mean, sigma, gen, k){
+function sampleCandidate(mean, sigma, gen, k){ // deterministic in (gen,k) — resume-safe
   const rand = mulberry32(0x5EED ^ (gen*2654435761>>>0) ^ (k*40503));
   const g = {};
-  GENES.forEach(key=>{ g[key] = +Math.max(GENE_MIN, mean[key]*Math.exp(sigma*gauss(rand))).toFixed(4); });
+  Object.keys(mean).forEach(key=>{ g[key] = +Math.max(GENE_MIN, mean[key]*Math.exp(sigma*gauss(rand))).toFixed(4); });
   return g;
 }
 function geoMean(genomes){
   const g = {};
-  GENES.forEach(key=>{
+  Object.keys(genomes[0]).forEach(key=>{
     const m = Math.exp(genomes.reduce((s,x)=>s+Math.log(Math.max(GENE_MIN,x[key])),0)/genomes.length);
     g[key] = +m.toFixed(4);
   });
   return g;
 }
-function freshState(){
-  return {
-    config: {LAMBDA, MU, SEARCH_SEEDS, CONFIRM_SEEDS},
-    champion: clone(AI_W), championAge: 0, promotions: 0,
-    gen: 1, mean: clone(AI_W), sigma: SIGMA0,
-    phase: 'search', candIdx: 0,
-    candidates: [], confirm: null, history: [], totalGames: 0,
-  };
+function freshState(baseGenome, config){
+  const S = { schema:2, config: Object.assign({}, DEFAULTS, config||{}) };
+  return Object.assign(S, {
+    champion: clone(baseGenome), championAge: 0, promotions: 0,
+    gen: 1, mean: clone(baseGenome), sigma: S.config.SIGMA0,
+    phase: 'search', rung: 0, candIdx: 0,
+    candidates: [],           // [{genome, active, seedsDone, cW, kW, shares:[]}]
+    confirm: null,            // {genome, seedsDone, cW, kW, shares:[]}
+    history: [],              // per-generation summaries
+    totalGames: 0,
+  });
 }
-function evalRec(genome){ return {genome, seedsDone:0, cW:0, kW:0, shares:[]}; }
-function stepEval(rec, seed, champ){
-  const r = seedBlock(seed, rec.genome, champ);
-  rec.cW += r.cW; rec.kW += r.kW;
-  rec.shares.push((r.cW+r.kW)>0 ? r.cW/(r.cW+r.kW) : null);
-  rec.seedsDone++;
+function migrate(S, logFn){ // v1 (pre-rung) -> v2: keep the run, restart the open generation
+  if(S.schema>=2) return S;
+  S.schema = 2; S.config = Object.assign({}, DEFAULTS);
+  S.rung = 0; S.phase = 'search'; S.candidates = []; S.candIdx = 0; S.confirm = null;
+  (S.history||[]).forEach(h=>{ if(h.challenged && !h.confirm) h.challenged=false; }); // no orphaned confirms
+  logFn('state migrated v1 -> v2 (rung schedule): champion, history and ES state kept; in-progress generation restarted');
+  return S;
 }
+function evalRec(genome){ return {genome, active:true, seedsDone:0, cW:0, kW:0, shares:[]}; }
 const shareOf = rec => clusterStat(rec.shares);
-function trainStep(S, logFn){
-    if(S.phase==='search'){
-      if(S.candidates.length===0){
-        for(let k=0;k<LAMBDA;k++) S.candidates.push(evalRec(sampleCandidate(S.mean, S.sigma, S.gen, k)));
-        S.candIdx = 0;
-      }
-      const rec = S.candidates[S.candIdx];
-      if(rec.seedsDone < SEARCH_SEEDS){
-        stepEval(rec, (S.gen-1)*SEARCH_SEEDS + rec.seedsDone, S.champion);
-        S.totalGames += 6;
-      } else if(S.candIdx < LAMBDA-1){
-        S.candIdx++;
-      } else {
-        const ranked = S.candidates.map(r=>({r, s:shareOf(r)})).sort((a,b)=>b.s.m-a.s.m);
-        const best = ranked[0];
-        S.mean = geoMean(ranked.slice(0,MU).map(x=>x.r.genome));
-        // step-size rule: count only *significant* winners — under paired mirroring a
-        // neutral candidate sits at ~50% by construction, so raw >50% counts would
-        // inflate sigma in flat terrain (null rate of m-ci>0.5 is ~2.5%, target 20%)
-        const beat = ranked.filter(x=>x.s.m - x.s.ci > 0.5).length/LAMBDA;
-        S.sigma = Math.min(SIGMA_MAX, Math.max(SIGMA_MIN, S.sigma*Math.exp((beat-0.2)*0.6)));
-        const sig = best.s.m - best.s.ci > 0.5;
-        S.history.push({gen:S.gen, bestShare:+best.s.m.toFixed(4), bestCI:+best.s.ci.toFixed(4),
-                        beatFrac:beat, sigma:+S.sigma.toFixed(4), challenged:sig, promoted:false});
-        logFn('gen '+S.gen+': best share '+pct(best.s.m)+' ± '+pct(best.s.ci)+' over '+SEARCH_SEEDS+' seeds; '+
-                    (sig ? 'CHALLENGE — confirming on fresh seeds' : 'champion holds (CI includes 50%)'));
-        if(sig){ S.phase='confirm'; S.confirm = evalRec(clone(best.r.genome)); }
-        else { S.gen++; S.candidates=[]; S.candIdx=0; S.championAge++; }
-      }
-    } else {
+function commitBlock(S, rec, res){ // apply one seed block's result (in seed order)
+  rec.cW += res.cW; rec.kW += res.kW;
+  rec.shares.push((res.cW+res.kW)>0 ? res.cW/(res.cW+res.kW) : null);
+  rec.seedsDone++;
+  S.totalGames += 6;
+}
+// needsGames: what the run wants next — {rec, seedOf(i)} or null (advance() first).
+function needsGames(S){
+  const C = cfg(S);
+  if(S.phase==='confirm'){
+    const rec = S.confirm;
+    if(rec.seedsDone < C.CONFIRM_SEEDS) return { rec, target:C.CONFIRM_SEEDS, seedOf:i=>CONFIRM_SEED_BASE + S.gen*C.CONFIRM_SEEDS + i };
+    return null;
+  }
+  if(!S.candidates.length) return null;
+  const rec = S.candidates[S.candIdx];
+  const target = C.RUNG_SEEDS[S.rung];
+  if(rec && rec.active && rec.seedsDone < target) return { rec, target, seedOf:i=>(S.gen-1)*C.RUNG_SEEDS[C.RUNG_SEEDS.length-1] + i };
+  return null;
+}
+// advance: perform every state transition that needs NO games. Returns when
+// needsGames(S) is non-null or the generation counter passed maxGen.
+function advance(S, logFn){
+  const C = cfg(S);
+  for(;;){
+    if(S.phase==='confirm'){
       const rec = S.confirm;
-      if(rec.seedsDone < CONFIRM_SEEDS){
-        stepEval(rec, CONFIRM_SEED_BASE + S.gen*CONFIRM_SEEDS + rec.seedsDone, S.champion);
-        S.totalGames += 6;
+      if(rec.seedsDone < C.CONFIRM_SEEDS) return;
+      const st = shareOf(rec);
+      const win = st.m - st.ci > 0.5;
+      const h = S.history[S.history.length-1];
+      h.confirm = {share:+st.m.toFixed(4), ci:+st.ci.toFixed(4), games:C.CONFIRM_SEEDS*6};
+      h.promoted = win;
+      if(win){
+        S.champion = clone(rec.genome); S.championAge = 0; S.promotions++;
+        logFn('gen '+S.gen+': PROMOTED — confirmed '+pct(st.m)+' ± '+pct(st.ci)+' over '+(C.CONFIRM_SEEDS*6)+' fresh paired games');
       } else {
-        const st = shareOf(rec);
-        const win = st.m - st.ci > 0.5;
-        const h = S.history[S.history.length-1];
-        h.confirm = {share:+st.m.toFixed(4), ci:+st.ci.toFixed(4), games:CONFIRM_SEEDS*6};
-        h.promoted = win;
-        if(win){
-          S.champion = clone(rec.genome); S.championAge = 0; S.promotions++;
-          logFn('gen '+S.gen+': PROMOTED — confirmed '+pct(st.m)+' ± '+pct(st.ci)+' over '+(CONFIRM_SEEDS*6)+' fresh paired games');
-        } else {
-          S.championAge++;
-          logFn('gen '+S.gen+': challenge REJECTED at confirmation — '+pct(st.m)+' ± '+pct(st.ci)+' (winner\'s curse caught by the gate)');
-        }
-        S.phase='search'; S.confirm=null; S.gen++; S.candidates=[]; S.candIdx=0;
+        S.championAge++;
+        logFn('gen '+S.gen+': challenge REJECTED at confirmation — '+pct(st.m)+' ± '+pct(st.ci)+' (winner\'s curse caught by the gate)');
+      }
+      S.phase='search'; S.confirm=null; S.gen++; S.rung=0; S.candidates=[]; S.candIdx=0;
+      continue;
+    }
+    if(!S.candidates.length){
+      for(let k=0;k<C.LAMBDA;k++) S.candidates.push(evalRec(sampleCandidate(S.mean, S.sigma, S.gen, k)));
+      S.candIdx = 0; S.rung = 0;
+    }
+    const target = C.RUNG_SEEDS[S.rung];
+    const rec = S.candidates[S.candIdx];
+    if(rec && rec.active && rec.seedsDone < target) return; // games wanted here
+    // move to the next active candidate still short of this rung's target
+    const nxt = S.candidates.findIndex((r,i)=> i>S.candIdx && r.active && r.seedsDone<target);
+    if(nxt>=0){ S.candIdx = nxt; continue; }
+    const anyShort = S.candidates.some(r=>r.active && r.seedsDone<target);
+    if(anyShort){ S.candIdx = S.candidates.findIndex(r=>r.active && r.seedsDone<target); continue; }
+    // rung complete
+    if(S.rung < C.RUNG_SEEDS.length-1){
+      const ranked = S.candidates.filter(r=>r.active).map(r=>({r, s:shareOf(r)})).sort((a,b)=>b.s.m-a.s.m);
+      ranked.slice(C.RUNG_KEEP[S.rung]).forEach(x=>{ x.r.active = false; });
+      logFn('gen '+S.gen+' rung '+S.rung+': cut to '+C.RUNG_KEEP[S.rung]+' of '+ranked.length+' (screen leader '+pct(ranked[0].s.m)+')');
+      S.rung++; S.candIdx = S.candidates.findIndex(r=>r.active);
+      continue;
+    }
+    // generation complete
+    const survivors = S.candidates.filter(r=>r.active).map(r=>({r, s:shareOf(r)})).sort((a,b)=>b.s.m-a.s.m);
+    const best = survivors[0];
+    S.mean = geoMean(survivors.slice(0, Math.min(C.MU, survivors.length)).map(x=>x.r.genome));
+    // step-size rule: count only *significant* winners — under paired mirroring a
+    // neutral candidate sits at ~50% by construction, so raw >50% counts would
+    // inflate sigma in flat terrain (null rate of m-ci>0.5 is ~2.5%, target 20%)
+    const all = S.candidates.map(r=>shareOf(r));
+    const beat = all.filter(s=>s.m - s.ci > 0.5).length/S.candidates.length;
+    S.sigma = Math.min(C.SIGMA_MAX, Math.max(C.SIGMA_MIN, S.sigma*Math.exp((beat-0.2)*0.6)));
+    const sig = best.s.m - best.s.ci > 0.5;
+    S.history.push({gen:S.gen, bestShare:+best.s.m.toFixed(4), bestCI:+best.s.ci.toFixed(4),
+                    beatFrac:+beat.toFixed(3), sigma:+S.sigma.toFixed(4), games:S.totalGames, challenged:sig, promoted:false});
+    logFn('gen '+S.gen+': best share '+pct(best.s.m)+' ± '+pct(best.s.ci)+' over '+C.RUNG_SEEDS[C.RUNG_SEEDS.length-1]+' seeds; '+
+                (sig ? 'CHALLENGE — confirming on fresh seeds' : 'champion holds (CI includes 50%)'));
+    if(sig){ S.phase='confirm'; S.confirm = evalRec(clone(best.r.genome)); continue; }
+    S.gen++; S.rung=0; S.candidates=[]; S.candIdx=0; S.championAge++;
+    // loop: next generation gets sampled on the next pass
+  }
+}
+// makeCommitBuffer: parallel executors complete blocks out of order; results must
+// commit in seed order for state files to stay bit-identical to sequential runs.
+// (Used by the browser worker pool; exercised by the parity test.)
+function makeCommitBuffer(S, rec){
+  return {
+    next: rec.seedsDone, buf: {},
+    push(idx, res){
+      this.buf[idx] = res;
+      while(this.buf[this.next] !== undefined){
+        commitBlock(S, rec, this.buf[this.next]);
+        delete this.buf[this.next]; this.next++;
       }
     }
+  };
 }
-
-/* ---- worker plumbing (browser-only) ---- */
-let S = null, running = false;
-function loop(){
-  if(!running || !S) return;
-  const t0 = Date.now(), logs = [];
-  while(Date.now() - t0 < 1200) trainStep(S, m=>logs.push(m));
-  self.postMessage({type:'ckpt', state:S, logs});
-  realSetTimeout(loop, 0);
-}
-self.onmessage = function(e){
-  const m = e.data;
-  if(m.type==='init'){ S = m.state || freshState(); self.postMessage({type:'ckpt', state:S, logs:['run '+(m.state?'resumed':'initialised')]}); }
-  else if(m.type==='start'){ if(!running){ running = true; loop(); } }
-  else if(m.type==='pause'){ running = false; self.postMessage({type:'paused'}); }
-};
 </script>
 
 <script>
 (async function(){
   const KEY = 'coastline_trainer_v1';
   const $id = s=>document.getElementById(s);
-  const pct = x=>(x*100).toFixed(1)+'%';
-  let worker = null, running = false, wakeLock = null;
-  let lastGames = 0, lastT = 0, speed = '–';
+  let running = false, wakeLock = null, S = null, baseAI = null;
+  let lastGames = 0, lastT = 0, speed = '–', lastSaveT = 0;
 
   function logLine(s){ const el = $id('log'); el.textContent += '\n'+s; el.scrollTop = el.scrollHeight; }
   function fatal(msg){ $id('fatal').style.display='block'; $id('fatal').textContent = 'ENGINE ERROR: '+msg; $id('runbadge').textContent='error'; }
 
-  function render(S){
+  // shared logic (verbatim from tests/trainer.body.js) into page scope
+  eval($id('trainer-logic').textContent);
+
+  function render(){
+    if(!S) return;
+    const C = cfg(S);
     $id('s_gen').textContent = S.gen;
-    $id('s_phase').textContent = S.phase;
-    $id('s_prog').textContent = S.phase==='confirm'
-      ? 'seed '+S.confirm.seedsDone+'/167'
-      : (S.candidates.length ? 'cand '+(S.candIdx+1)+'/8 · seed '+S.candidates[S.candIdx].seedsDone+'/50' : 'sampling…');
+    $id('s_phase').textContent = S.phase + (S.phase==='search' ? ' r'+S.rung : '');
+    const rec = S.phase==='confirm' ? S.confirm : (S.candidates[S.candIdx]||null);
+    $id('s_prog').textContent = !rec ? 'sampling…' : (S.phase==='confirm'
+      ? 'seed '+rec.seedsDone+'/'+C.CONFIRM_SEEDS
+      : 'cand '+(S.candIdx+1)+'/'+C.LAMBDA+' · seed '+rec.seedsDone+'/'+C.RUNG_SEEDS[S.rung]);
     $id('s_sigma').textContent = S.sigma.toFixed(3);
     $id('s_promo').textContent = S.promotions;
     $id('s_age').textContent = S.championAge+' gens';
     $id('s_games').textContent = S.totalGames.toLocaleString();
     const now = Date.now();
-    if(lastT && S.totalGames>lastGames && now>lastT) speed = Math.round((S.totalGames-lastGames)/((now-lastT)/1000))+' games/s';
-    lastGames = S.totalGames; lastT = now;
+    if(lastT && now-lastT>2000){ speed = Math.round((S.totalGames-lastGames)/((now-lastT)/1000))+' games/s'; lastGames=S.totalGames; lastT=now; }
+    if(!lastT){ lastGames=S.totalGames; lastT=now; }
     $id('s_speed').textContent = running ? speed : 'paused';
     $id('hist').innerHTML = S.history.slice(-14).map(h=>{
       const conf = h.confirm ? pct(h.confirm.share)+' ± '+pct(h.confirm.ci) : (h.challenged ? 'running…' : '—');
       const out = h.promoted ? '<td class="win">PROMOTED</td>' : (h.confirm ? '<td class="rej">rejected</td>' : (h.challenged ? '<td>confirming…</td>' : '<td>champion holds</td>'));
       return '<tr><td>'+h.gen+'</td><td>'+pct(h.bestShare)+' ± '+pct(h.bestCI)+'</td><td>'+conf+'</td>'+out+'</tr>';
     }).reverse().join('');
+  }
+  function checkpoint(force){
+    const now = Date.now();
+    if(!force && now-lastSaveT<1000) return;
+    lastSaveT = now;
+    try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+    render();
   }
 
   async function setWake(on){
@@ -305,9 +374,7 @@ self.onmessage = function(e){
   }
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && running) setWake(true); });
 
-  let saved = null;
-  try{ saved = JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(e){}
-
+  /* ---- boot the pool ---- */
   const engine = await (async ()=>{
     const html = await (await fetch('index.html', {cache:'no-store'})).text();
     return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n;\n');
@@ -315,29 +382,71 @@ self.onmessage = function(e){
   if(!engine) return;
 
   const boot = $id('worker-boot').textContent, core = $id('worker-core').textContent;
-  worker = new Worker(URL.createObjectURL(new Blob([boot], {type:'text/javascript'})));
-  worker.onmessage = (e)=>{
-    const m = e.data;
-    if(m.type==='fatal'){ fatal(m.msg); return; }
-    if(m.type==='ready'){ worker.postMessage({type:'init', state:saved}); $id('runbadge').textContent = saved ? 'resumed checkpoint' : 'fresh run'; $id('startbtn').disabled=false; return; }
-    if(m.type==='ckpt'){
-      try{ localStorage.setItem(KEY, JSON.stringify(m.state)); }catch(err){}
-      (m.logs||[]).forEach(logLine);
-      render(m.state); saved = m.state;
-    }
-    if(m.type==='paused'){ $id('runbadge').textContent='paused'; }
-  };
-  worker.postMessage({type:'boot', engine, core});
+  const N = Math.max(1, (navigator.hardwareConcurrency||4) - 1);
+  const workers = [], idle = [];
+  let jobId = 0; const pending = {}; let buffer = null, bufferRec = null;
+  let readyCount = 0;
 
-  $id('startbtn').onclick = ()=>{ running=true; worker.postMessage({type:'start'}); $id('startbtn').disabled=true; $id('pausebtn').disabled=false; $id('runbadge').textContent='training…'; setWake(true); };
-  $id('pausebtn').onclick = ()=>{ running=false; worker.postMessage({type:'pause'}); $id('startbtn').disabled=false; $id('pausebtn').disabled=true; setWake(false); };
+  function dispatchLoop(){
+    if(!running || !S) return;
+    advance(S, logLine);
+    const need = needsGames(S);
+    if(!need){ checkpoint(true); return; } // fully quiescent (shouldn't persist)
+    if(bufferRec !== need.rec){ buffer = makeCommitBuffer(S, need.rec); bufferRec = need.rec; }
+    const inflight = Object.values(pending).filter(p=>p.rec===need.rec).length;
+    while(idle.length && need.rec.seedsDone + Object.values(pending).filter(p=>p.rec===need.rec).length < need.target){
+      const i = need.rec.seedsDone + Object.values(pending).filter(p=>p.rec===need.rec).length;
+      const w = idle.pop();
+      const id = ++jobId;
+      pending[id] = { rec: need.rec, idx: i, w };
+      w.postMessage({ type:'block', id, seed: need.seedOf(i), cand: need.rec.genome, champ: S.champion });
+    }
+  }
+  function onResult(w, m){
+    const p = pending[m.id]; delete pending[m.id];
+    idle.push(w);
+    if(p && buffer && p.rec===bufferRec) buffer.push(p.idx, {cW:m.cW, kW:m.kW});
+    checkpoint(false);
+    dispatchLoop();
+  }
+
+  for(let i=0;i<N;i++){
+    const w = new Worker(URL.createObjectURL(new Blob([boot], {type:'text/javascript'})));
+    w.onmessage = (e)=>{
+      const m = e.data;
+      if(m.type==='fatal'){ fatal(m.msg); return; }
+      if(m.type==='ready'){
+        baseAI = baseAI || m.AI_W;
+        idle.push(w); readyCount++;
+        $id('poolbadge').textContent = readyCount+'/'+N+' workers';
+        if(readyCount===N){
+          let saved = null;
+          try{ saved = JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(err){}
+          S = saved ? migrate(saved, logLine) : freshState(baseAI, null);
+          $id('runbadge').textContent = saved ? 'resumed checkpoint' : 'fresh run';
+          $id('startbtn').disabled = false;
+          logLine('pool ready: '+N+' engine workers'+(saved?' — checkpoint resumed at gen '+S.gen:''));
+          render();
+        }
+        return;
+      }
+      if(m.type==='res') onResult(w, m);
+    };
+    w.postMessage({type:'boot', engine, core});
+    workers.push(w);
+  }
+
+  /* ---- controls ---- */
+  $id('startbtn').onclick = ()=>{ running=true; $id('startbtn').disabled=true; $id('pausebtn').disabled=false; $id('runbadge').textContent='training…'; setWake(true); lastT=0; dispatchLoop(); };
+  $id('pausebtn').onclick = ()=>{ running=false; $id('startbtn').disabled=false; $id('pausebtn').disabled=true; $id('runbadge').textContent='pausing (letting in-flight games land)…'; setWake(false);
+    const waitDrain = setInterval(()=>{ if(!Object.keys(pending).length){ clearInterval(waitDrain); checkpoint(true); $id('runbadge').textContent='paused'; render(); } }, 200); };
   function download(name, obj){
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(obj)], {type:'application/json'}));
     a.download = name; a.click();
   }
-  $id('exportbtn').onclick = ()=>{ if(saved) download('trainer-state.json', saved); };
-  $id('champbtn').onclick = ()=>{ if(saved) download('champion.json', saved.champion); };
+  $id('exportbtn').onclick = ()=>{ if(S) download('trainer-state.json', S); };
+  $id('champbtn').onclick = ()=>{ if(S) download('champion.json', S.champion); };
   $id('importbtn').onclick = ()=>$id('importfile').click();
   $id('importfile').onchange = (e)=>{
     const f = e.target.files[0]; if(!f) return;
@@ -345,18 +454,18 @@ self.onmessage = function(e){
     r.onload = ()=>{ try{
       const st = JSON.parse(r.result);
       if(!st.champion || !st.mean) throw new Error('not a trainer state file');
-      saved = st; localStorage.setItem(KEY, JSON.stringify(st));
-      worker.postMessage({type:'init', state:st}); logLine('state imported');
+      if(running){ logLine('pause before importing'); return; }
+      S = migrate(st, logLine); buffer=null; bufferRec=null;
+      checkpoint(true); logLine('state imported (gen '+S.gen+', '+S.totalGames.toLocaleString()+' games)');
     }catch(err){ logLine('import failed: '+err.message); } };
     r.readAsText(f);
   };
   $id('resetbtn').onclick = ()=>{
+    if(running){ logLine('pause before resetting'); return; }
     if(!confirm('Reset the run? The current checkpoint and champion are discarded (export first if you want them).')) return;
-    localStorage.removeItem(KEY); saved = null;
-    worker.postMessage({type:'pause'}); running=false;
-    worker.postMessage({type:'init', state:null});
-    $id('startbtn').disabled=false; $id('pausebtn').disabled=true; $id('runbadge').textContent='fresh run';
-    $id('hist').innerHTML=''; logLine('run reset');
+    localStorage.removeItem(KEY);
+    S = freshState(baseAI, null); buffer=null; bufferRec=null;
+    checkpoint(true); $id('hist').innerHTML=''; $id('runbadge').textContent='fresh run'; logLine('run reset');
   };
 })();
 </script>
