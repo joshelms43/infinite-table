@@ -1,5 +1,22 @@
 # Coastline — Changelog
 
+## v0.3.4 — 2026-07-09
+Benchmark ladder — the engine-strength measurement foundation (strength roadmap item 1). No gameplay changes.
+
+**The ladder (tests/ladder.js + tests/ladder.body.js, `npm run ladder`)**
+- Frozen engine versions play round-robin head-to-head: `node tests/ladder.js <verA> <verB> [--seeds a..b] [--out f.jsonl]`, where a version is a git ref, a path to a frozen index.html, or `work` (working tree). `--report f.jsonl` aggregates chunked runs; `--sanity` self-checks the pairing mechanics.
+- Host rules, frozen brains: the working-tree engine supplies the rules (offline path — NET stays 'off'); each version's AI section (AI→BOOT markers, versions ≥ v0.2.26) is evaluated in its own closure, and the engine's three brain call points (aiStep, aiShouldJSN, keepScore) become per-seat dispatchers. player.tuneW carries each version's genome into shared engine code (payment DP). Known limitation, documented in the file: structural changes to ENGINE-section AI logic (the payment DP itself) aren't swapped per version — move that logic behind a dispatchable function when it first diverges.
+- Paired seeds: Math.random is a seeded PRNG per game, so one seed = one identical shuffle and opening deal across all seat assignments. Per seed and pair: 6 games (each side solo in all 3 seats vs 2× the other). The timer queue is drained per game — determinism required it (queued BOOT/previous-game callbacks were leaking into the next game).
+- Stats: head-to-head share of decided wins (50% = equal) with seed-clustered 95% CI, plus each side's solo win rate vs the 33.3% baseline. A verdict is declared only when the share CI excludes 50%, matching the engine-project measurement standard (≥1,000 paired-seed games).
+- Headless stubs mirror tests/test.js (the retired train.js stubs broke on aiShowcase's rect guard), except setTimeout, which is a drainable queue rather than setImmediate for deterministic replay.
+
+**First ladder results (logged per the measurement standard)**
+- Sanity 4/4 PASS on the v0.3.3 host: seed determinism, distinct shuffles across seeds, identical replay under identical seats, completion under rotated seats.
+- Dispatch proof: a deliberately crippled brain (picks its worst candidate) collapses — solo 0.0%, healthy side 66.7% solo (12 games; degenerate worst-move games churn too long for large samples, which is all this check needed).
+- **v0.3.3 vs v0.2.26 (922a14a): 1,002 paired games over 167 seeds — play-identical (share 50.0% ± 0.0pp, both solos exactly 33.3%).** Every seed's winner seat is invariant across seat assignments, i.e. the brains chose the same moves everywhere. Two facts confirmed: the AI section is textually unchanged v0.2.29→v0.3.3 and behaviorally unchanged v0.2.26→v0.2.29 (the genome/evaluator work was behavior-preserving), and the multiplayer work (v0.3.0–v0.3.3) did not perturb offline AI play. The baseline to beat is this single lineage brain, and the first real strength change (turn-sequence planning) now has a trustworthy referee.
+- Throughput: ~14ms/game headless — a full 1,002-game pairing runs in ~14s.
+
+
 ## v0.3.3 — 2026-07-09
 First live-network fixes, from the first real two-tab game.
 
