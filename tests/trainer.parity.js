@@ -112,5 +112,62 @@ MAIN_API.forEach(n=>{
 });
 check('main-thread helpers work outside the eval (cfg/pct/shareOf smoke)', mainScope.smoke);
 
+/* ---------- part 4: full pipeline — real scheduler, hostile fake workers ----------
+   Drives the page's pool-scheduler block with fake workers that complete blocks in
+   RANDOMIZED order and crash once mid-run. Asserts the run is bit-identical to the
+   sequential node run AND that no seed block is ever played twice (the v0.4.5
+   scheduler derived indices from seedsDone + inflight, which duplicated dispatches
+   after out-of-order returns, and a stranded job could freeze the run at 0 games/s). */
+(function(){
+  // part 2's boot sim pointed global.setTimeout at ITS timer queue; part 4 replays
+  // games through part 1's playGame, which drains the module-scope queue — realign.
+  global.setTimeout = (fn)=>{ timers.push(fn); return timers.length; };
+  const schedSrc = grab('pool-scheduler');
+  eval(schedSrc); // function declaration leaks to this scope — same mechanism as the page
+  const baseAI = JSON.parse(JSON.stringify((typeof ready!=='undefined' && ready && ready.AI_W) || null));
+  check('scheduler sim has the engine genome from boot', !!baseAI);
+  if(!baseAI) return;
+
+  const S = freshState(baseAI, TINY);
+  const queue = []; // in-flight fake jobs
+  let plays = 0, crashed = false;
+  const seen = new Set(); // duplicate-dispatch detector: one play per (genome, seed)
+  const rng = (()=>{ let x = 12345; return ()=>{ x = (x*48271)%2147483647; return x/2147483647; }; })();
+  const logs = [];
+  const env = {
+    S, workerCount: 3,
+    post: (slot, job)=>{ queue.push({slot, job}); },
+    log: m=>logs.push(m),
+    checkpoint: ()=>{},
+    stop: ()=>S.gen>3,
+  };
+  const sim = makeScheduler(env);
+  sim.start();
+  let guard = 0;
+  while(queue.length && guard++<100000){
+    const pick = Math.floor(rng()*queue.length); // hostile completion order
+    const {slot, job} = queue.splice(pick,1)[0];
+    if(!crashed && S.totalGames>60){ // one worker "crashes" mid-run: job vanishes, error event fires
+      crashed = true;
+      sim.onWorkerError(slot, 'simulated crash');
+      continue;
+    }
+    const key = job.seed+'|'+JSON.stringify(job.cand);
+    check.dup = check.dup || seen.has(key);
+    seen.add(key);
+    plays++;
+    const res = seedBlock(job.seed, job.cand, job.champ);
+    sim.onResult({id:job.id, cW:res.cW, kW:res.kW});
+  }
+  check('pipeline reaches the generation cap without stalling', S.gen>3);
+  check('no seed block ever dispatched twice (duplicate-dispatch regression)', !check.dup);
+  check('crashed worker\'s block recycled and replayed (run self-heals)', crashed && logs.some(m=>/recycled/.test(m)));
+  check('zero wasted games: plays x 6 === committed games', plays*6===S.totalGames);
+  check('pipeline state matches the sequential node run bit-for-bit',
+    JSON.stringify(S.history)===JSON.stringify(N.history) && JSON.stringify(S.mean)===JSON.stringify(N.mean) &&
+    Math.abs(S.sigma-N.sigma)<1e-12 && JSON.stringify(S.champion)===JSON.stringify(N.champion) &&
+    S.totalGames===N.totalGames && S.gen===N.gen);
+})();
+
 console.log(fails===0 ? 'ALL TRAINER PARITY TESTS PASS' : 'FAILURES: '+fails);
 process.exit(fails===0?0:1);

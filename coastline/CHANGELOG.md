@@ -1,5 +1,23 @@
 # Coastline — Changelog
 
+## v0.4.6 — 2026-07-09
+Trainer: pool scheduler extracted, hardened, and end-to-end tested — fixes the 0 games/sec freeze. No gameplay changes.
+
+**The freeze**
+- The dispatch scheduler lived untested in trainer.html's main script and had two real flaws. It derived the next seed index from `seedsDone + in-flight count`, so out-of-order completions caused duplicate dispatches of indices already in flight (wasted games); worse, a worker that hit an uncaught error stranded its job in the pending table forever — the in-flight count never drained, the dispatcher concluded the rung was covered, and the run froze at 0 games/sec with no visible reason.
+
+**The fix (scheduler is now a shared, simulated block — pool-scheduler)**
+- Dispatch computes the exact set of missing seed indices (committed ∪ buffered ∪ outstanding → first gap), so duplicates are structurally impossible and a lost job's index simply becomes dispatchable again.
+- Worker `onerror` recycles the slot: its pending blocks return to the pool and replay. A seed whose game throws inside the engine posts back as an undecided block (counted, logged, skipped) instead of stranding the job — a deterministic bad seed can't loop or freeze the run.
+- A 10-second watchdog reports stalls with context (in-flight count, idle workers, phase) and kicks the dispatcher if it ever goes quiet with nothing in flight; games/sec is now computed on a fixed 2-second ticker, so the dashboard reads honestly even when the answer is zero.
+
+**Testing (the part that matters)**
+- tests/trainer.parity.js part 4 drives the page's actual pool-scheduler block with hostile fake workers: randomized completion order, a mid-run simulated worker crash, generation cap. Asserts: no stall, no seed block dispatched twice, the crashed block recycles and replays, zero wasted games (plays × 6 === committed), and the final state is bit-identical to the sequential node run. 26/26 PASS.
+- Every piece of the browser trainer now has node-side coverage: worker boot (part 2), main-thread eval scope (part 3), shared logic parity (part 1), scheduler pipeline (part 4).
+
+**Tests** — 33/33 PASS, flows 12/12, drops clean, trainer sanity 6/6, trainer parity 26/26.
+
+
 ## v0.4.5 — 2026-07-09
 Trainer hotfix: the other side of the eval-scope trap. No gameplay changes.
 

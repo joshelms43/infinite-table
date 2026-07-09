@@ -194,8 +194,12 @@ function seedBlock(seed, cand, champ){ // 6 paired games on one seed
 self.onmessage = function(e){
   const m = e.data;
   if(m.type!=='block') return;
-  const res = seedBlock(m.seed, m.cand, m.champ);
-  self.postMessage({type:'res', id:m.id, cW:res.cW, kW:res.kW});
+  try{
+    const res = seedBlock(m.seed, m.cand, m.champ);
+    self.postMessage({type:'res', id:m.id, cW:res.cW, kW:res.kW});
+  }catch(err){ // a throwing seed must not strand the job — report it as a skipped (undecided) block
+    self.postMessage({type:'res', id:m.id, cW:0, kW:0, error:String((err&&err.message)||err)});
+  }
 };
 self.postMessage({type:'ready', AI_W: AI_W}); // inside the eval scope — AI_W is visible here
 </script>
@@ -374,12 +378,84 @@ function makeCommitBuffer(S, rec){
 }
 </script>
 
+<script type="text/plain" id="pool-scheduler">
+/* Pool scheduler — dispatches seed blocks to workers and commits results in seed
+   order. Environment-agnostic on purpose: tests/trainer.parity.js drives it with
+   fake workers (randomized completion order, injected crashes) and asserts the run
+   is bit-identical to sequential AND that every seed is played exactly once.
+   env: { S (live state), workerCount, post(slot, job), log(msg),
+          checkpoint(force), stop() optional }.
+   Dispatch picks the exact set of missing seed indices (committed? buffered?
+   outstanding? -> next gap), so out-of-order completion can never cause duplicate
+   dispatch, and a recycled (errored) job's index simply becomes dispatchable again. */
+function makeScheduler(env){
+  const idleSlots = []; for(let i=0;i<env.workerCount;i++) idleSlots.push(i);
+  const pending = {}; let jobId = 0;
+  let buffer = null, bufferRec = null;
+  const outstanding = new Set();
+  let running = false;
+  function nextIdx(rec, target){
+    for(let i=rec.seedsDone; i<target; i++){
+      if(outstanding.has(i)) continue;
+      if(buffer && buffer.buf[i] !== undefined) continue;
+      return i;
+    }
+    return -1;
+  }
+  function dispatch(){
+    if(!running) return;
+    advance(env.S, env.log);
+    if(env.stop && env.stop()){ running = false; return; }
+    const need = needsGames(env.S);
+    if(!need){ env.checkpoint(true); return; }
+    if(bufferRec !== need.rec){ buffer = makeCommitBuffer(env.S, need.rec); bufferRec = need.rec; outstanding.clear(); }
+    while(idleSlots.length){
+      const i = nextIdx(need.rec, need.target);
+      if(i < 0) break;
+      const slot = idleSlots.pop();
+      const id = ++jobId;
+      pending[id] = { rec: need.rec, idx: i, slot };
+      outstanding.add(i);
+      env.post(slot, { type:'block', id, seed: need.seedOf(i), cand: need.rec.genome, champ: env.S.champion });
+    }
+  }
+  function onResult(m){
+    const p = pending[m.id];
+    if(!p){ env.log('scheduler: stray result for job '+m.id+' — ignored'); return; }
+    delete pending[m.id];
+    idleSlots.push(p.slot);
+    outstanding.delete(p.idx);
+    if(m.error) env.log('block error on seed idx '+p.idx+' (counted as undecided): '+m.error);
+    if(buffer && p.rec === bufferRec) buffer.push(p.idx, {cW:m.cW, kW:m.kW});
+    env.checkpoint(false);
+    dispatch();
+  }
+  function onWorkerError(slot, msg){ // recycle the slot; its in-flight indices become dispatchable again
+    let dropped = 0;
+    Object.keys(pending).forEach(id=>{
+      if(pending[id].slot===slot){ outstanding.delete(pending[id].idx); delete pending[id]; dropped++; }
+    });
+    if(idleSlots.indexOf(slot)<0) idleSlots.push(slot);
+    env.log('worker '+slot+' errored ('+msg+') — '+dropped+' block(s) recycled');
+    dispatch();
+  }
+  return {
+    start(){ if(!running){ running = true; dispatch(); } },
+    pause(){ running = false; },
+    onResult, onWorkerError,
+    inflight(){ return Object.keys(pending).length; },
+    idle(){ return idleSlots.length; },
+    isRunning(){ return running; },
+  };
+}
+</script>
+
 <script>
 (async function(){
   const KEY = 'coastline_trainer_v1';
   const $id = s=>document.getElementById(s);
-  let running = false, wakeLock = null, S = null, baseAI = null;
-  let lastGames = 0, lastT = 0, speed = '–', lastSaveT = 0, lastRenderT = 0;
+  let wakeLock = null, S = null, baseAI = null, sched = null;
+  let speed = '0', wdGames = -1, lastTickGames = 0, lastRenderT = 0;
   const RENDER_MS = 250;
 
   // deterministic Aussie heat names, unique within a generation (LAMBDA <= 24)
@@ -388,16 +464,18 @@ function makeCommitBuffer(S, rec){
 
   function logLine(s){ const el = $id('log'); el.textContent += '\n'+s; el.scrollTop = el.scrollHeight; }
   function fatal(msg){ $id('fatal').style.display='block'; $id('fatal').textContent = 'ENGINE ERROR: '+msg; $id('runbadge').textContent='error'; }
+  const isRunning = ()=> !!(sched && sched.isRunning());
 
-  // shared logic (verbatim from tests/trainer.body.js) into page scope
+  // shared logic + scheduler (verbatim twins of tests/trainer.body.js; see tests/trainer.parity.js)
   eval($id('trainer-logic').textContent);
+  eval($id('pool-scheduler').textContent);
 
   function renderRace(C){
     const rows = S.candidates.map((r,k)=>{
-      const s = shareOf(r);
-      const share = isNaN(s.m) ? 0.5 : s.m;
+      const st = shareOf(r);
+      const share = isNaN(st.m) ? 0.5 : st.m;
       const target = r.active ? C.RUNG_SEEDS[S.rung] : C.RUNG_SEEDS[0];
-      return {r, k, s, share, target};
+      return {r, k, s:st, share, target};
     });
     const leader = rows.filter(x=>x.r.active).sort((a,b)=>b.share-a.share)[0];
     $id('racemeta').textContent = !rows.length ? 'sampling the next generation…' :
@@ -423,7 +501,6 @@ function makeCommitBuffer(S, rec){
     if(!on) return;
     const st = shareOf(S.confirm);
     const share = isNaN(st.m) ? 0.5 : st.m;
-    // challenger name: the top survivor of the still-standing generation
     const survivors = S.candidates.map((r,k)=>({r,k,s:shareOf(r)})).filter(x=>x.r.active).sort((a,b)=>b.s.m-a.s.m);
     $id('fightname').textContent = survivors.length ? nameOf(S.gen, survivors[0].k) : 'Challenger';
     $id('fightfill').style.width = (share*100).toFixed(1)+'%';
@@ -457,9 +534,7 @@ function makeCommitBuffer(S, rec){
     $id('s_promo').textContent = S.promotions;
     $id('s_sigma').textContent = S.sigma.toFixed(3);
     $id('s_games').textContent = S.totalGames.toLocaleString();
-    if(lastT && now-lastT>2000){ speed = Math.round((S.totalGames-lastGames)/((now-lastT)/1000)).toLocaleString(); lastGames=S.totalGames; lastT=now; }
-    if(!lastT){ lastGames=S.totalGames; lastT=now; }
-    $id('s_speed').textContent = running ? speed : '⏸';
+    $id('s_speed').textContent = isRunning() ? speed : '⏸';
     $id('champline').textContent = S.promotions===0
       ? '🏆 The original genome has defended the title for '+S.championAge+' generation'+(S.championAge===1?'':'s')
       : '🏆 Champion crowned in a title fight — '+S.promotions+' promotion'+(S.promotions===1?'':'s')+' so far, current reign '+S.championAge+' generation'+(S.championAge===1?'':'s');
@@ -470,6 +545,7 @@ function makeCommitBuffer(S, rec){
       return '<tr><td>'+h.gen+'</td><td>'+pct(h.bestShare)+' ± '+pct(h.bestCI)+'</td><td>'+conf+'</td>'+out+'</tr>';
     }).reverse().join('');
   }
+  let lastSaveT = 0;
   function checkpoint(force){
     const now = Date.now();
     if(force || now-lastSaveT>=1000){
@@ -479,6 +555,26 @@ function makeCommitBuffer(S, rec){
     render(force);
   }
 
+  /* speed ticker + stall watchdog — always honest, even when nothing moves */
+  setInterval(()=>{
+    if(!S) return;
+    speed = Math.round((S.totalGames - lastTickGames)/2).toLocaleString();
+    lastTickGames = S.totalGames;
+    render(true);
+  }, 2000);
+  setInterval(()=>{
+    if(!S || !isRunning()) { wdGames = S ? S.totalGames : -1; return; }
+    if(S.totalGames===wdGames){
+      if(sched.inflight()===0){
+        logLine('watchdog: no progress, nothing in flight (gen '+S.gen+', phase '+S.phase+', '+sched.idle()+' idle workers) — kicking the dispatcher');
+        sched.start();
+      } else {
+        logLine('watchdog: '+sched.inflight()+' block(s) in flight but no commits for 10s — if a worker died, its blocks recycle on the error event');
+      }
+    }
+    wdGames = S.totalGames;
+  }, 10000);
+
   async function setWake(on){
     try{
       if(on && 'wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); $id('wakebadge').textContent='wake lock on'; $id('wakebadge').className='badge on';
@@ -486,7 +582,7 @@ function makeCommitBuffer(S, rec){
       } else if(!on && wakeLock){ await wakeLock.release(); wakeLock=null; }
     }catch(e){ $id('wakebadge').textContent='wake lock unavailable'; }
   }
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && running) setWake(true); });
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && isRunning()) setWake(true); });
 
   /* ---- boot the pool ---- */
   const engine = await (async ()=>{
@@ -497,63 +593,44 @@ function makeCommitBuffer(S, rec){
 
   const boot = $id('worker-boot').textContent, core = $id('worker-core').textContent;
   const N = Math.max(1, (navigator.hardwareConcurrency||4) - 1);
-  const workers = [], idle = [];
-  let jobId = 0; const pending = {}; let buffer = null, bufferRec = null;
+  const workers = [];
   let readyCount = 0;
-
-  function inflightFor(rec){ let n=0; for(const id in pending) if(pending[id].rec===rec) n++; return n; }
-  function dispatchLoop(){
-    if(!running || !S) return;
-    advance(S, logLine);
-    const need = needsGames(S);
-    if(!need){ checkpoint(true); return; }
-    if(bufferRec !== need.rec){ buffer = makeCommitBuffer(S, need.rec); bufferRec = need.rec; }
-    while(idle.length && need.rec.seedsDone + inflightFor(need.rec) < need.target){
-      const i = need.rec.seedsDone + inflightFor(need.rec);
-      const w = idle.pop();
-      const id = ++jobId;
-      pending[id] = { rec: need.rec, idx: i, w };
-      w.postMessage({ type:'block', id, seed: need.seedOf(i), cand: need.rec.genome, champ: S.champion });
-    }
-  }
-  function onResult(w, m){
-    const p = pending[m.id]; delete pending[m.id];
-    idle.push(w);
-    if(p && buffer && p.rec===bufferRec) buffer.push(p.idx, {cW:m.cW, kW:m.kW});
-    checkpoint(false);
-    dispatchLoop();
-  }
+  const env = { S:null, workerCount:N, post:(slot,job)=>workers[slot].postMessage(job), log:logLine, checkpoint };
+  sched = makeScheduler(env);
 
   for(let i=0;i<N;i++){
+    const slot = i;
     const w = new Worker(URL.createObjectURL(new Blob([boot], {type:'text/javascript'})));
     w.onmessage = (e)=>{
       const m = e.data;
       if(m.type==='fatal'){ fatal(m.msg); return; }
       if(m.type==='ready'){
         baseAI = baseAI || m.AI_W;
-        idle.push(w); readyCount++;
+        readyCount++;
         $id('poolbadge').textContent = readyCount+'/'+N+' workers';
         if(readyCount===N){
           let saved = null;
           try{ saved = JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(err){}
           S = saved ? migrate(saved, logLine) : freshState(baseAI, null);
+          env.S = S; lastTickGames = S.totalGames;
           $id('runbadge').textContent = saved ? 'resumed checkpoint' : 'fresh run';
           $id('startbtn').disabled = false;
-          logLine('pool ready: '+N+' engine workers'+(saved?' — checkpoint resumed at gen '+S.gen:''));
+          logLine('pool ready: '+N+' engine workers'+(saved?' — checkpoint resumed at gen '+S.gen+' ('+S.totalGames.toLocaleString()+' games)':''));
           render(true);
         }
         return;
       }
-      if(m.type==='res') onResult(w, m);
+      if(m.type==='res') sched.onResult(m);
     };
+    w.onerror = (e)=>{ e.preventDefault && e.preventDefault(); sched.onWorkerError(slot, (e && e.message) || 'uncaught error'); };
     w.postMessage({type:'boot', engine, core});
     workers.push(w);
   }
 
   /* ---- controls ---- */
-  $id('startbtn').onclick = ()=>{ running=true; $id('startbtn').disabled=true; $id('pausebtn').disabled=false; $id('runbadge').textContent='training…'; setWake(true); lastT=0; dispatchLoop(); };
-  $id('pausebtn').onclick = ()=>{ running=false; $id('startbtn').disabled=false; $id('pausebtn').disabled=true; $id('runbadge').textContent='pausing (letting in-flight games land)…'; setWake(false);
-    const waitDrain = setInterval(()=>{ if(!Object.keys(pending).length){ clearInterval(waitDrain); checkpoint(true); $id('runbadge').textContent='paused'; } }, 200); };
+  $id('startbtn').onclick = ()=>{ $id('startbtn').disabled=true; $id('pausebtn').disabled=false; $id('runbadge').textContent='training…'; setWake(true); sched.start(); render(true); };
+  $id('pausebtn').onclick = ()=>{ sched.pause(); $id('startbtn').disabled=false; $id('pausebtn').disabled=true; $id('runbadge').textContent='pausing (letting in-flight games land)…'; setWake(false);
+    const waitDrain = setInterval(()=>{ if(sched.inflight()===0){ clearInterval(waitDrain); checkpoint(true); $id('runbadge').textContent='paused'; } }, 200); };
   function download(name, obj){
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(obj)], {type:'application/json'}));
@@ -568,17 +645,17 @@ function makeCommitBuffer(S, rec){
     r.onload = ()=>{ try{
       const st = JSON.parse(r.result);
       if(!st.champion || !st.mean) throw new Error('not a trainer state file');
-      if(running){ logLine('pause before importing'); return; }
-      S = migrate(st, logLine); buffer=null; bufferRec=null;
+      if(isRunning()){ logLine('pause before importing'); return; }
+      S = migrate(st, logLine); env.S = S; sched = makeScheduler(env); lastTickGames = S.totalGames;
       checkpoint(true); logLine('state imported (gen '+S.gen+', '+S.totalGames.toLocaleString()+' games)');
     }catch(err){ logLine('import failed: '+err.message); } };
     r.readAsText(f);
   };
   $id('resetbtn').onclick = ()=>{
-    if(running){ logLine('pause before resetting'); return; }
+    if(isRunning()){ logLine('pause before resetting'); return; }
     if(!confirm('Reset the run? The current checkpoint and champion are discarded (export first if you want them).')) return;
     localStorage.removeItem(KEY);
-    S = freshState(baseAI, null); buffer=null; bufferRec=null;
+    S = freshState(baseAI, null); env.S = S; sched = makeScheduler(env); lastTickGames = S.totalGames;
     checkpoint(true); $id('runbadge').textContent='fresh run'; logLine('run reset');
   };
 })();
