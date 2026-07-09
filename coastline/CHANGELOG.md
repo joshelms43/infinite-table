@@ -1,5 +1,24 @@
 # Coastline — Changelog
 
+## v0.4.2 — 2026-07-09
+Security hardening, prompted by Supabase's anonymous-auth warning ("anonymous users get the authenticated role — review your RLS").
+
+**What the audit found in v0.4.0's schema**
+- Self-service Elo: the update-own-profile policy had no column restriction — any signed-in user (anonymous included) could set their own elo/wins/games directly.
+- Forgeable matches: record_match was callable with arbitrary player UUIDs — outsiders could record fake games involving anyone.
+- Friend spam: profiles (with friend codes) were fully world-readable and friendships inserted directly, so strangers could harvest codes/UUIDs and befriend-spam.
+
+**Schema v2 (supabase/schema.sql — safe to run over v1 or fresh)**
+- Column-level grants: profiles select excludes friend_code; update grants cover only `name`. Ratings and counters can move ONLY through the security-definer RPC.
+- record_match now requires the caller to be a match participant, validates 2-4 players and a participating winner, and rate-limits to one recorded match per participant per 45 seconds.
+- Friend codes go private: own code via my_friend_code(); adding via add_friend(code) (server-side lookup + mutual row — possession of the code is the proof); remove_friend() and a ✕ on each friend row.
+
+**Residual risk, stated honestly** — participants can still collude to self-report games (unavoidable without a server referee), and Realtime rooms remain open to anyone holding a 4-letter code. Both fine at mates-scale; both solvable later (server-validated games, private channels).
+
+**Client** — profile/friends flows moved to the new RPC surfaces; friend list select trimmed to granted columns.
+
+**Tests** — 44/44 PASS.
+
 ## v0.4.1 — 2026-07-09
 Genome trainer, twice: a rigorous node trainer for Claude's container and a browser trainer page for overnight runs. No gameplay changes.
 

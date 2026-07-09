@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.4.1
+  Version: 0.4.2
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.4.1</title>
+<title>Coastline — v0.4.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -445,6 +445,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .frname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .frelo{font-size:11px;color:var(--money-gold);font-weight:800}
 .frinvite{font-family:'Lilita One',cursive;font-size:11.5px;color:#fff;background:linear-gradient(180deg,var(--coral),var(--coral-deep));border-radius:9px;padding:6px 12px}
+.frremove{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-faint);font-size:11px;flex:0 0 auto}
 .invitetoast{
   position:fixed;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
   z-index:96;display:flex;align-items:center;gap:12px;max-width:92vw;
@@ -619,7 +620,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.4.1</span>
+    <span class="ver">v0.4.2</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -2716,11 +2717,16 @@ const ID = {
       }
       if(!session) { this.renderProfile(); return; }
       this.user = session.user;
-      let { data: prof } = await sb.from('profiles').select('*').eq('id', this.user.id).maybeSingle();
+      let { data: prof } = await sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
       if(!prof){
         const name = (NET.myName || 'Player').slice(0,12);
-        const ins = await sb.from('profiles').insert({ id:this.user.id, name, friend_code:this.makeFriendCode() }).select().single();
-        prof = ins.data;
+        await sb.from('profiles').insert({ id:this.user.id, name, friend_code:this.makeFriendCode() });
+        const r2 = await sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
+        prof = r2.data;
+      }
+      if(prof){
+        const { data: code } = await sb.rpc('my_friend_code');
+        prof.friend_code = code || '——————';
       }
       this.profile = prof;
       if(prof && prof.name){ NET.myName = prof.name; const hn=$('#homename'); if(hn && hn.value!==undefined) hn.value = prof.name; }
@@ -2770,7 +2776,7 @@ const ID = {
     const { data: rows } = await this.sb.from('friends').select('a,b').or(`a.eq.${uid},b.eq.${uid}`);
     const ids = [...new Set((rows||[]).map(r=> r.a===uid ? r.b : r.a))];
     if(!ids.length){ this.friends=[]; this.renderFriends(); return; }
-    const { data: profs } = await this.sb.from('profiles').select('id,name,elo,friend_code').in('id', ids);
+    const { data: profs } = await this.sb.from('profiles').select('id,name,elo').in('id', ids);
     this.friends = profs || [];
     this.renderFriends();
   },
@@ -2783,18 +2789,25 @@ const ID = {
         <span class="frname">${f.name}</span>
         <span class="frelo">${f.elo}</span>
         <button class="frinvite" onclick="ID.invite('${f.id}')">Invite</button>
+        <button class="frremove" onclick="ID.removeFriend('${f.id}')">✕</button>
       </div>`).join('') || '<div class="profsub" style="text-align:center;opacity:.5;padding:4px 0">Add mates with their friend code</div>';
+  },
+  async removeFriend(id){
+    if(!this.sb) return;
+    await this.sb.rpc('remove_friend', { p_id: id });
+    this.loadFriends();
   },
   async addFriend(){
     const inp = $('#friendcode'); const code = ((inp&&inp.value)||'').toUpperCase().trim();
     if(code.length!==6){ banner('6-LETTER CODE','var(--danger-red)'); return; }
     if(!this.sb || !this.user) return;
-    const { data: prof } = await this.sb.from('profiles').select('id,name').eq('friend_code', code).maybeSingle();
-    if(!prof){ banner('CODE NOT FOUND','var(--danger-red)'); return; }
-    if(prof.id===this.user.id){ banner("THAT'S YOU",'var(--warning-amber)'); return; }
-    await this.sb.from('friends').insert({ a:this.user.id, b:prof.id });
+    const { data: r } = await this.sb.rpc('add_friend', { p_code: code });
+    if(!r || !r.ok){
+      banner(r && r.err==='self' ? "THAT'S YOU" : 'CODE NOT FOUND', r && r.err==='self' ? 'var(--warning-amber)' : 'var(--danger-red)');
+      return;
+    }
     if(inp) inp.value='';
-    banner('ADDED '+prof.name.toUpperCase(),'var(--success-green)');
+    banner('ADDED '+String(r.name||'').toUpperCase(),'var(--success-green)');
     this.loadFriends();
   },
 
