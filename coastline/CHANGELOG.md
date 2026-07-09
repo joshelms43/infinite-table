@@ -1,5 +1,23 @@
 # Coastline — Changelog
 
+## v0.2.28 — 2026-07-09
+Game review foundations — the engine now judges your play, chess.com style.
+
+**Shared evaluator**
+- The AI's candidate generator was extracted into brainCandidates(player): the same card-counting EV engine that powers Bazza and Shaz can now score any player's options at any decision point, each candidate carrying metadata (card, mode, human-readable label).
+
+**Move recording (captured live — can't be reconstructed later)**
+- The moment you raise or drag a card, the engine silently snapshots every option you had and its EV. When the play commits (single choke point for both tap and drag routes), your choice is matched against that snapshot and stored: what you did, what was best, both scores.
+
+**Review screen**
+- The win card gains a gold "Game review" button: overall accuracy % plus every play classified — Best / Good / Inaccuracy / Mistake / Blunder — with the engine's preferred line shown wherever you strayed ("Best: Charge teal rent ($8M) — 6.2 vs 1.8 · turn 4").
+- v1 scope: your card plays. Payment choices, No Deal decisions, and wild reassignments are future review dimensions.
+
+**Test-harness fix**
+- Reordered assertions so the interval-terminated full-game soak runs last; previous appends had been racing it (masked by a lucky G.over) and the new review tests exposed the hang. Full-game turn counts are meaningful again.
+
+**Tests** — 4 new review assertions (evaluator coverage, recording, classification, accuracy): 36/36 PASS, 6-run soak; interaction flows 12/12.
+
 ## v0.2.27 — 2026-07-09
 AI genome + self-play trainer. Default play unchanged (deliberately — see below).
 

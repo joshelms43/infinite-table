@@ -81,23 +81,6 @@ function allCards(){
   });
   return n;
 }
-newGame();
-G.players.forEach(p=>p.isAI=true);
-G.over=false; G.turn=0;
-let conserved=true; let steps=0;
-const _fe=finishEnd;
-finishEnd=function(){ if(allCards()!==106)conserved=false; steps++; if(steps>600){G.over=true;return;} _fe(); };
-startTurn();
-setInterval(()=>{
-  if(G.over){
-    T('full AI game reaches a winner', steps<=600);
-    T('card count conserved at 106 every turn', conserved);
-    T('a player holds 3 complete sets', G.players.some(p=>completeColors(p).length>=3));
-    console.log('turns played:', steps);
-    DONE();
-  }
-},50);
-
 // ===== AI BRAIN assertions =====
 newGame();
 const cen = deckCensus();
@@ -136,3 +119,40 @@ addProp(sharp, {id:95015,t:'prop',color:'gold',name:'g3',v:4}, 'gold');
 G.turn = 2; G.playsLeft = 3; G.over = false;
 aiStep(sharp);
 T('AI takes the winning line instantly', G.over===true && completeColors(sharp).length===3);
+
+// ===== REVIEW ENGINE assertions =====
+newGame();
+G.turn=0; G.playsLeft=3;
+const hum = G.players[0];
+hum.hand = [{id:96001,t:'money',v:5},{id:96002,t:'prop',color:'teal',name:'T',v:3}];
+hum.props={}; hum.bldg={}; hum.bank=[];
+const cands = brainCandidates(hum, 0, ()=>{});
+T('evaluator scores human options (bank + play present)',
+  cands.some(x=>x.mode==='bank'&&x.cardId===96001) && cands.some(x=>x.mode==='play'&&x.cardId===96002) && cands.every(x=>x.ev>0));
+REVIEW_SNAP = { cardId: 96001, cands: [
+  {ev:5, label:'Bank $5M', cardId:96001, mode:'bank'},
+  {ev:8, label:'Play Teal', cardId:96002, mode:'play'},
+]};
+recordHumanPlay({id:96001}, {el:{id:'mybank'}});
+T('human play recorded with best-vs-chosen', G.review.length===1 && G.review[0].ce===5 && G.review[0].be===8);
+const cls = classifyMove(G.review[0]);
+T('classification thresholds sane (5/8 -> Inaccuracy)', cls[0]==='Inaccuracy');
+T('accuracy computed', gameAccuracy()===Math.round(100*(5/8)));
+
+// ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
+newGame();
+G.players.forEach(p=>p.isAI=true);
+G.over=false; G.turn=0;
+let conserved=true; let steps=0;
+const _fe=finishEnd;
+finishEnd=function(){ if(allCards()!==106)conserved=false; steps++; if(steps>600){G.over=true;return;} _fe(); };
+startTurn();
+setInterval(()=>{
+  if(G.over){
+    T('full AI game reaches a winner', steps<=600);
+    T('card count conserved at 106 every turn', conserved);
+    T('a player holds 3 complete sets', G.players.some(p=>completeColors(p).length>=3));
+    console.log('turns played:', steps);
+    DONE();
+  }
+},50);
