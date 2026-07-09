@@ -1,5 +1,28 @@
 # Coastline — Changelog
 
+## v0.2.26 — 2026-07-09
+Expert AI: card counting, probability, and EV decisions. Bazza and Shaz got smart.
+
+**Honest framing** — true "optimal" is impossible in Deal (hidden hands + shuffled deck), but this is how expert humans play: perfect counting plus probability-weighted decisions.
+
+**Card counting**
+- The AI derives the full 106-card census from the deck builder, then subtracts everything visible (discard, all tables, all banks, buildings, its own hand). What remains is exactly the deck + hidden hands — reshuffle-proof because it re-derives from state every decision.
+- No Deal risk is a real hypergeometric: "2 of 3 JSNs unseen among 41 cards, you hold 6 → 27% you have one." Attack EVs are discounted accordingly, with credit for forcing a JSN burn.
+
+**EV decision engine (replaces priority heuristics)**
+- Every legal play is scored and the max taken: set-progress values for properties, supply-aware wild placement (won't chase colours that are exhausted), rent expected-collection against each target's actual liquidity with the Rent-Hike combo costed as a two-play investment, steal values counting both sides' completion swing, richest-target selection, hand-size-aware Payday, and Deal Breaker held early but never wasted.
+- Win-line detection: any play completing a third set scores 1000 and is taken instantly — verified by assertion.
+- The AI now plays Swap Meet (the old one never did) — but only for trades with genuine net completion gain.
+
+**Spiteful payments (exact DP)**
+- Payment selection is an exact minimisation over value given + strategic damage: complete-set cards heavily protected, near-sets guarded, wilds kept, and gifting the receiver a set-completing property is a 40-point penalty — effectively never. Verified by assertion.
+
+**Smarter defence**
+- No Deal decisions are EV-based, not random: always contest a Takeover, always protect against a near-winning attacker, otherwise weigh loss against JSN scarcity and counter-risk.
+- End-of-turn discards keep by strategic value (No Deal 99, Takeover 90 … spare money last) instead of face value.
+
+**Tests** — 6 new brain assertions (census exactness, unseen math, JSN bounds + zero-case, payment spite, instant win-line): suite 32/32 PASS, 12-run soak; interaction flows 12/12; drop matrix clean.
+
 ## v0.2.25 — 2026-07-09
 Deck finalised against the internally consistent official list: 106 playing cards.
 

@@ -97,3 +97,42 @@ setInterval(()=>{
     DONE();
   }
 },50);
+
+// ===== AI BRAIN assertions =====
+newGame();
+const cen = deckCensus();
+T('census totals 106', cen.tot===106);
+const un1 = unseenFor(1);
+T('unseen = deck + other hands (counting is exact)', un1.tot === G.deck.length + G.players[0].hand.length + G.players[2].hand.length);
+const pj = pHoldsAtLeastOne('a:nodeal', 0, 1);
+T('JSN probability bounded', pj>=0 && pj<=1);
+// move every No Deal into the discard: probability must hit exactly zero
+newGame();
+const yank = arr => { for(let i=arr.length-1;i>=0;i--){ if(arr[i].t==='action'&&arr[i].kind==='nodeal') G.discard.push(arr.splice(i,1)[0]); } };
+yank(G.deck); G.players.forEach(q=>yank(q.hand));
+T('all No Deals visible -> P(holds one) = 0', pHoldsAtLeastOne('a:nodeal', 0, 1) === 0);
+
+// spiteful payment: never gift the receiver a completing property when money covers it
+newGame();
+const payer2 = G.players[1], recv2 = G.players[2];
+payer2.bank = [{id:95001,t:'money',v:4}];
+payer2.props = {}; payer2.bldg = {};
+addProp(payer2, {id:95002,t:'prop',color:'gold',name:'Trap',v:4}, 'gold');
+recv2.props = {}; recv2.bldg = {};
+addProp(recv2, {id:95003,t:'prop',color:'gold',name:'Half',v:4}, 'gold'); // gold is a 2-set: one more completes
+let paidOK = false;
+requestPayment(1, 4, 2, ()=>{ paidOK = true; });
+T('AI payment: pays money, never the set-completing property', paidOK && countIn(recv2,'gold')===1 && bankTotal(recv2)===4 && countIn(payer2,'gold')===1);
+
+// win-line detection: completing the third set is always found and taken immediately
+newGame();
+const sharp = G.players[2];
+sharp.props = {}; sharp.bldg = {}; sharp.hand = [{id:95010,t:'prop',color:'gold',name:'Winner',v:4}];
+addProp(sharp, {id:95011,t:'prop',color:'brown',name:'b1',v:1}, 'brown');
+addProp(sharp, {id:95012,t:'prop',color:'brown',name:'b2',v:1}, 'brown');
+addProp(sharp, {id:95013,t:'prop',color:'green',name:'g1',v:2}, 'green');
+addProp(sharp, {id:95014,t:'prop',color:'green',name:'g2',v:2}, 'green');
+addProp(sharp, {id:95015,t:'prop',color:'gold',name:'g3',v:4}, 'gold');
+G.turn = 2; G.playsLeft = 3; G.over = false;
+aiStep(sharp);
+T('AI takes the winning line instantly', G.over===true && completeColors(sharp).length===3);
