@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.3.2
+  Version: 0.3.3
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.3.2</title>
+<title>Coastline — v0.3.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -596,7 +596,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.3.2</span>
+    <span class="ver">v0.3.3</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1547,6 +1547,7 @@ const DRAG = { pend:null, active:false, card:null, clone:null, srcW:null, px0:0,
 let SUPPRESSTAP = false;
 document.getElementById('hand').addEventListener('pointerdown', e=>{
   if((!isMyTurn() && !G.over) || document.querySelector('#overlay.show')) return;
+  if(NET.mode==='client' && NET.hold) return;
   if(MODE.type && MODE.type!=='discard') return;
   const w = e.target.closest ? e.target.closest('.cardw') : null;
   if(!w) return;
@@ -2405,9 +2406,11 @@ const NET = {
   /* --- executor gate: on a client, local calls become intents --- */
   intercept(k, a){
     if(this.mode!=='client' || this.applying) return false;
+    if(this.hold){ showPrompt('Hold on — someone is still responding…', false); return true; }
     this.tx.send('intent', { seat: this.seat, k, a });
     clearSelection(); hidePrompt(); closeSheet();
-    showPrompt('Sent — waiting for the table…', false);
+    this.sentWait = true;
+    showPrompt('Sent…', false);
     return true;
   },
   reply(type, payload){ this.tx.send('intent', { seat: this.seat, k:'reply', a:Object.assign({rt:type}, payload) }); },
@@ -2447,6 +2450,7 @@ const NET = {
       return;
     }
     if(G.over || G.turn!==seat) return;   // stale / out-of-turn intents dropped
+    if(Object.keys(this.pendingAsks).length) return; // a payment/interrupt is resolving — hold your horses
     const p = G.players[seat];
     const findHand = id => p.hand.find(c=>c.id===id);
     this.applying = true;
@@ -2477,6 +2481,7 @@ const NET = {
       turn:G.turn, playsLeft:G.playsLeft, turnCount:G.turnCount, over:G.over,
       deckN:G.deck.length, pile:{ label:top, n:G.discard.length },
       players:G.players.map(q=>({ name:q.name, isAI:!!q.isAI, handN:q.hand.length, bank:q.bank, props:q.props, bldg:q.bldg })),
+      waitFor: Object.keys(this.pendingAsks).length ? +Object.keys(this.pendingAsks)[0] : null,
     };
   },
   pushState(){
@@ -2495,6 +2500,10 @@ const NET = {
       hand: i===MYSEAT ? myHand : new Array(q.handN).fill(0).map((_,j)=>({ id:'h'+i+'_'+j, t:'money', v:0 })),
     }));
     const wasOver = G.over; G.over = st.over;
+    this.hold = (st.waitFor!=null && st.waitFor!==this.seat);
+    if(this.sentWait){ this.sentWait=false; hidePrompt(); }
+    if(this.hold && st.turn===this.seat) showPrompt('Waiting for '+ (G.players[st.waitFor]? st.players[st.waitFor].name : 'a player') +'…', false);
+    else if(this.hold===false && st.turn===this.seat && MODE.type===null && !SELECTED) hidePrompt();
     renderAll();
     if(st.over && !wasOver){
       const w = G.players.find(p=>completeColors(p).length>=3);
@@ -2551,7 +2560,8 @@ const NET = {
       await new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; sc.onload=res; sc.onerror=()=>rej(new Error('supabase cdn failed')); document.head.appendChild(sc); });
     }
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-    const ch = sb.channel('room-'+code, { config:{ broadcast:{ self:false }, presence:{ key: this.myName+'-'+Math.random().toString(36).slice(2,6) } } });
+    this.pkey = this.pkey || (Math.random().toString(36).slice(2,10));
+    const ch = sb.channel('room-'+code, { config:{ broadcast:{ self:false }, presence:{ key: this.pkey } } });
     const self = this;
     this.tx = {
       send(type, payload){ ch.send({ type:'broadcast', event:type, payload }); },
@@ -2572,7 +2582,7 @@ const NET = {
     const code = this.makeCode();
     if(!(await this.connect(code, true))) return;
     this.mode = 'lobby-host';
-    this.tx.track({ name:this.myName, host:true, joined:Date.now() });
+    this.tx.track({ key:this.pkey, name:this.myName, host:true, joined:Date.now() });
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
     $('#lobbycode').textContent = code;
     this.renderLobby();
@@ -2584,7 +2594,7 @@ const NET = {
     if(code.length!==4){ alert('Enter the 4-letter room code.'); return; }
     if(!(await this.connect(code, false))) return;
     this.mode = 'joining';
-    this.tx.track({ name:this.myName, host:false, joined:Date.now() });
+    this.tx.track({ key:this.pkey, name:this.myName, host:false, joined:Date.now() });
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
     $('#lobbycode').textContent = code;
     const st=$('#lobbystart'); if(st&&st.style) st.style.display='none';
@@ -2609,16 +2619,18 @@ const NET = {
     if(this.mode!=='lobby-host') return;
     const seats = this.lobbySeats();
     if(seats.length<2) return;
-    const names = seats.map(mm=>mm.name);
-    this.tx.send('start', { names });
-    this.onStart({ names }, true);
+    const roster = seats.map(mm=>({ key:mm.key, name:mm.name }));
+    this.tx.send('start', { roster });
+    this.onStart({ roster }, true);
   },
   onStart(m, hosting){
-    const names = m.names;
+    const roster = m.roster || (m.names||[]).map(n=>({key:n,name:n}));
+    const names = roster.map(r=>r.name);
     if(hosting){ this.mode='host'; this.seat=0; MYSEAT=0; }
     else {
       this.mode='client';
-      this.seat = Math.max(0, names.indexOf(this.myName));
+      const bykey = roster.findIndex(r=>r.key===this.pkey);
+      this.seat = bykey>=0 ? bykey : Math.max(0, names.indexOf(this.myName));
       MYSEAT = this.seat;
     }
     newGame();

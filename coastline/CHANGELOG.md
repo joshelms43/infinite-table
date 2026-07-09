@@ -1,5 +1,19 @@
 # Coastline — Changelog
 
+## v0.3.3 — 2026-07-09
+First live-network fixes, from the first real two-tab game.
+
+**Seat identity by key, not name**
+- Seats were matched by player name at game start — two tabs with the same (or defaulted) name collided, and a client could resolve itself to the wrong seat: the cause of "says your turn when it's not" plus downstream chaos (wrong hand, wrong asks). Every connection now carries a unique presence key; the start message sends a roster of {key, name} and clients find their seat by key. Asserted: three players all named "Josh" seat correctly.
+
+**No acting while someone's paying**
+- The host accepted new turn intents while a payment/interrupt ask was still outstanding, so the charging player could keep playing mid-chain. Host now drops non-reply intents while any ask is pending; state broadcasts carry waitFor, and clients whose turn it is see "Waiting for <name>…" with input held until the chain resolves.
+
+**"Sent…" clears itself**
+- The waiting prompt after sending an intent had no clearer. It's now flagged and dismissed the moment the next authoritative state arrives.
+
+**Tests** — 42/42 (new seat-identity assertion), flows 12/12, drop matrix 38/38.
+
 ## v0.3.2 — 2026-07-09
 Hotfix: human rent crashed ("b is not defined") + full actor-layer audit.
 
