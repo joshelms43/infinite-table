@@ -1,5 +1,21 @@
 # Coastline — Changelog
 
+## v0.4.4 — 2026-07-09
+Trainer hotfix + spectator dashboard. No gameplay changes, no efficiency cost.
+
+**The bug (every trainer.html load died with "ENGINE ERROR: AI_W is not defined")**
+- The worker boot posted its ready message with `AI_W` *after* the engine eval — but engine consts are eval-scoped (the long-documented harness quirk; the node harness avoids it by concatenating everything into one eval). Fix: the worker core posts `{ready, AI_W}` from inside the eval scope; the boot shell only catches fatals.
+- This escaped because parity testing was a throwaway script that never exercised worker boot. It is now permanent: **tests/trainer.parity.js (`npm run test:trainer`)** runs the page's worker-boot block exactly as a browser worker would (boot → ready → seed blocks) and re-proves shared-logic bit-parity against `node tests/trainer.js` with worst-case reverse-order commits, every time. 6/6 PASS. (The test itself caught one of its own bugs on the way in: seedBlock attributes wins by object reference, so the mirror check must pass distinct clones — as postMessage's structured clone does in real runs.)
+
+**Watchable training (main-thread only, throttled to 4 Hz — the pool never waits on the UI)**
+- Generation race: every candidate gets a deterministic Aussie heat name (Davo, Muzza, Chooka…) and a live lane — share bar against the 50% line, seeds progress, 👑 on the leader, ✂ strikethrough fade on heat-1 eliminations, teal glow when someone's whole CI clears 50%.
+- 🥊 Title fight card during confirmations: challenger by name vs the Champion, big running share ± CI, 1,002-game progress, "needs the whole CI above 50% to take the title".
+- Season view: sparkline of every generation's best share (gold dots = new champions, red dots = rejected challenges) above the history table; hero stats (games played, games/sec, generations, reigns) and a champion status line.
+- Same state schema, same exports, same efficiency: rendering is ~12 DOM rows and one small canvas at most 4×/sec.
+
+**Tests** — 33/33 PASS, flows 12/12, drops clean, trainer sanity 6/6, trainer parity 6/6.
+
+
 ## v0.4.3 — 2026-07-09
 Trainer efficiency pass: successive-halving rungs + a browser worker pool. Roughly 8–10× more search per overnight run at the same statistical bar. No gameplay changes.
 

@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — genome trainer (browser twin of tests/trainer.js)
-  v2: WORKER POOL. One engine per CPU core; games are pure functions of
-  (seed, genomes), so parallel results commit in seed order and the state file
-  stays bit-identical to a sequential run — exports load straight into
-  `node tests/trainer.js --state FILE` and vice versa (v1 states are migrated).
-  Open this page from the deployed site, press Start, leave the tab overnight.
-  Checkpoints to localStorage continuously; ONE trainer tab at a time.
+  v3: fixed worker boot (AI_W is eval-scoped — the ready message must be posted from
+  inside the eval; see tests/trainer.parity.js which now regression-tests boot), plus
+  a watchable dashboard: live generation race with eliminations, title-fight view for
+  confirmations, history sparkline. All rendering is main-thread and throttled to
+  ~4 Hz — the worker pool never waits on the UI.
+  One engine worker per CPU core; games are pure functions of (seed, genomes), so
+  results commit in seed order and the state file stays bit-identical to a sequential
+  run — exports load straight into `node tests/trainer.js --state FILE` and back.
+  Open from the deployed site, press Start, leave the tab overnight. ONE tab at a time.
 -->
 <html lang="en">
 <head>
@@ -15,29 +18,59 @@
 <title>Coastline — Trainer</title>
 <style>
   *{ box-sizing:border-box; margin:0; }
-  body{ background:#101820; color:#e8eef4; font:15px/1.5 "Nunito Sans",system-ui,sans-serif; padding:20px; max-width:900px; margin:0 auto; }
+  body{ background:#101820; color:#e8eef4; font:15px/1.5 "Nunito Sans",system-ui,sans-serif; padding:20px; max-width:920px; margin:0 auto; }
   h1{ font-size:22px; margin:4px 0 2px; } h1 em{ color:#f4c95d; font-style:normal; }
   .sub{ color:#8fa1b3; font-size:13px; margin-bottom:16px; }
   .card{ background:#1a2430; border:1px solid #2a3644; border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+  .cardtitle{ font-size:13px; color:#8fa1b3; text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; }
   .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   button{ background:#f4c95d; color:#101820; font:700 14px "Nunito Sans",system-ui,sans-serif; border:0; border-radius:8px; padding:9px 16px; cursor:pointer; }
   button.sec{ background:#2a3644; color:#e8eef4; }
   button:disabled{ opacity:.45; cursor:default; }
-  .stat{ display:inline-block; margin:2px 14px 2px 0; }
-  .stat b{ color:#f4c95d; }
   .badge{ font-size:12px; padding:2px 8px; border-radius:10px; background:#2a3644; color:#8fa1b3; }
   .badge.on{ background:#173f2e; color:#4ecdc4; }
+  /* hero numbers */
+  .hero{ display:flex; gap:26px; flex-wrap:wrap; }
+  .hero .h{ min-width:100px; }
+  .hero .n{ font-size:26px; font-weight:800; color:#f4c95d; line-height:1.1; }
+  .hero .l{ font-size:12px; color:#8fa1b3; }
+  #champline{ margin-top:10px; font-size:14px; color:#4ecdc4; }
+  /* race */
+  .lane{ display:grid; grid-template-columns: 86px 52px 1fr 96px; gap:8px; align-items:center; padding:3px 0; font-size:13px; transition:opacity .5s; }
+  .lane .nm{ font-weight:700; white-space:nowrap; overflow:hidden; }
+  .lane .seeds{ color:#8fa1b3; font-size:11px; text-align:right; }
+  .lane .val{ text-align:right; font-variant-numeric:tabular-nums; color:#8fa1b3; font-size:12px; }
+  .track{ position:relative; height:14px; background:#0d141b; border-radius:7px; overflow:hidden; }
+  .track .mid{ position:absolute; left:50%; top:0; bottom:0; width:2px; background:#2a3644; z-index:2; }
+  .track .fill{ position:absolute; left:0; top:0; bottom:0; border-radius:7px; background:#3a76c4; transition:width .35s ease; }
+  .lane.leader .fill{ background:#f4c95d; }
+  .lane.leader .nm{ color:#f4c95d; }
+  .lane.sig .fill{ background:#4ecdc4; }
+  .lane.cut{ opacity:.32; }
+  .lane.cut .nm{ text-decoration:line-through; }
+  .lane.cut .fill{ background:#5a6a7a; }
+  #racemeta{ color:#8fa1b3; font-size:12px; margin-bottom:8px; }
+  /* title fight */
+  #fight{ display:none; }
+  #fight .vs{ font-size:18px; font-weight:800; margin-bottom:6px; }
+  #fight .vs em{ color:#ff6b6b; font-style:normal; }
+  #fightbar{ position:relative; height:26px; background:#0d141b; border-radius:13px; overflow:hidden; margin:8px 0; }
+  #fightbar .mid{ position:absolute; left:50%; top:0; bottom:0; width:2px; background:#4a5a6a; z-index:2; }
+  #fightbar .fill{ position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#c44536,#ff6b6b); transition:width .35s ease; }
+  #fightnum{ font-size:22px; font-weight:800; color:#ff6b6b; }
+  #fightsub{ color:#8fa1b3; font-size:12px; }
   table{ width:100%; border-collapse:collapse; font-size:13px; }
   th,td{ text-align:left; padding:4px 8px; border-bottom:1px solid #2a3644; }
   th{ color:#8fa1b3; font-weight:600; }
   td.win{ color:#4ecdc4; font-weight:700; } td.rej{ color:#ff6b6b; }
-  #log{ font:12px/1.5 ui-monospace,monospace; color:#8fa1b3; max-height:180px; overflow-y:auto; white-space:pre-wrap; }
-  #fatal{ color:#ff6b6b; font-weight:700; display:none; }
+  #spark{ width:100%; height:56px; display:block; margin-bottom:8px; }
+  #log{ font:12px/1.5 ui-monospace,monospace; color:#8fa1b3; max-height:150px; overflow-y:auto; white-space:pre-wrap; }
+  #fatal{ color:#ff6b6b; font-weight:700; display:none; margin-top:8px; }
 </style>
 </head>
 <body>
 <h1>Coastline <em>Trainer</em></h1>
-<div class="sub">Paired-seed ES · successive-halving rungs · CI-gated promotion · worker pool. Browser twin of <code>tests/trainer.js</code> — one tab at a time; keep the machine awake overnight.</div>
+<div class="sub">Paired-seed ES · successive-halving heats · CI-gated title fights · one engine per core. Twin of <code>tests/trainer.js</code> — one tab, machine awake.</div>
 
 <div class="card">
   <div class="row">
@@ -52,23 +85,41 @@
     <span id="runbadge" class="badge">loading engine…</span>
   </div>
   <input type="file" id="importfile" accept=".json,application/json" style="display:none">
-</div>
-
-<div class="card" id="stats">
-  <span class="stat">generation <b id="s_gen">–</b></span>
-  <span class="stat">phase <b id="s_phase">–</b></span>
-  <span class="stat">progress <b id="s_prog">–</b></span>
-  <span class="stat">sigma <b id="s_sigma">–</b></span>
-  <span class="stat">promotions <b id="s_promo">–</b></span>
-  <span class="stat">champion age <b id="s_age">–</b></span>
-  <span class="stat">total games <b id="s_games">–</b></span>
-  <span class="stat">speed <b id="s_speed">–</b></span>
   <div id="fatal"></div>
 </div>
 
 <div class="card">
+  <div class="hero">
+    <div class="h"><div class="n" id="s_games">–</div><div class="l">games played</div></div>
+    <div class="h"><div class="n" id="s_speed">–</div><div class="l">games / sec</div></div>
+    <div class="h"><div class="n" id="s_gen">–</div><div class="l">generation</div></div>
+    <div class="h"><div class="n" id="s_promo">–</div><div class="l">new champions</div></div>
+    <div class="h"><div class="n" id="s_sigma">–</div><div class="l">mutation step</div></div>
+  </div>
+  <div id="champline">–</div>
+</div>
+
+<div class="card" id="fight">
+  <div class="cardtitle">🥊 Title fight — 1,002 fresh paired games</div>
+  <div class="vs"><em id="fightname">Challenger</em> vs the Champion</div>
+  <div id="fightbar"><div class="mid"></div><div class="fill" id="fightfill" style="width:50%"></div></div>
+  <div class="row" style="justify-content:space-between">
+    <span id="fightnum">50.0%</span>
+    <span id="fightsub">seed 0/167 — needs the whole CI above 50% to take the title</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="cardtitle">Generation race</div>
+  <div id="racemeta">–</div>
+  <div id="race"></div>
+</div>
+
+<div class="card">
+  <div class="cardtitle">Season so far</div>
+  <canvas id="spark" width="880" height="56"></canvas>
   <table>
-    <thead><tr><th>gen</th><th>best share (survivor eval)</th><th>confirmation (1,002 fresh games)</th><th>outcome</th></tr></thead>
+    <thead><tr><th>gen</th><th>heat winner (full eval)</th><th>title fight</th><th>outcome</th></tr></thead>
     <tbody id="hist"></tbody>
   </table>
 </div>
@@ -77,7 +128,9 @@
 
 <script type="text/plain" id="worker-boot">
 /* Worker bootstrap: headless stubs mirroring tests/trainer.js, then boot-eval of
-   engine + worker core in one direct-eval scope (consts must be shared). */
+   engine + worker core in ONE direct-eval scope. NOTE: engine consts (AI_W, COLORS…)
+   are eval-scoped — nothing outside the eval can see them, so the worker core posts
+   its own 'ready' message from inside. */
 const el = () => new Proxy({classList:{add(){},remove(){},toggle(){}},style:{}},{
   get(t,k){ if(k in t) return t[k]; return ()=>{}; },
   set(){ return true; }
@@ -91,8 +144,7 @@ self.clearTimeout = ()=>{};
 self.onmessage = function(e){
   if(e.data.type!=='boot') return;
   try{
-    eval(e.data.engine + '\n;\n' + e.data.core);
-    self.postMessage({type:'ready', AI_W: AI_W});
+    eval(e.data.engine + '\n;\n' + e.data.core); // core posts {type:'ready', AI_W} itself
   }catch(err){
     self.postMessage({type:'fatal', msg:String((err&&err.message)||err)});
   }
@@ -145,6 +197,7 @@ self.onmessage = function(e){
   const res = seedBlock(m.seed, m.cand, m.champ);
   self.postMessage({type:'res', id:m.id, cW:res.cW, kW:res.kW});
 };
+self.postMessage({type:'ready', AI_W: AI_W}); // inside the eval scope — AI_W is visible here
 </script>
 
 <script type="text/plain" id="trainer-logic">
@@ -326,7 +379,12 @@ function makeCommitBuffer(S, rec){
   const KEY = 'coastline_trainer_v1';
   const $id = s=>document.getElementById(s);
   let running = false, wakeLock = null, S = null, baseAI = null;
-  let lastGames = 0, lastT = 0, speed = '–', lastSaveT = 0;
+  let lastGames = 0, lastT = 0, speed = '–', lastSaveT = 0, lastRenderT = 0;
+  const RENDER_MS = 250;
+
+  // deterministic Aussie heat names, unique within a generation (LAMBDA <= 24)
+  const NAMES = ['Davo','Robbo','Muzza','Gazza','Tezza','Wazza','Jacko','Thommo','Smitty','Deano','Johnno','Stevo','Macca','Chooka','Bluey','Dazza','Kezza','Rusty','Snowy','Boof','Curly','Spud','Wombat','Tiny'];
+  const nameOf = (gen,k)=> k<NAMES.length ? NAMES[(k + gen*7) % NAMES.length] : ('#'+(k+1));
 
   function logLine(s){ const el = $id('log'); el.textContent += '\n'+s; el.scrollTop = el.scrollHeight; }
   function fatal(msg){ $id('fatal').style.display='block'; $id('fatal').textContent = 'ENGINE ERROR: '+msg; $id('runbadge').textContent='error'; }
@@ -334,35 +392,91 @@ function makeCommitBuffer(S, rec){
   // shared logic (verbatim from tests/trainer.body.js) into page scope
   eval($id('trainer-logic').textContent);
 
-  function render(){
+  function renderRace(C){
+    const rows = S.candidates.map((r,k)=>{
+      const s = shareOf(r);
+      const share = isNaN(s.m) ? 0.5 : s.m;
+      const target = r.active ? C.RUNG_SEEDS[S.rung] : C.RUNG_SEEDS[0];
+      return {r, k, s, share, target};
+    });
+    const leader = rows.filter(x=>x.r.active).sort((a,b)=>b.share-a.share)[0];
+    $id('racemeta').textContent = !rows.length ? 'sampling the next generation…' :
+      'generation '+S.gen+' — '+(S.rung===0
+        ? 'heat 1: all '+C.LAMBDA+' race a '+C.RUNG_SEEDS[0]+'-seed screen, top '+C.RUNG_KEEP[0]+' survive'
+        : 'heat 2: '+C.RUNG_KEEP[0]+' finalists battle to '+C.RUNG_SEEDS[C.RUNG_SEEDS.length-1]+' seeds')+
+      ' · beat the 50% line to threaten the champion';
+    $id('race').innerHTML = rows.map(x=>{
+      const sig = !isNaN(x.s.m) && x.s.m - x.s.ci > 0.5;
+      const cls = 'lane'+(!x.r.active?' cut':(leader && x.k===leader.k?' leader':(sig?' sig':'')));
+      const icon = !x.r.active ? '✂ ' : (leader && x.k===leader.k ? '👑 ' : '');
+      const val = isNaN(x.s.m) ? '—' : pct(x.s.m)+' ±'+(isNaN(x.s.ci)?'—':(x.s.ci*100).toFixed(0));
+      return '<div class="'+cls+'">'+
+        '<span class="nm">'+icon+nameOf(S.gen,x.k)+'</span>'+
+        '<span class="seeds">'+x.r.seedsDone+'/'+x.target+'</span>'+
+        '<div class="track"><div class="mid"></div><div class="fill" style="width:'+(x.share*100).toFixed(1)+'%"></div></div>'+
+        '<span class="val">'+val+'</span></div>';
+    }).join('');
+  }
+  function renderFight(C){
+    const on = S.phase==='confirm' && S.confirm;
+    $id('fight').style.display = on ? 'block' : 'none';
+    if(!on) return;
+    const st = shareOf(S.confirm);
+    const share = isNaN(st.m) ? 0.5 : st.m;
+    // challenger name: the top survivor of the still-standing generation
+    const survivors = S.candidates.map((r,k)=>({r,k,s:shareOf(r)})).filter(x=>x.r.active).sort((a,b)=>b.s.m-a.s.m);
+    $id('fightname').textContent = survivors.length ? nameOf(S.gen, survivors[0].k) : 'Challenger';
+    $id('fightfill').style.width = (share*100).toFixed(1)+'%';
+    $id('fightnum').textContent = isNaN(st.m) ? '…' : pct(st.m)+' ± '+pct(st.ci||0);
+    $id('fightsub').textContent = 'seed '+S.confirm.seedsDone+'/'+C.CONFIRM_SEEDS+' — needs the whole CI above 50% to take the title';
+  }
+  function renderSpark(){
+    const cv = $id('spark'), ctx = cv.getContext('2d');
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const H = S.history; if(!H.length) return;
+    const n = H.length, w = cv.width, h = cv.height, pad = 6;
+    const y = v => h-pad - Math.max(0, Math.min(1, (v-0.40)/0.25))*(h-2*pad); // 40%..65% window
+    ctx.strokeStyle = '#2a3644'; ctx.beginPath(); ctx.moveTo(0, y(0.5)); ctx.lineTo(w, y(0.5)); ctx.stroke();
+    ctx.strokeStyle = '#3a76c4'; ctx.lineWidth = 2; ctx.beginPath();
+    H.forEach((hh,i)=>{ const px = n===1 ? w/2 : pad + i*(w-2*pad)/(n-1); i?ctx.lineTo(px,y(hh.bestShare)):ctx.moveTo(px,y(hh.bestShare)); });
+    ctx.stroke();
+    H.forEach((hh,i)=>{
+      if(!hh.challenged) return;
+      const px = n===1 ? w/2 : pad + i*(w-2*pad)/(n-1);
+      ctx.fillStyle = hh.promoted ? '#f4c95d' : '#ff6b6b';
+      ctx.beginPath(); ctx.arc(px, y(hh.bestShare), 4, 0, 7); ctx.fill();
+    });
+  }
+  function render(force){
     if(!S) return;
+    const now = Date.now();
+    if(!force && now-lastRenderT < RENDER_MS) return;
+    lastRenderT = now;
     const C = cfg(S);
     $id('s_gen').textContent = S.gen;
-    $id('s_phase').textContent = S.phase + (S.phase==='search' ? ' r'+S.rung : '');
-    const rec = S.phase==='confirm' ? S.confirm : (S.candidates[S.candIdx]||null);
-    $id('s_prog').textContent = !rec ? 'sampling…' : (S.phase==='confirm'
-      ? 'seed '+rec.seedsDone+'/'+C.CONFIRM_SEEDS
-      : 'cand '+(S.candIdx+1)+'/'+C.LAMBDA+' · seed '+rec.seedsDone+'/'+C.RUNG_SEEDS[S.rung]);
-    $id('s_sigma').textContent = S.sigma.toFixed(3);
     $id('s_promo').textContent = S.promotions;
-    $id('s_age').textContent = S.championAge+' gens';
+    $id('s_sigma').textContent = S.sigma.toFixed(3);
     $id('s_games').textContent = S.totalGames.toLocaleString();
-    const now = Date.now();
-    if(lastT && now-lastT>2000){ speed = Math.round((S.totalGames-lastGames)/((now-lastT)/1000))+' games/s'; lastGames=S.totalGames; lastT=now; }
+    if(lastT && now-lastT>2000){ speed = Math.round((S.totalGames-lastGames)/((now-lastT)/1000)).toLocaleString(); lastGames=S.totalGames; lastT=now; }
     if(!lastT){ lastGames=S.totalGames; lastT=now; }
-    $id('s_speed').textContent = running ? speed : 'paused';
+    $id('s_speed').textContent = running ? speed : '⏸';
+    $id('champline').textContent = S.promotions===0
+      ? '🏆 The original genome has defended the title for '+S.championAge+' generation'+(S.championAge===1?'':'s')
+      : '🏆 Champion crowned in a title fight — '+S.promotions+' promotion'+(S.promotions===1?'':'s')+' so far, current reign '+S.championAge+' generation'+(S.championAge===1?'':'s');
+    renderRace(C); renderFight(C); renderSpark();
     $id('hist').innerHTML = S.history.slice(-14).map(h=>{
       const conf = h.confirm ? pct(h.confirm.share)+' ± '+pct(h.confirm.ci) : (h.challenged ? 'running…' : '—');
-      const out = h.promoted ? '<td class="win">PROMOTED</td>' : (h.confirm ? '<td class="rej">rejected</td>' : (h.challenged ? '<td>confirming…</td>' : '<td>champion holds</td>'));
+      const out = h.promoted ? '<td class="win">🏆 NEW CHAMPION</td>' : (h.confirm ? '<td class="rej">challenge rejected</td>' : (h.challenged ? '<td>🥊 fighting…</td>' : '<td>champion holds</td>'));
       return '<tr><td>'+h.gen+'</td><td>'+pct(h.bestShare)+' ± '+pct(h.bestCI)+'</td><td>'+conf+'</td>'+out+'</tr>';
     }).reverse().join('');
   }
   function checkpoint(force){
     const now = Date.now();
-    if(!force && now-lastSaveT<1000) return;
-    lastSaveT = now;
-    try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
-    render();
+    if(force || now-lastSaveT>=1000){
+      lastSaveT = now;
+      try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+    }
+    render(force);
   }
 
   async function setWake(on){
@@ -387,15 +501,15 @@ function makeCommitBuffer(S, rec){
   let jobId = 0; const pending = {}; let buffer = null, bufferRec = null;
   let readyCount = 0;
 
+  function inflightFor(rec){ let n=0; for(const id in pending) if(pending[id].rec===rec) n++; return n; }
   function dispatchLoop(){
     if(!running || !S) return;
     advance(S, logLine);
     const need = needsGames(S);
-    if(!need){ checkpoint(true); return; } // fully quiescent (shouldn't persist)
+    if(!need){ checkpoint(true); return; }
     if(bufferRec !== need.rec){ buffer = makeCommitBuffer(S, need.rec); bufferRec = need.rec; }
-    const inflight = Object.values(pending).filter(p=>p.rec===need.rec).length;
-    while(idle.length && need.rec.seedsDone + Object.values(pending).filter(p=>p.rec===need.rec).length < need.target){
-      const i = need.rec.seedsDone + Object.values(pending).filter(p=>p.rec===need.rec).length;
+    while(idle.length && need.rec.seedsDone + inflightFor(need.rec) < need.target){
+      const i = need.rec.seedsDone + inflightFor(need.rec);
       const w = idle.pop();
       const id = ++jobId;
       pending[id] = { rec: need.rec, idx: i, w };
@@ -426,7 +540,7 @@ function makeCommitBuffer(S, rec){
           $id('runbadge').textContent = saved ? 'resumed checkpoint' : 'fresh run';
           $id('startbtn').disabled = false;
           logLine('pool ready: '+N+' engine workers'+(saved?' — checkpoint resumed at gen '+S.gen:''));
-          render();
+          render(true);
         }
         return;
       }
@@ -439,7 +553,7 @@ function makeCommitBuffer(S, rec){
   /* ---- controls ---- */
   $id('startbtn').onclick = ()=>{ running=true; $id('startbtn').disabled=true; $id('pausebtn').disabled=false; $id('runbadge').textContent='training…'; setWake(true); lastT=0; dispatchLoop(); };
   $id('pausebtn').onclick = ()=>{ running=false; $id('startbtn').disabled=false; $id('pausebtn').disabled=true; $id('runbadge').textContent='pausing (letting in-flight games land)…'; setWake(false);
-    const waitDrain = setInterval(()=>{ if(!Object.keys(pending).length){ clearInterval(waitDrain); checkpoint(true); $id('runbadge').textContent='paused'; render(); } }, 200); };
+    const waitDrain = setInterval(()=>{ if(!Object.keys(pending).length){ clearInterval(waitDrain); checkpoint(true); $id('runbadge').textContent='paused'; } }, 200); };
   function download(name, obj){
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(obj)], {type:'application/json'}));
@@ -465,7 +579,7 @@ function makeCommitBuffer(S, rec){
     if(!confirm('Reset the run? The current checkpoint and champion are discarded (export first if you want them).')) return;
     localStorage.removeItem(KEY);
     S = freshState(baseAI, null); buffer=null; bufferRec=null;
-    checkpoint(true); $id('hist').innerHTML=''; $id('runbadge').textContent='fresh run'; logLine('run reset');
+    checkpoint(true); $id('runbadge').textContent='fresh run'; logLine('run reset');
   };
 })();
 </script>
