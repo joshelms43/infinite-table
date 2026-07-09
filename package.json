@@ -1,0 +1,11 @@
+{
+  "name": "infinite-table",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node tests/test.js",
+    "test:drops": "node tests/repro2.js",
+    "test:flows": "node tests/repro3.js"
+  },
+  "devDependencies": { "jsdom": "^24.0.0" }
+}

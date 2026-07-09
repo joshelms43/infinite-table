@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!-- Infinite Table — lobby v0.1.0 -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Infinite Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --table-night:#121A16; --felt-green:#1D2B25; --felt-highlight:#29392F;
+  --text-ivory:#F2EEE2; --text-faint:rgba(242,238,226,.55);
+  --card-ivory:#F7F2E6; --card-edge:#D9D2C0; --ink-black:#24241D; --muted-ink:#6E6C5E;
+  --primary-coral:#E26A4B; --primary-coral-deep:#BC4F37; --money-gold:#BE8F41;
+  --line-soft:rgba(242,238,226,.13);
+  --p-amber:#E0AB52; --p-teal:#3B8B82; --p-coral:#D4756B; --p-purple:#7F6595; --p-sky:#6394B6;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:'Nunito Sans',system-ui,sans-serif;color:var(--text-ivory);
+  background:var(--felt-green);min-height:100dvh;
+  display:flex;flex-direction:column;align-items:center;
+  padding:0 20px calc(28px + env(safe-area-inset-bottom));
+}
+header{text-align:center;padding:56px 0 34px}
+.logo{font-family:'Lilita One',cursive;font-size:34px;letter-spacing:1px;line-height:1.05}
+.logo .inf{color:var(--money-gold)}
+.tag{font-size:11px;font-weight:800;letter-spacing:2.4px;text-transform:uppercase;opacity:.4;margin-top:8px}
+main{width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px}
+.game{
+  display:block;text-decoration:none;color:var(--ink-black);
+  background:linear-gradient(168deg,#FFFDF6 0%,var(--card-ivory) 55%,#EFE8D3 100%);
+  border:1px solid rgba(10,25,26,.35);border-radius:16px;overflow:hidden;
+  box-shadow:0 2px 5px rgba(8,12,10,.3), 0 10px 24px rgba(8,12,10,.22);
+  transition:transform .15s cubic-bezier(.2,1.1,.3,1), box-shadow .15s;
+}
+.game:active{transform:translateY(-4px) scale(1.01);box-shadow:0 16px 30px rgba(8,12,10,.4)}
+.gband{height:8px;display:flex}
+.gband span{flex:1}
+.gbody{padding:16px 18px 15px;display:flex;align-items:center;gap:14px}
+.ginfo{flex:1;min-width:0}
+.gname{font-family:'Lilita One',cursive;font-size:21px;letter-spacing:.3px}
+.gdesc{font-size:12px;font-weight:700;color:var(--muted-ink);margin-top:3px;line-height:1.4}
+.gplay{
+  font-family:'Lilita One',cursive;font-size:14px;color:#fff;flex:0 0 auto;
+  background:linear-gradient(180deg,var(--primary-coral),var(--primary-coral-deep));
+  border-radius:11px;padding:10px 20px;
+  box-shadow:0 3px 8px rgba(188,79,55,.35), inset 0 1px 0 rgba(255,255,255,.25);
+}
+.gmeta{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--money-gold);padding:0 18px 13px}
+.game.soon{
+  background:none;border:2px dashed var(--line-soft);box-shadow:none;color:var(--text-faint);
+  display:flex;align-items:center;justify-content:center;min-height:88px;
+  font-size:12.5px;font-weight:800;letter-spacing:.6px;
+}
+.game.soon:active{transform:none}
+footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity:.3}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="inf">INFINITE</span> TABLE</div>
+  <div class="tag">Pull up a chair</div>
+</header>
+
+<main>
+  <a class="game" href="./coastline/">
+    <div class="gband">
+      <span style="background:var(--p-amber)"></span>
+      <span style="background:var(--p-teal)"></span>
+      <span style="background:var(--p-coral)"></span>
+      <span style="background:var(--p-purple)"></span>
+      <span style="background:var(--p-sky)"></span>
+    </div>
+    <div class="gbody">
+      <div class="ginfo">
+        <div class="gname">Coastline</div>
+        <div class="gdesc">Build sets, charge rent, raid your mates' tables. Deal-style property card game on the Sunshine Coast.</div>
+      </div>
+      <span class="gplay">PLAY</span>
+    </div>
+    <div class="gmeta">1 player vs 2 AI · v0.2.19</div>
+  </a>
+
+  <div class="game soon">More games joining the table…</div>
+</main>
+
+<footer>Infinite Table</footer>
+
+</body>
+</html>
