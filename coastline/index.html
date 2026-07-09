@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.23
+  Version: 0.2.24
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.23</title>
+<title>Coastline — v0.2.24</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -93,6 +93,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 .opp-name{font-weight:800;font-size:13.5px;flex:1}
 .opp-meta{font-size:10.5px;opacity:.65;font-weight:700;white-space:nowrap}
+.opp.active .opp-meta::before{content:'▸ ';color:var(--gold-money);animation:blip 1.1s ease-in-out infinite}
 .tidebar{display:flex;flex-wrap:wrap;gap:4px;min-height:15px;align-items:flex-end}
 .chipset{display:flex;gap:1.5px;align-items:flex-end}
 .chip{width:7px;border-radius:2px;height:12px;box-shadow:inset 0 -2px 2px rgba(0,0,0,.25)}
@@ -136,13 +137,14 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .bldg-tags{display:flex;gap:3px}
 .bldg-tag{font-size:9px;font-weight:800;letter-spacing:.4px;background:var(--gold-money);color:var(--table-deep);border-radius:4px;padding:1px 5px;box-shadow:0 1px 2px rgba(8,12,10,.3)}
 #mybank{display:flex;gap:5px;flex-wrap:wrap;align-items:center;min-height:32px}
-.banktotal{font-size:12px;font-weight:800;opacity:.75;margin-left:4px}
+.banktotal{font-size:12px;font-weight:800;opacity:.75;margin-left:4px;display:inline-block}
+.banktotal.pop{animation:zpop .35s ease}
 
 /* ---------- hand ---------- */
 #handwrap{background:linear-gradient(to top, rgba(10,15,12,.55), transparent);padding:8px 0 calc(8px + env(safe-area-inset-bottom))}
 #handbar{display:flex;justify-content:space-between;align-items:center;padding:0 16px 8px}
 #playsleft{display:flex;gap:5px;align-items:center;font-size:11.5px;font-weight:800;letter-spacing:.3px}
-.playdot{width:10px;height:10px;border-radius:50%;background:var(--coral);opacity:.22;box-shadow:inset 0 -2px 2px rgba(0,0,0,.3)}
+.playdot{width:10px;height:10px;border-radius:50%;background:var(--coral);opacity:.22;box-shadow:inset 0 -2px 2px rgba(0,0,0,.3);transition:opacity .25s, box-shadow .25s}
 .playdot.on{opacity:1;box-shadow:0 0 6px rgba(226,106,75,.6), inset 0 -2px 2px rgba(0,0,0,.3)}
 #endturn{
   font-family:'Lilita One',cursive;font-size:14px;letter-spacing:.4px;color:#fff;
@@ -162,6 +164,10 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 .cardw.hidden-src{visibility:hidden}
 .cardw.raised{z-index:60!important;transform:translateY(-30px)}
+.cardw.part-l{transform:translateX(-9px)}
+.cardw.part-r{transform:translateX(9px)}
+.cardw.denied .card{animation:deny .32s ease}
+@keyframes deny{25%{transform:translateX(-5px)}50%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
 .cardw.raised .card{box-shadow:var(--sh-raise);transform:scale(1.03)}
 .card{transition:transform .18s cubic-bezier(.2,1.1,.3,1), box-shadow .18s}
 .card{
@@ -213,8 +219,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .bandsplit{background:linear-gradient(90deg,var(--b1) 50%,var(--b2) 50%)!important}
 
 /* ---------- modal / sheet ---------- */
-#overlay{position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(2px);display:none;align-items:flex-end;justify-content:center;z-index:50}
-#overlay.show{display:flex}
+#overlay{position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;z-index:50;opacity:0;pointer-events:none;transition:opacity .18s ease}
+#overlay.show{opacity:1;pointer-events:auto}
 #sheet{
   width:100%;max-width:520px;background:linear-gradient(180deg,var(--ui-highlight),var(--ui-deep) 50%);
   border-radius:24px 24px 0 0;padding:10px 16px calc(18px + env(safe-area-inset-bottom));
@@ -246,11 +252,12 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 /* ---------- win ---------- */
 #winscreen{
-  position:fixed;inset:0;z-index:60;display:none;
+  position:fixed;inset:0;z-index:60;display:flex;
   background:rgba(10,15,12,.72);backdrop-filter:blur(3px);
   flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
+  opacity:0;pointer-events:none;transition:opacity .25s ease;
 }
-#winscreen.show{display:flex;animation:fadein .25s ease}
+#winscreen.show{opacity:1;pointer-events:auto}
 .wincard{
   background:linear-gradient(180deg,var(--felt-highlight),var(--table-deep) 72%);
   border:1px solid var(--line);border-radius:20px;padding:26px 28px 24px;
@@ -421,10 +428,11 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 /* ---------- opponent POV screen ---------- */
 #pov{
-  position:fixed;inset:0;z-index:68;display:none;flex-direction:column;
+  position:fixed;inset:0;z-index:68;display:flex;flex-direction:column;
   background:var(--table);
 }
-#pov.show{display:flex;animation:fadein .18s ease}
+#pov{opacity:0;pointer-events:none;transform:scale(1.015);transition:opacity .2s ease, transform .2s ease}
+#pov.show{opacity:1;pointer-events:auto;transform:none}
 .povhdr{display:flex;justify-content:space-between;align-items:baseline;padding:14px 16px 4px}
 .povname{font-family:'Lilita One',cursive;font-size:21px;color:var(--text-ivory)}
 .povsub{font-size:10.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;opacity:.45}
@@ -437,8 +445,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .povcardback{flex:0 0 102px;width:102px;height:150px}
 
 /* ---------- fullscreen card inspect ---------- */
-#inspect{position:fixed;inset:0;background:var(--scrim);z-index:90;display:none;align-items:center;justify-content:center}
-#inspect.show{display:flex;animation:fadein .15s ease}
+#inspect{position:fixed;inset:0;background:var(--scrim);z-index:90;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .16s ease}
+#inspect.show{opacity:1;pointer-events:auto}
 @keyframes fadein{from{opacity:0}}
 .inspectcard{transform:scale(2.3);transform-origin:center;animation:inspop .22s cubic-bezier(.2,1.3,.4,1)}
 .inspectcard .card{box-shadow:0 10px 30px rgba(8,12,10,.6);pointer-events:none}
@@ -502,8 +510,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 @keyframes donepop{25%{transform:scale(1.06);box-shadow:0 0 16px rgba(217,160,63,.9)}}
 #endturn.pulse{animation:btnpulse 1.1s ease-in-out infinite}
 @keyframes btnpulse{50%{transform:scale(1.07);box-shadow:0 0 14px rgba(226,106,75,.9)}}
-#overlay.show #sheet{animation:sheetUp .28s cubic-bezier(.2,.9,.3,1)}
-@keyframes sheetUp{from{transform:translateY(64px);opacity:.4}}
+#sheet{transform:translateY(52px);transition:transform .24s cubic-bezier(.2,1,.3,1)}
+#overlay.show #sheet{transform:none}
 .confetti{position:fixed;top:-14px;width:9px;height:14px;z-index:65;border-radius:2px;animation:cfall linear forwards;pointer-events:none}
 @keyframes cfall{to{transform:translateY(106vh) rotate(560deg)}}
 
@@ -549,7 +557,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.23</span>
+    <span class="ver">v0.2.24</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -710,6 +718,8 @@ function draw(){
     if(G.discard.length===0) return null;
     G.deck = shuffle(G.discard.splice(0));
     log('Discard pile reshuffled into deck.');
+    if(typeof banner==='function') banner('RESHUFFLE');
+    if(typeof sfx==='function') sfx('tick');
   }
   return G.deck.pop();
 }
@@ -839,7 +849,8 @@ function aiShowcase(card, oppIdx){
   const r = oppEl.getBoundingClientRect();
   oppEl.classList.add('aiplay');
   setTimeout(()=>{ if(oppEl.classList) oppEl.classList.remove('aiplay'); }, 500);
-  const HOLD = 780, FLY = 320;
+  const quick = card.t==='action' && (card.kind==='payday' || card.kind==='hike');
+  const HOLD = quick ? 520 : 780, FLY = 320;
   VISLOCK = Date.now() + HOLD + FLY + 180;
   const f = document.createElement('div');
   f.className = 'showcase';
@@ -873,6 +884,7 @@ function aiShowcase(card, oppIdx){
   }, HOLD);
 }
 let prevComplete = new Set();
+let PREVBANK = -1;
 const logs = [];
 function log(msg){
   logs.unshift(msg);
@@ -976,6 +988,12 @@ function renderAll(){
     + `<span class="banktotal" style="margin-left:10px">$${bankTotal(p)}M</span>`;
   const hw = $('#handwrap');
   if(hw && hw.classList) hw.classList.toggle('dimmed', MODE.type==='pay' || MODE.type==='minepick');
+  const bt = bankTotal(p);
+  if(typeof PREVBANK==='number' && PREVBANK>=0 && bt!==PREVBANK){
+    const el = document.querySelector('#mybank .banktotal');
+    if(el && el.classList) el.classList.add('pop');
+  }
+  PREVBANK = bt;
   renderHand(p);
   $('#playsleft').innerHTML = 'Plays ' + [0,1,2].map(i=>`<span class="playdot ${isMyTurn()&&i<G.playsLeft?'on':''}"></span>`).join('');
   $('#endturn').disabled = !isMyTurn() || !!MODE.type;
@@ -1107,7 +1125,7 @@ function setStackHTML(p, color, cards, tapAttr, opts){
       const sel = opts.sel && opts.sel.has(c.id);
       return `<div class="tcard ${pick?'pickable':''} ${sel?'paysel':''}" style="top:${i*28}px;z-index:${i+1}" ${pick?`onclick="event.stopPropagation();${pick}"`:''}>${staticCardHTML(c, c.t!=='prop'?color:null)}</div>`;
     }).join('')}</div>
-    <div class="tsetfoot"><span class="setdot" style="background:${COLORS[color].hex}"></span>${done?'✓ complete':cards.length+'/'+COLORS[color].size}
+    <div class="tsetfoot"><span class="setdot" style="background:${COLORS[color].hex}"></span>${done?'<span style="color:var(--money-gold)">✓ complete</span>':cards.length+'/'+COLORS[color].size}
       ${p.bldg[color]?`<span class="bldg-tags">${p.bldg[color].granny?'<span class="bldg-tag">FLAT</span>':''}${p.bldg[color].resort?'<span class="bldg-tag">RESORT</span>':''}</span>`:''}
     </div>
   </div>`;
@@ -1182,7 +1200,7 @@ function cardVars(c){
   return '';
 }
 function handCardHTML(c){
-  const on = isMyTurn() ? `onclick="tapCard(${c.id})"` : `onclick="notYourTurn()"`;
+  const on = isMyTurn() ? `onclick="tapCard(${c.id})"` : `onclick="notYourTurn(${c.id})"`;
   return `<div class="${cardClasses(c)}" style="${cardVars(c)}" ${on}>${faceHTML(c)}</div>`;
 }
 function staticCardHTML(c, assignedColor, extraAttrs){
@@ -1320,7 +1338,11 @@ function toggleSelect(id){
   clearSelection();
   SELECTED = c;
   const w = document.querySelector(`#hand .cardw[data-cid="${id}"]`);
-  if(w && w.classList){ w.classList.add('raised'); if(w.style) w.style.touchAction='none'; }
+  if(w && w.classList){
+    w.classList.add('raised'); if(w.style) w.style.touchAction='none';
+    if(w.previousElementSibling && w.previousElementSibling.classList) w.previousElementSibling.classList.add('part-l');
+    if(w.nextElementSibling && w.nextElementSibling.classList) w.nextElementSibling.classList.add('part-r');
+  }
   buildZones(c);
   showPromptOptions(true);
   sfx('pick'); haptic(6);
@@ -1329,6 +1351,7 @@ function clearSelection(){
   if(!SELECTED) return;
   const w = document.querySelector(`#hand .cardw[data-cid="${SELECTED.id}"]`);
   if(w && w.classList){ w.classList.remove('raised'); if(w.style) w.style.touchAction=''; }
+  document.querySelectorAll('#hand .part-l, #hand .part-r').forEach(x=>x.classList.remove('part-l','part-r'));
   DRAG.zones.forEach(z=>{ if(z.el.classList) z.el.classList.remove('droppable','dropok'); });
   document.querySelectorAll('.setghost').forEach(g=>g.remove());
   document.querySelectorAll('.actionzone').forEach(g=>g.remove());
@@ -1746,6 +1769,8 @@ function checkAllWin(){
       $('#winsub').textContent = 'Three complete sets: ' + completeColors(p).map(c=>COLORS[c].label).join(', ');
       $('#winstats').textContent = 'Round '+G.turnCount+' · '+G.players.map(x=>x.name+' $'+bankTotal(x)+'M').join(' · ');
       setTimeout(()=>{
+        const wc = document.querySelector('.wincard');
+        if(wc && wc.style){ wc.style.animation='none'; void (wc.offsetWidth||0); wc.style.animation=''; }
         $('#winscreen').classList.add('show');
         sfx(p===me()?'win':'alert');
         haptic(p===me()?[12,60,12,60,24]:20);
@@ -1764,7 +1789,7 @@ function reopenWin(){
   $('#winpill').classList.remove('show');
   $('#winscreen').classList.add('show');
 }
-$('#endturn').onclick = ()=>{ if(isMyTurn() && !DRAG.active) endTurn(); };
+$('#endturn').onclick = ()=>{ if(isMyTurn() && !DRAG.active){ haptic(6); sfx('tick'); endTurn(); } };
 function endTurn(){
   endOppSelect();
   const p = cur();
@@ -1884,7 +1909,15 @@ function pickTarget(cb){
   closeSheet();
   startOppSelect('Tap a player', i=>true, cb);
 }
-function notYourTurn(){ if(!SUPPRESSTAP) log('Hang on — not your turn.'); }
+function notYourTurn(id){
+  if(SUPPRESSTAP) return;
+  haptic(5); sfx('back');
+  const w = id!=null ? document.querySelector(`#hand .cardw[data-cid="${id}"]`) : null;
+  if(w && w.classList){
+    w.classList.remove('denied'); void (w.offsetWidth||0); w.classList.add('denied');
+    setTimeout(()=>{ if(w.classList) w.classList.remove('denied'); }, 360);
+  }
+}
 
 /* ----- opponent tap: focus or select ----- */
 function oppTapped(idx){
@@ -1928,7 +1961,7 @@ function closePOVForce(){
   POVIDX = null;
   const el = $('#pov');
   if(el && el.classList) el.classList.remove('show');
-  if(el) el.innerHTML = '';
+  setTimeout(()=>{ if(POVIDX==null && el) el.innerHTML=''; }, 230);
 }
 function closePOV(){
   if(MODE.type==='povpick'){ cancelTargeting(); return; }

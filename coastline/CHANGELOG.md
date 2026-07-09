@@ -1,5 +1,24 @@
 # Coastline — Changelog
 
+## v0.2.24 — 2026-07-09
+Final single-player polish pass. No rule changes. Next stop: multiplayer.
+
+**Every overlay now transitions both ways**
+- Sheets, the opponent POV, the fullscreen inspector, and the win screen previously popped in nicely but vanished instantly. All four now live permanently in the layout and animate on opacity/transform in both directions — sheets glide down as they leave, the POV settles out with a gentle scale, the win card re-pops on every reopen from the Results pill.
+
+**Pacing & rhythm**
+- Adaptive showcase: low-stakes AI cards (Payday, Rent Hike) hold centre stage for 520ms instead of the full 780ms attack-card beat — long games stop dragging without losing readability where it matters.
+- The deck reshuffle gets its own banner and tick instead of a buried log line.
+
+**Hand tactility**
+- Raising a card now parts its neighbours 9px each way — the hand physically makes room.
+- Tapping cards during an AI turn is no longer silent: the card shakes "no" with a soft descending tone and a haptic tick.
+
+**Micro-feedback**
+- Bank total pops whenever it changes; play dots fade out smoothly as plays are spent; the active opponent's panel shows a pulsing gold ▸ thinking marker; End Turn clicks with a tick and haptic; completed-set labels render in gold.
+
+**Tests** — 26/26 PASS, 12-run soak; interaction flows 12/12; drop matrix clean from the repo.
+
 ## v0.2.23 — 2026-07-09
 Deck brought to the official Monopoly Deal itemization; Rules sheet; win-card polish.
 
