@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.2.20 — 2026-07-09
+Hotfix: v0.2.19 shipped with a large chunk of the stylesheet missing.
+
+**What happened**
+- The v0.2.19 cleanup used a greedy regex to delete a few retired payment-sheet CSS rules; it matched from the first retired rule to the last and swallowed everything between — the colour picker, the entire win screen, the log drawer, and the whole drag/manipulation block (drag clone, drop-zone highlights, prompt pill, player-select pulse, wild ghosts). Symptoms: unstyled log-drawer text visible below the hand, and glitchy dragging (the drag clone lost its fixed positioning).
+- The JS suites couldn't catch it because none of them validated CSS.
+
+**Fixed**
+- All swallowed rules restored with current-era token values; the intended retirements (payment-sheet styles) stay removed.
+
+**Never again**
+- The engine suite now opens with a CSS-integrity assertion: 23 load-bearing selectors must exist in the stylesheet or the suite fails before anything else runs.
+
+**Tests** — suite now 26/26 PASS (incl. CSS integrity), 15-run soak clean; interaction flows 12/12; drop matrix 38/38.
+
 ## v0.2.19 — 2026-07-09
 Sheets retired for pay/select — everything happens on the boards. Plus: the turn-2 "Script error" root-caused and fixed.
 

@@ -1,3 +1,10 @@
+// 0. CSS integrity: every load-bearing selector must exist in the stylesheet
+const _P = require('path'), _F = require('fs');
+const HTML_PATH = _F.existsSync(_P.join(__dirname,'coastline.html')) ? _P.join(__dirname,'coastline.html') : _P.join(__dirname,'..','coastline','index.html');
+const HTML_SRC = _F.readFileSync(HTML_PATH,'utf8');
+const REQUIRED_CSS = ['#winscreen{','#logdrawer{','.dragclone{','#promptbar{','.droppable{','.dropok{','.setghost{','.colorpick{','.opp.selectable{','.pickable{','#pov{','#inspect{','.errtoast{','.banner{','.flyer{','.cardback{','.actionzone{','.tcard.pickable','#myprops,.tablespread','.note{','.tset','.pbleft{','#pbfill{'];
+const missingCss = REQUIRED_CSS.filter(sel=>!HTML_SRC.includes(sel));
+T('CSS integrity: all load-bearing selectors present'+(missingCss.length?' (missing: '+missingCss.join(', ')+')':''), missingCss.length===0);
 // 1. deck composition
 const d=buildDeck();
 T('deck has 105 cards', d.length===105);
