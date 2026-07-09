@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.3.1
+  Version: 0.3.2
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.3.1</title>
+<title>Coastline — v0.3.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -596,7 +596,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.3.1</span>
+    <span class="ver">v0.3.2</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -2136,7 +2136,7 @@ function viewOppSelect(idx, mode, actionCard){
 <script>
 /* ================= ACTIONS / NO DEAL / PAYMENTS ================= */
 function spendAction(c, actor){
-  const p = actor||me();
+  const p = (typeof actor==='number' ? G.players[actor] : actor) || me();
   const i = p.hand.findIndex(x=>x.id===c.id);
   if(i>-1) p.hand.splice(i,1);
   G.discard.push(c);
@@ -2298,29 +2298,31 @@ function doShout(c,by){
 function doRent(c,color,targetIdx,by){
   if(NET.intercept('rent',{id:c.id,color,t:targetIdx})) return;
   const b=(by==null?MYSEAT:by); NET.evt(b,c);
-  const base = rentFor(me(),color);
-  const hikeCard = me().hand.find(x=>x.t==='action'&&x.kind==='hike');
-  if(hikeCard && G.playsLeft>=2){
+  const actor = G.players[b];
+  const base = rentFor(actor,color);
+  const hikeCard = actor.hand.find(x=>x.t==='action'&&x.kind==='hike');
+  if(hikeCard && G.playsLeft>=2 && b===MYSEAT){
     const who = targetIdx!=null ? G.players[targetIdx].name+' pays' : 'everyone pays';
     openSheet(`<h3>Rent Hike?</h3><div class="sub">You hold a Rent Hike — double this to $${base*2}M (${who}). Costs one extra play.</div>
       <div class="optlist">
         <button class="optbtn primary" onclick="window._hk(true)">Charge $${base*2}M</button>
         <button class="optbtn" onclick="window._hk(false)">Just $${base}M</button>
       </div>`);
-    window._hk = (yes)=>{ closeSheet(); execRent(c,color,targetIdx,yes?hikeCard:null,base); };
-  } else execRent(c,color,targetIdx,null,base);
+    window._hk = (yes)=>{ closeSheet(); execRent(c,color,targetIdx,yes?hikeCard:null,base,b); };
+  } else execRent(c,color,targetIdx,null,base,b);
 }
-function execRent(c,color,targetIdx,hikeCard,base){
+function execRent(c,color,targetIdx,hikeCard,base,by){
+  const b=(by==null?MYSEAT:by);
   haptic(10);
-  spendAction(c);
+  spendAction(c,b);
   let amount = base;
-  if(hikeCard){ spendAction(hikeCard); amount = base*2; }
-  const targets = targetIdx!=null ? [targetIdx] : [1,2];
-  log('You charged $'+amount+'M '+COLORS[color].label+' rent.');
+  if(hikeCard){ spendAction(hikeCard,b); amount = base*2; }
+  const targets = targetIdx!=null ? [targetIdx] : othersOf(b);
+  log(nameOf(b)+' charged $'+amount+'M '+COLORS[color].label+' rent.');
   processQueue(targets,(t,next)=>{
     resolveBlock(t,b,'Rent',blocked=>{
-      if(blocked){ log(G.players[t].name+' blocked the rent.'); return next(); }
-      requestPayment(t,amount,0,()=>{ flashOpp(t); sfx('coin'); next(); });
+      if(blocked){ log(nameOf(t)+' blocked the rent.'); return next(); }
+      requestPayment(t,amount,b,()=>{ flashOpp(t); sfx('coin'); next(); });
     });
   },()=>{ checkAllWin(); renderAll(); });
 }
@@ -2334,12 +2336,12 @@ function execSwipe(c, tIdx, cardId, by){
   const target = G.players[tIdx];
   const entry = propList(target).find(x=>x.card.id===cardId);
   if(!entry) return;
-  spendAction(c);
-  log('You played Sneaky Swipe on '+target.name+'.');
+  spendAction(c,b);
+  log(nameOf(b)+' played Sneaky Swipe on '+nameOf(tIdx)+'.');
   resolveBlock(tIdx,b,'Sneaky Swipe',blocked=>{
     if(blocked){ log('Swipe blocked.'); checkAllWin(); renderAll(); return; }
-    transferProp(target,me(),entry.card);
-    log('You swiped '+cardName(entry.card)+'.');
+    transferProp(target,G.players[b],entry.card);
+    log(nameOf(b)+' swiped '+cardName(entry.card)+'.');
     flashOpp(tIdx); sfx('good'); haptic(12);
     checkAllWin(); renderAll();
   });
@@ -2347,11 +2349,11 @@ function execSwipe(c, tIdx, cardId, by){
 function execTakeoverD(c, tIdx, color, by){
   if(NET.intercept('takeover',{id:c.id,t:tIdx,color})) return;
   const b=(by==null?MYSEAT:by); NET.evt(b,c);
-  spendAction(c);
-  log('You launched a Hostile Takeover on '+G.players[tIdx].name+"'s "+COLORS[color].label+' set!');
+  spendAction(c,b);
+  log(nameOf(b)+' launched a Hostile Takeover on '+nameOf(tIdx)+"'s "+COLORS[color].label+' set!');
   resolveBlock(tIdx,b,'Hostile Takeover',blocked=>{
     if(blocked){ log('Takeover blocked.'); checkAllWin(); renderAll(); return; }
-    doTakeover(tIdx,0,color);
+    doTakeover(tIdx,b,color);
     checkAllWin(); renderAll(); flashOpp(tIdx); sfx('good'); haptic([12,50,18]);
   });
 }
@@ -2359,16 +2361,17 @@ function execSwapFinal(c, tIdx, theirCardId, mineCardId, by){
   if(NET.intercept('swap',{id:c.id,t:tIdx,cid:theirCardId,mid:mineCardId})) return;
   const b=(by==null?MYSEAT:by); NET.evt(b,c);
   const target=G.players[tIdx];
+  const actorP = G.players[b];
   const theirEntry = propList(target).find(x=>x.card.id===theirCardId);
-  const mineEntry = propList(me()).find(x=>x.card.id===mineCardId);
+  const mineEntry = propList(actorP).find(x=>x.card.id===mineCardId);
   if(!theirEntry||!mineEntry) return;
-  spendAction(c);
-  log('You proposed a Swap Meet with '+target.name+'.');
+  spendAction(c,b);
+  log(nameOf(b)+' proposed a Swap Meet with '+nameOf(tIdx)+'.');
   resolveBlock(tIdx,b,'Swap Meet',blocked=>{
     if(blocked){ log('Swap blocked.'); checkAllWin(); renderAll(); return; }
-    transferProp(me(),target,mineEntry.card);
-    transferProp(target,me(),theirEntry.card);
-    log('You swapped '+cardName(mineEntry.card)+' for '+cardName(theirEntry.card)+'.');
+    transferProp(actorP,target,mineEntry.card);
+    transferProp(target,actorP,theirEntry.card);
+    log(nameOf(b)+' swapped '+cardName(mineEntry.card)+' for '+cardName(theirEntry.card)+'.');
     flashOpp(tIdx); sfx('good'); haptic(12);
     checkAllWin(); renderAll();
   });

@@ -1,5 +1,19 @@
 # Coastline — Changelog
 
+## v0.3.2 — 2026-07-09
+Hotfix: human rent crashed ("b is not defined") + full actor-layer audit.
+
+**The crash**
+- The v0.3.0 actor threading declared the actor seat in doRent but the patched resolveBlock line lives in execRent — a separate function. Any human rent play threw a ReferenceError. It shipped because only the flows suite was run before the v0.3.0 push; the drop matrix (which force-plays rent) would have caught it. All three suites now run before every ship, no exceptions.
+
+**The audit it triggered (remote-seat correctness)**
+- Reading the crash site exposed that the whole exec layer still assumed the local player as actor — harmless in solo (actor = seat 0 = me) but wrong for host-applied client intents: spendAction was being passed a seat number where it expected a player object (seat 0's falsiness masked it), execRent hardcoded targets [1,2] and receiver seat 0, execSwipe/execSwapFinal delivered stolen/swapped cards to me() instead of the actor, execTakeoverD awarded sets to seat 0, and doRent read rent/hike from the local hand.
+- All fixed: spendAction accepts seat or player; every exec resolves the actor player once and uses it for spends, transfers, targets (othersOf(actor)), payment receivers, and name-correct logs; the Rent-Hike prompt only appears for the local seat.
+
+**Also** — the 404 in the console is just the missing favicon; harmless, a proper icon can come with the PWA pass.
+
+**Tests** — engine suite 41/41, flows 12/12, drop matrix 38/38 — all three, from the repo.
+
 ## v0.3.1 — 2026-07-09
 Online is live: Supabase project keys wired (anon public key — safe to ship client-side; rooms are pure Realtime channels, no database access to protect).
 
