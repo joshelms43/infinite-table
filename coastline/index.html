@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.2.22
+  Version: 0.2.23
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.2.22</title>
+<title>Coastline — v0.2.23</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -396,9 +396,12 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 /* ---------- win dismiss + results pill ---------- */
 #winclose{
-  position:absolute;top:10px;right:12px;font-size:16px;width:30px;height:30px;
-  border-radius:50%;background:rgba(255,255,255,.1);color:var(--text-ivory);
+  position:absolute;top:-12px;right:-12px;font-size:13px;width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;padding:0;line-height:1;
+  border-radius:50%;background:var(--felt-highlight);border:1px solid var(--line);
+  color:var(--text-ivory);box-shadow:0 3px 8px rgba(8,12,10,.45);
 }
+#winclose:active{transform:scale(.92)}
 .wincard{position:relative}
 #winpill{
   position:fixed;top:calc(54px + env(safe-area-inset-top));right:16px;z-index:59;display:none;
@@ -546,7 +549,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.2.22</span>
+    <span class="ver">v0.2.23</span>
+    <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
   </div>
@@ -645,18 +649,19 @@ const ACTIONS = {
   takeover:{n:'Hostile Takeover', d:'Steal a complete set from any player', v:5, c:2},
   nodeal:  {n:'No Deal!',         d:'Cancel an action played against you',  v:4, c:3},
   swipe:   {n:'Sneaky Swipe',     d:'Steal a property (not from a complete set)', v:3, c:3},
-  swap:    {n:'Swap Meet',        d:'Swap one of your properties with another player\'s', v:3, c:3},
+  swap:    {n:'Swap Meet',        d:'Swap one of your properties with another player\'s', v:3, c:4},
   favour:  {n:'Call In a Favour', d:'One player pays you $5M', v:3, c:3},
   shout:   {n:'Shout a Round',    d:'Every player pays you $2M', v:2, c:3},
   payday:  {n:'Payday',           d:'Draw 2 extra cards', v:1, c:10},
   granny:  {n:'Granny Flat',      d:'+$3M rent on a complete set (not Transport)', v:3, c:3},
-  resort:  {n:'Beach Resort',     d:'+$4M rent on a set with a Granny Flat', v:4, c:2},
+  resort:  {n:'Beach Resort',     d:'+$4M rent on a set with a Granny Flat', v:4, c:3},
   hike:    {n:'Rent Hike',        d:'Play with a Rent card to double it', v:1, c:2},
 };
 const MONEY = [[1,6],[2,5],[3,3],[4,3],[5,2],[10,1]];
 const DUAL_WILDS = [
   [['gold','teal'],4,1],[['coral','sky'],2,2],[['orange','purple'],2,2],
   [['green','sage'],3,1],[['brown','black'],1,1],[['teal','coral'],3,1],
+  [['sky','black'],2,1],
 ];
 const RENT_DUALS = [['gold','teal'],['coral','sky'],['orange','purple'],['green','sage'],['brown','black']];
 
@@ -875,6 +880,20 @@ function log(msg){
   $('#loglist').innerHTML = logs.slice(0,120).map(l=>`<div>${l}</div>`).join('');
 }
 $('#logbtn').onclick = ()=> $('#logdrawer').classList.add('show');
+$('#rulesbtn').onclick = ()=> openRules();
+function openRules(){
+  openSheet(`<h3>How to play</h3>
+    <div class="sub">First to <b>3 complete property sets</b> wins.</div>
+    <div class="sheetsec">Your turn</div>
+    <div class="sub">Draw 2 (or 5 on an empty hand). Play up to <b>3 cards</b>: properties to your table, money and spare cards to your bank, actions to the pile. End with at most 7 in hand.</div>
+    <div class="sheetsec">Paying</div>
+    <div class="sub">Debts are paid from your bank and table — never your hand. No change is given. Properties paid move to the other player's table.</div>
+    <div class="sheetsec">Protection</div>
+    <div class="sub">Complete sets can't be Swiped or Swapped — only a Hostile Takeover claims them. <b>No Deal!</b> cancels any action played against you, and can itself be countered.</div>
+    <div class="sheetsec">Wilds & buildings</div>
+    <div class="sub">Wilds count as either shown colour and can be moved freely on your turn. Granny Flats (+$3M) and Beach Resorts (+$4M) boost completed sets — not Transport.</div>
+    <button class="optbtn" onclick="closeSheet()">Close</button>`);
+}
 $('#sndbtn').onclick = function(){ SOUND=!SOUND; this.textContent = SOUND?'🔊':'🔇'; };
 $('#logclose').onclick = ()=> $('#logdrawer').classList.remove('show');
 

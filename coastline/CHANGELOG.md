@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.2.23 — 2026-07-09
+Deck brought to the official Monopoly Deal itemization; Rules sheet; win-card polish.
+
+**Deck corrections (105 → 108 playing cards)**
+- Audited against the official card list. Money (20, $57M, exact denominations), properties (28), and rent (13: five dual pairs ×2 + three wild) were already exact. Three counts were off: Swap Meet 3 → 4 (Forced Deal), Beach Resort 2 → 3 (Hotel), and wildcards 10 → 11 via a new Kawana/Transport dual (the Light Blue/Railroad analogue).
+- Note: the source's own action itemization (2/3/3/4/3/3/10/3/3/2) sums to 36, not the 34 its header claims — the per-card list is authoritative and is what's implemented.
+- The physical deck's 4 rule cards aren't shuffled into play; digitally they become a proper Rules sheet behind a new ? button in the header — turn structure, paying, protection, wilds & buildings, win condition.
+
+**Polish**
+- Win-card ✕ reseated: it now perches on the card's corner as a proper floating close button (felt-highlight disc with border and shadow, press feedback) instead of sitting awkwardly inside the padding.
+
+**Tests** — suite updated to the new counts (deck 108, 36 actions, 11 wilds, conservation at 108): 26/26 PASS, 12-run soak; interaction flows 12/12; drop matrix clean.
+
 ## v0.2.22 — 2026-07-09
 AI plays get a showcase; the finished board is browsable. No rule changes.
 

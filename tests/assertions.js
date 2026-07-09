@@ -7,11 +7,11 @@ const missingCss = REQUIRED_CSS.filter(sel=>!HTML_SRC.includes(sel));
 T('CSS integrity: all load-bearing selectors present'+(missingCss.length?' (missing: '+missingCss.join(', ')+')':''), missingCss.length===0);
 // 1. deck composition
 const d=buildDeck();
-T('deck has 105 cards', d.length===105);
+T('deck has 108 cards (official itemization, rule cards = Rules sheet)', d.length===108);
 T('28 properties', d.filter(c=>c.t==='prop').length===28);
-T('10 wilds (8 dual + 2 rainbow)', d.filter(c=>c.t==='wild').length===8 && d.filter(c=>c.t==='wildall').length===2);
+T('11 wilds (9 dual + 2 rainbow)', d.filter(c=>c.t==='wild').length===9 && d.filter(c=>c.t==='wildall').length===2);
 T('20 money cards', d.filter(c=>c.t==='money').length===20);
-T('34 action cards', d.filter(c=>c.t==='action').length===34);
+T('36 action cards (2/3/3/4/3/3/10/3/3/2 per official list)', d.filter(c=>c.t==='action').length===36);
 T('13 rent cards', d.filter(c=>c.t==='rent').length===10 && d.filter(c=>c.t==='rentall').length===3);
 T('set sizes sum to 28', Object.values(COLORS).reduce((s,c)=>s+c.size,0)===28);
 // 2. rent + completion
@@ -86,12 +86,12 @@ G.players.forEach(p=>p.isAI=true);
 G.over=false; G.turn=0;
 let conserved=true; let steps=0;
 const _fe=finishEnd;
-finishEnd=function(){ if(allCards()!==105)conserved=false; steps++; if(steps>600){G.over=true;return;} _fe(); };
+finishEnd=function(){ if(allCards()!==108)conserved=false; steps++; if(steps>600){G.over=true;return;} _fe(); };
 startTurn();
 setInterval(()=>{
   if(G.over){
     T('full AI game reaches a winner', steps<=600);
-    T('card count conserved at 105 every turn', conserved);
+    T('card count conserved at 108 every turn', conserved);
     T('a player holds 3 complete sets', G.players.some(p=>completeColors(p).length>=3));
     console.log('turns played:', steps);
     DONE();
