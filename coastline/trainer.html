@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<!--
+  COASTLINE — genome trainer (browser twin of tests/trainer.js)
+  Open this page from the deployed site (it fetches index.html for the engine),
+  press Start, and leave the tab open overnight. The engine runs full speed in a
+  Web Worker; the run checkpoints to localStorage after every batch, so closing or
+  crashing the tab loses at most a couple of seconds of games. Export/Import state
+  is byte-compatible with `node tests/trainer.js --state FILE`.
+  Keep the machine awake (the page requests a screen wake lock while running) and
+  run ONE trainer tab at a time — two tabs would fight over the same checkpoint.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coastline — Trainer</title>
+<style>
+  :root{ --bg:#101820; --card:#1a2430; --line:#2a3644; --ink:#e8eef4; --dim:#8fa1b3; --gold:#f4c95d; --coral:#ff6b6b; --mint:#4ecdc4; }
+  *{ box-sizing:border-box; margin:0; }
+  body{ background:#101820; color:#e8eef4; font:15px/1.5 "Nunito Sans",system-ui,sans-serif; padding:20px; max-width:900px; margin:0 auto; }
+  h1{ font-size:22px; margin:4px 0 2px; } h1 em{ color:#f4c95d; font-style:normal; }
+  .sub{ color:#8fa1b3; font-size:13px; margin-bottom:16px; }
+  .card{ background:#1a2430; border:1px solid #2a3644; border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  button{ background:#f4c95d; color:#101820; font:700 14px "Nunito Sans",system-ui,sans-serif; border:0; border-radius:8px; padding:9px 16px; cursor:pointer; }
+  button.sec{ background:#2a3644; color:#e8eef4; }
+  button:disabled{ opacity:.45; cursor:default; }
+  .stat{ display:inline-block; margin:2px 14px 2px 0; }
+  .stat b{ color:#f4c95d; }
+  .badge{ font-size:12px; padding:2px 8px; border-radius:10px; background:#2a3644; color:#8fa1b3; }
+  .badge.on{ background:#173f2e; color:#4ecdc4; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th,td{ text-align:left; padding:4px 8px; border-bottom:1px solid #2a3644; }
+  th{ color:#8fa1b3; font-weight:600; }
+  td.win{ color:#4ecdc4; font-weight:700; } td.rej{ color:#ff6b6b; }
+  #log{ font:12px/1.5 ui-monospace,monospace; color:#8fa1b3; max-height:180px; overflow-y:auto; white-space:pre-wrap; }
+  #fatal{ color:#ff6b6b; font-weight:700; display:none; }
+</style>
+</head>
+<body>
+<h1>Coastline <em>Trainer</em></h1>
+<div class="sub">Paired-seed evolution with CI-gated promotion — the browser twin of <code>tests/trainer.js</code>. One tab at a time; keep the machine awake overnight.</div>
+
+<div class="card">
+  <div class="row">
+    <button id="startbtn" disabled>Start</button>
+    <button id="pausebtn" class="sec" disabled>Pause</button>
+    <button id="exportbtn" class="sec">Export state</button>
+    <button id="importbtn" class="sec">Import state</button>
+    <button id="champbtn" class="sec">Export champion</button>
+    <button id="resetbtn" class="sec">Reset run</button>
+    <span id="wakebadge" class="badge">wake lock off</span>
+    <span id="runbadge" class="badge">loading engine…</span>
+  </div>
+  <input type="file" id="importfile" accept=".json,application/json" style="display:none">
+</div>
+
+<div class="card" id="stats">
+  <span class="stat">generation <b id="s_gen">–</b></span>
+  <span class="stat">phase <b id="s_phase">–</b></span>
+  <span class="stat">progress <b id="s_prog">–</b></span>
+  <span class="stat">sigma <b id="s_sigma">–</b></span>
+  <span class="stat">promotions <b id="s_promo">–</b></span>
+  <span class="stat">champion age <b id="s_age">–</b></span>
+  <span class="stat">total games <b id="s_games">–</b></span>
+  <span class="stat">speed <b id="s_speed">–</b></span>
+  <div id="fatal"></div>
+</div>
+
+<div class="card">
+  <table>
+    <thead><tr><th>gen</th><th>best share (search, 300 games)</th><th>confirmation (1,002 fresh games)</th><th>outcome</th></tr></thead>
+    <tbody id="hist"></tbody>
+  </table>
+</div>
+
+<div class="card"><div id="log">trainer log…</div></div>
+
+<script type="text/plain" id="worker-boot">
+/* Worker bootstrap: headless stubs mirroring tests/trainer.js, then boot-eval of
+   engine + core in one direct-eval scope (consts must be shared). */
+const realSetTimeout = self.setTimeout.bind(self);
+const el = () => new Proxy({classList:{add(){},remove(){},toggle(){}},style:{}},{
+  get(t,k){ if(k in t) return t[k]; return ()=>{}; },
+  set(){ return true; }
+});
+self.document = { querySelector:()=>el(), querySelectorAll:()=>[], createElement:()=>el(), getElementById:()=>el(), addEventListener:()=>{}, body:{appendChild(){}} };
+self.window = self;
+self.requestAnimationFrame = fn=>fn();
+const timers = [];
+self.setTimeout = (fn)=>{ timers.push(fn); return timers.length; };
+self.clearTimeout = ()=>{};
+self.onmessage = function(e){
+  if(e.data.type!=='boot') return;
+  try{
+    eval(e.data.engine + '\n;\n' + e.data.core);
+    self.postMessage({type:'ready'});
+  }catch(err){
+    self.postMessage({type:'fatal', msg:String((err&&err.message)||err)});
+  }
+};
+</script>
+
+<script type="text/plain" id="worker-core">
+/* Trainer core. playGame/seedBlock/stats/sampling/trainStep are VERBATIM copies of
+   tests/trainer.body.js — change them there first, then mirror here. State JSON is
+   interchangeable between this page and `node tests/trainer.js --state FILE`. */
+const LAMBDA = 8, MU = 4, SEARCH_SEEDS = 50, CONFIRM_SEEDS = 167;
+const SIGMA0 = 0.15, SIGMA_MIN = 0.03, SIGMA_MAX = 0.5;
+const GENE_MIN = 0.01;
+const CONFIRM_SEED_BASE = 10000000;
+
+function mulberry32(seed){
+  let s = (seed>>>0) + 0x9E3779B9;
+  return function(){
+    s |= 0; s = (s + 0x6D2B79F5)|0;
+    let t = Math.imul(s ^ (s>>>15), 1|s);
+    t = (t + Math.imul(t ^ (t>>>7), 61|t)) ^ t;
+    return ((t ^ (t>>>14))>>>0) / 4294967296;
+  };
+}
+function gauss(rand){
+  let u = 0, v = 0;
+  while(u===0) u = rand();
+  while(v===0) v = rand();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+const pump = ()=>{ let n=0; while(timers.length && n<20000){ const f=timers.shift(); try{f();}catch(e){} n++; } };
+const trueRandom = Math.random;
+function playGame(seed, genomes){
+  timers.length = 0;
+  Math.random = mulberry32(seed);
+  newGame();
+  G.players[0].isAI = true;
+  for(let i=0;i<3;i++) G.players[i].tuneW = genomes[i];
+  startTurn(); pump();
+  let guard = 0;
+  while(!G.over && guard<600){ if(timers.length){ pump(); } else { aiStep(cur()); pump(); } guard++; }
+  Math.random = trueRandom;
+  if(!G.over) return -1;
+  return G.players.findIndex(p=>completeColors(p).length>=3);
+}
+function seedBlock(seed, cand, champ){
+  let cW = 0, kW = 0;
+  for(const solo of [cand, champ]){
+    const fill = solo===cand ? champ : cand;
+    for(let seat=0; seat<3; seat++){
+      const gs = [fill,fill,fill]; gs[seat] = solo;
+      const w = playGame(seed, gs);
+      if(w<0) continue;
+      if(gs[w]===cand) cW++; else kW++;
+    }
+  }
+  return {cW, kW};
+}
+function clusterStat(perSeedValues){
+  const xs = perSeedValues.filter(x=>x!=null);
+  const n = xs.length;
+  if(n<2) return { m:NaN, ci:NaN, n };
+  const m = xs.reduce((a,b)=>a+b,0)/n;
+  const v = xs.reduce((a,x)=>a+(x-m)*(x-m),0)/(n-1);
+  return { m, ci: 1.96*Math.sqrt(v/n), n };
+}
+const pct = x => (x*100).toFixed(1)+'%';
+const GENES = Object.keys(AI_W);
+const clone = w => JSON.parse(JSON.stringify(w));
+function sampleCandidate(mean, sigma, gen, k){
+  const rand = mulberry32(0x5EED ^ (gen*2654435761>>>0) ^ (k*40503));
+  const g = {};
+  GENES.forEach(key=>{ g[key] = +Math.max(GENE_MIN, mean[key]*Math.exp(sigma*gauss(rand))).toFixed(4); });
+  return g;
+}
+function geoMean(genomes){
+  const g = {};
+  GENES.forEach(key=>{
+    const m = Math.exp(genomes.reduce((s,x)=>s+Math.log(Math.max(GENE_MIN,x[key])),0)/genomes.length);
+    g[key] = +m.toFixed(4);
+  });
+  return g;
+}
+function freshState(){
+  return {
+    config: {LAMBDA, MU, SEARCH_SEEDS, CONFIRM_SEEDS},
+    champion: clone(AI_W), championAge: 0, promotions: 0,
+    gen: 1, mean: clone(AI_W), sigma: SIGMA0,
+    phase: 'search', candIdx: 0,
+    candidates: [], confirm: null, history: [], totalGames: 0,
+  };
+}
+function evalRec(genome){ return {genome, seedsDone:0, cW:0, kW:0, shares:[]}; }
+function stepEval(rec, seed, champ){
+  const r = seedBlock(seed, rec.genome, champ);
+  rec.cW += r.cW; rec.kW += r.kW;
+  rec.shares.push((r.cW+r.kW)>0 ? r.cW/(r.cW+r.kW) : null);
+  rec.seedsDone++;
+}
+const shareOf = rec => clusterStat(rec.shares);
+function trainStep(S, logFn){
+    if(S.phase==='search'){
+      if(S.candidates.length===0){
+        for(let k=0;k<LAMBDA;k++) S.candidates.push(evalRec(sampleCandidate(S.mean, S.sigma, S.gen, k)));
+        S.candIdx = 0;
+      }
+      const rec = S.candidates[S.candIdx];
+      if(rec.seedsDone < SEARCH_SEEDS){
+        stepEval(rec, (S.gen-1)*SEARCH_SEEDS + rec.seedsDone, S.champion);
+        S.totalGames += 6;
+      } else if(S.candIdx < LAMBDA-1){
+        S.candIdx++;
+      } else {
+        const ranked = S.candidates.map(r=>({r, s:shareOf(r)})).sort((a,b)=>b.s.m-a.s.m);
+        const best = ranked[0];
+        S.mean = geoMean(ranked.slice(0,MU).map(x=>x.r.genome));
+        // step-size rule: count only *significant* winners — under paired mirroring a
+        // neutral candidate sits at ~50% by construction, so raw >50% counts would
+        // inflate sigma in flat terrain (null rate of m-ci>0.5 is ~2.5%, target 20%)
+        const beat = ranked.filter(x=>x.s.m - x.s.ci > 0.5).length/LAMBDA;
+        S.sigma = Math.min(SIGMA_MAX, Math.max(SIGMA_MIN, S.sigma*Math.exp((beat-0.2)*0.6)));
+        const sig = best.s.m - best.s.ci > 0.5;
+        S.history.push({gen:S.gen, bestShare:+best.s.m.toFixed(4), bestCI:+best.s.ci.toFixed(4),
+                        beatFrac:beat, sigma:+S.sigma.toFixed(4), challenged:sig, promoted:false});
+        logFn('gen '+S.gen+': best share '+pct(best.s.m)+' ± '+pct(best.s.ci)+' over '+SEARCH_SEEDS+' seeds; '+
+                    (sig ? 'CHALLENGE — confirming on fresh seeds' : 'champion holds (CI includes 50%)'));
+        if(sig){ S.phase='confirm'; S.confirm = evalRec(clone(best.r.genome)); }
+        else { S.gen++; S.candidates=[]; S.candIdx=0; S.championAge++; }
+      }
+    } else {
+      const rec = S.confirm;
+      if(rec.seedsDone < CONFIRM_SEEDS){
+        stepEval(rec, CONFIRM_SEED_BASE + S.gen*CONFIRM_SEEDS + rec.seedsDone, S.champion);
+        S.totalGames += 6;
+      } else {
+        const st = shareOf(rec);
+        const win = st.m - st.ci > 0.5;
+        const h = S.history[S.history.length-1];
+        h.confirm = {share:+st.m.toFixed(4), ci:+st.ci.toFixed(4), games:CONFIRM_SEEDS*6};
+        h.promoted = win;
+        if(win){
+          S.champion = clone(rec.genome); S.championAge = 0; S.promotions++;
+          logFn('gen '+S.gen+': PROMOTED — confirmed '+pct(st.m)+' ± '+pct(st.ci)+' over '+(CONFIRM_SEEDS*6)+' fresh paired games');
+        } else {
+          S.championAge++;
+          logFn('gen '+S.gen+': challenge REJECTED at confirmation — '+pct(st.m)+' ± '+pct(st.ci)+' (winner\'s curse caught by the gate)');
+        }
+        S.phase='search'; S.confirm=null; S.gen++; S.candidates=[]; S.candIdx=0;
+      }
+    }
+}
+
+/* ---- worker plumbing (browser-only) ---- */
+let S = null, running = false;
+function loop(){
+  if(!running || !S) return;
+  const t0 = Date.now(), logs = [];
+  while(Date.now() - t0 < 1200) trainStep(S, m=>logs.push(m));
+  self.postMessage({type:'ckpt', state:S, logs});
+  realSetTimeout(loop, 0);
+}
+self.onmessage = function(e){
+  const m = e.data;
+  if(m.type==='init'){ S = m.state || freshState(); self.postMessage({type:'ckpt', state:S, logs:['run '+(m.state?'resumed':'initialised')]}); }
+  else if(m.type==='start'){ if(!running){ running = true; loop(); } }
+  else if(m.type==='pause'){ running = false; self.postMessage({type:'paused'}); }
+};
+</script>
+
+<script>
+(async function(){
+  const KEY = 'coastline_trainer_v1';
+  const $id = s=>document.getElementById(s);
+  const pct = x=>(x*100).toFixed(1)+'%';
+  let worker = null, running = false, wakeLock = null;
+  let lastGames = 0, lastT = 0, speed = '–';
+
+  function logLine(s){ const el = $id('log'); el.textContent += '\n'+s; el.scrollTop = el.scrollHeight; }
+  function fatal(msg){ $id('fatal').style.display='block'; $id('fatal').textContent = 'ENGINE ERROR: '+msg; $id('runbadge').textContent='error'; }
+
+  function render(S){
+    $id('s_gen').textContent = S.gen;
+    $id('s_phase').textContent = S.phase;
+    $id('s_prog').textContent = S.phase==='confirm'
+      ? 'seed '+S.confirm.seedsDone+'/167'
+      : (S.candidates.length ? 'cand '+(S.candIdx+1)+'/8 · seed '+S.candidates[S.candIdx].seedsDone+'/50' : 'sampling…');
+    $id('s_sigma').textContent = S.sigma.toFixed(3);
+    $id('s_promo').textContent = S.promotions;
+    $id('s_age').textContent = S.championAge+' gens';
+    $id('s_games').textContent = S.totalGames.toLocaleString();
+    const now = Date.now();
+    if(lastT && S.totalGames>lastGames && now>lastT) speed = Math.round((S.totalGames-lastGames)/((now-lastT)/1000))+' games/s';
+    lastGames = S.totalGames; lastT = now;
+    $id('s_speed').textContent = running ? speed : 'paused';
+    $id('hist').innerHTML = S.history.slice(-14).map(h=>{
+      const conf = h.confirm ? pct(h.confirm.share)+' ± '+pct(h.confirm.ci) : (h.challenged ? 'running…' : '—');
+      const out = h.promoted ? '<td class="win">PROMOTED</td>' : (h.confirm ? '<td class="rej">rejected</td>' : (h.challenged ? '<td>confirming…</td>' : '<td>champion holds</td>'));
+      return '<tr><td>'+h.gen+'</td><td>'+pct(h.bestShare)+' ± '+pct(h.bestCI)+'</td><td>'+conf+'</td>'+out+'</tr>';
+    }).reverse().join('');
+  }
+
+  async function setWake(on){
+    try{
+      if(on && 'wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); $id('wakebadge').textContent='wake lock on'; $id('wakebadge').className='badge on';
+        wakeLock.addEventListener('release', ()=>{ $id('wakebadge').textContent='wake lock off'; $id('wakebadge').className='badge'; });
+      } else if(!on && wakeLock){ await wakeLock.release(); wakeLock=null; }
+    }catch(e){ $id('wakebadge').textContent='wake lock unavailable'; }
+  }
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && running) setWake(true); });
+
+  let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(e){}
+
+  const engine = await (async ()=>{
+    const html = await (await fetch('index.html', {cache:'no-store'})).text();
+    return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n;\n');
+  })().catch(e=>{ fatal('could not fetch index.html — open this page from the deployed site, not file://'); return null; });
+  if(!engine) return;
+
+  const boot = $id('worker-boot').textContent, core = $id('worker-core').textContent;
+  worker = new Worker(URL.createObjectURL(new Blob([boot], {type:'text/javascript'})));
+  worker.onmessage = (e)=>{
+    const m = e.data;
+    if(m.type==='fatal'){ fatal(m.msg); return; }
+    if(m.type==='ready'){ worker.postMessage({type:'init', state:saved}); $id('runbadge').textContent = saved ? 'resumed checkpoint' : 'fresh run'; $id('startbtn').disabled=false; return; }
+    if(m.type==='ckpt'){
+      try{ localStorage.setItem(KEY, JSON.stringify(m.state)); }catch(err){}
+      (m.logs||[]).forEach(logLine);
+      render(m.state); saved = m.state;
+    }
+    if(m.type==='paused'){ $id('runbadge').textContent='paused'; }
+  };
+  worker.postMessage({type:'boot', engine, core});
+
+  $id('startbtn').onclick = ()=>{ running=true; worker.postMessage({type:'start'}); $id('startbtn').disabled=true; $id('pausebtn').disabled=false; $id('runbadge').textContent='training…'; setWake(true); };
+  $id('pausebtn').onclick = ()=>{ running=false; worker.postMessage({type:'pause'}); $id('startbtn').disabled=false; $id('pausebtn').disabled=true; setWake(false); };
+  function download(name, obj){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(obj)], {type:'application/json'}));
+    a.download = name; a.click();
+  }
+  $id('exportbtn').onclick = ()=>{ if(saved) download('trainer-state.json', saved); };
+  $id('champbtn').onclick = ()=>{ if(saved) download('champion.json', saved.champion); };
+  $id('importbtn').onclick = ()=>$id('importfile').click();
+  $id('importfile').onchange = (e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ()=>{ try{
+      const st = JSON.parse(r.result);
+      if(!st.champion || !st.mean) throw new Error('not a trainer state file');
+      saved = st; localStorage.setItem(KEY, JSON.stringify(st));
+      worker.postMessage({type:'init', state:st}); logLine('state imported');
+    }catch(err){ logLine('import failed: '+err.message); } };
+    r.readAsText(f);
+  };
+  $id('resetbtn').onclick = ()=>{
+    if(!confirm('Reset the run? The current checkpoint and champion are discarded (export first if you want them).')) return;
+    localStorage.removeItem(KEY); saved = null;
+    worker.postMessage({type:'pause'}); running=false;
+    worker.postMessage({type:'init', state:null});
+    $id('startbtn').disabled=false; $id('pausebtn').disabled=true; $id('runbadge').textContent='fresh run';
+    $id('hist').innerHTML=''; logLine('run reset');
+  };
+})();
+</script>
+</body>
+</html>

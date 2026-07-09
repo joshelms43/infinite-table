@@ -1,5 +1,26 @@
 # Coastline — Changelog
 
+## v0.4.1 — 2026-07-09
+Genome trainer, twice: a rigorous node trainer for Claude's container and a browser trainer page for overnight runs. No gameplay changes.
+
+**The trainer (tests/trainer.js + tests/trainer.body.js, `npm run trainer`)**
+- Paired-seed evolution strategy over the 22-gene AI_W genome, built around the measurement standard the old (retired) train.js violated: every candidate is evaluated against the reigning champion with paired seeds and common random numbers (6 games per seed — candidate solo in all 3 seats vs 2× champion, and the mirror), log-normal mutation around a search mean, geometric-mean parent update, and a step-size rule that counts only *statistically significant* winners (under paired mirroring a neutral candidate sits at ~50% by construction, so raw counts would inflate sigma in flat terrain).
+- **CI-gated promotion**: a generation's best is confirmed on ≥1,002 fresh paired games only if its search CI already excludes 50%, and promoted only if the confirmation CI excludes 50% too. Selection optimism never touches the championship.
+- Fully resumable: state checkpoints to JSON after every seed block; `--seconds` bounds wall time per invocation; candidate sampling is deterministic in (generation, index), so a resumed run is bit-identical to an uninterrupted one (sanity-checked). `--status`, `--export champion.json`, `--sanity`.
+
+**The browser twin (coastline/trainer.html) — overnight runs without a terminal**
+- Open it on the deployed site, press Start, leave the tab overnight: the engine runs full speed in a Web Worker (same headless stubs as the node harness), checkpoints to localStorage after every ~1.2s batch, requests a screen wake lock while running, and shows a live dashboard (generation history, shares ± CI, confirmations, promotions, games/sec).
+- Export/Import state is byte-compatible with `node tests/trainer.js --state FILE` — an overnight browser run drops straight back into the container harness, and vice versa. Export champion writes the genome alone. One trainer tab at a time.
+- Parity is enforced by construction (trainStep and the eval/stat/sampling functions are verbatim copies, flagged in both files) and verified by test: the embedded worker-core, run headless against the v0.4.0 engine, reproduces the node trainer's candidate-0 evaluation bit-for-bit (same genome, same 152/148 win tallies over 50 paired seeds).
+
+**First training telemetry (exploratory, logged for the record)**
+- Two short container runs (~18k games total, gens 1–4 then 1–3 after the sigma-rule fix). No promotions — consistent with the documented 10k-game null (constants near a local optimum).
+- The gate caught a textbook winner's curse live: a gen-4 candidate at 56.7% ± 5.1% on search seeds regressed to 51.9% ± 2.7% on 1,002 fresh paired games and was rejected. That confirmation CI (49.2–54.6%) leans positive but includes 50% — exactly the kind of question an overnight browser run has the budget to settle.
+- Champion genomes stay in the state file; promoting a trained genome into index.html's AI_W remains a separate, ladder-gated change.
+
+**Tests** — 33/33 PASS, flows 12/12 zero window errors, drops all card×zone combos clean; trainer sanity 4/4; ladder sanity 4/4 on the v0.4.0 engine (AI section verified identical v0.3.4→v0.4.0).
+
+
 ## v0.4.0 — 2026-07-09
 Accounts, friends, invites, stats, Elo — plus the two remaining live-game bugs (folded into this release; v0.3.4 is the engine ladder below).
 

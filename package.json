@@ -6,7 +6,8 @@
     "test": "node tests/test.js",
     "test:drops": "node tests/repro2.js",
     "test:flows": "node tests/repro3.js",
-    "ladder": "node tests/ladder.js"
+    "ladder": "node tests/ladder.js",
+    "trainer": "node tests/trainer.js"
   },
   "devDependencies": { "jsdom": "^24.0.0" }
 }
