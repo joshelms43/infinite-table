@@ -743,6 +743,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
       <div class="sub" style="letter-spacing:1px">ROOM CODE</div>
       <div id="lobbycode" class="lobbycode"></div>
       <div id="lobbyseats"></div>
+      <button id="addbot" class="homebtn" style="display:none" onclick="NET.addBot()">Add a bot</button>
       <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start game</button>
       <div id="lobbywait" class="sub"></div>
     </div>
@@ -980,6 +981,7 @@ function visWait(){ return Math.max(0, VISLOCK - Date.now()); }
 function visDefer(fn){ const w = visWait(); if(w < 30) fn(); else setTimeout(fn, w); }
 /* AI showcase: the played card takes centre stage, then flies to the pile */
 function aiShowcase(card, oppIdx){
+  if(NET.mode==='host' && G.players[oppIdx] && G.players[oppIdx].isAI) NET.evt(oppIdx, card);
   const oppEl = document.querySelector(`#opponents .opp[data-idx="${oppIdx}"]`);
   if(!oppEl || !oppEl.getBoundingClientRect || !document.body || !document.body.appendChild) return;
   const r = oppEl.getBoundingClientRect();
@@ -2470,8 +2472,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=062"></script>
-<script src="../shared/identity.js?v=062"></script>
+<script src="../shared/config.js?v=063"></script>
+<script src="../shared/identity.js?v=063"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2726,18 +2728,35 @@ const NET = {
     list.sort((a,b)=>((b.host?1:0)-(a.host?1:0)) || (a.joined-b.joined));
     return list.slice(0,4);
   },
+  bots: [],
+  botNames: ['Bazza','Shaz','Davo'],
+  addBot(){
+    if(this.tableSeats().length>=4) return;
+    const used = this.bots.map(b=>b.name);
+    const name = this.botNames.find(n=>!used.includes(n)) || 'Robbo';
+    this.bots.push({ key:'bot-'+name.toLowerCase(), name, isAI:true });
+    this.renderLobby();
+  },
+  removeBot(key){
+    this.bots = this.bots.filter(b=>b.key!==key);
+    this.renderLobby();
+  },
+  tableSeats(){
+    return [...this.lobbySeats(), ...this.bots].slice(0,4);
+  },
   renderLobby(){
     const el = $('#lobbyseats'); if(!el || !this.tx) return;
-    const seats = this.lobbySeats();
-    el.innerHTML = seats.map((mm,i)=>`<div class="lobbyseat"><span class="avatar" style="background:${i===0?'var(--money-gold)':'var(--felt-highlight)'}">${(mm.name||'?')[0]}</span>${mm.name}${mm.host?' · host':''}</div>`).join('')
+    const seats = this.tableSeats();
+    el.innerHTML = seats.map((mm,i)=>`<div class="lobbyseat"><span class="avatar" style="background:${mm.isAI?'var(--felt-highlight)':(i===0?'var(--money-gold)':'var(--felt-highlight)')}">${mm.isAI?'☺':(mm.name||'?')[0]}</span><span style="flex:1;text-align:left">${mm.name}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>${mm.isAI&&this.mode==='lobby-host'?`<button class="frremove" onclick="NET.removeBot('${mm.key}')">✕</button>`:''}</div>`).join('')
       + (seats.length<2 ? '<div class="sub" style="opacity:.5">Share the code</div>' : '');
+    const ab = $('#addbot'); if(ab && ab.style) ab.style.display = (this.mode==='lobby-host' && seats.length<4) ? '' : 'none';
     const st = $('#lobbystart'); if(st && this.mode==='lobby-host') st.disabled = seats.length<2;
   },
   startOnline(){
     if(this.mode!=='lobby-host') return;
-    const seats = this.lobbySeats();
+    const seats = this.tableSeats();
     if(seats.length<2) return;
-    const roster = seats.map(mm=>({ key:mm.key, name:mm.name, uid:mm.uid||null }));
+    const roster = seats.map(mm=>({ key:mm.key, name:mm.name, uid:mm.uid||null, isAI:!!mm.isAI }));
     this.tx.send('start', { roster });
     this.onStart({ roster }, true);
   },
@@ -2755,7 +2774,7 @@ const NET = {
     }
     GAME_STARTED = true;
     newGame();
-    G.players = names.map(n=>({ name:n, isAI:false, hand:[], bank:[], props:{}, bldg:{} }));
+    G.players = roster.map(r=>({ name:r.name, isAI:!!r.isAI, hand:[], bank:[], props:{}, bldg:{} }));
     G.deck = shuffle(buildDeck());
     for(let i=0;i<5;i++) G.players.forEach(p=>p.hand.push(draw()));
     G.turn = 0; G.playsLeft = 0; G.turnCount = 1; G.over = false;

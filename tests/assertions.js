@@ -179,6 +179,14 @@ G.over=false; NET.onLeave([{ key:'ck' }]);
 T('a non-host leaving does not end the table', G.over===false);
 NET.mode='off'; NET.tx=null; NET.roster=null;
 
+
+// ===== bots in online rosters =====
+NET.mode='host'; NET.tx={ send(){}, track(){}, presence(){return{}} };
+NET.onStart({ roster:[{key:'h',name:'Josh'},{key:'bot-bazza',name:'Bazza',isAI:true},{key:'c',name:'Mick'}] }, true);
+T('online roster seats bots as AI players', G.players.length===3 && G.players[1].isAI===true && !G.players[0].isAI && !G.players[2].isAI);
+T('serialize carries isAI so clients render bots', NET.serialize().players[1].isAI===true);
+NET.mode='off'; NET.tx=null; NET.roster=null; MYSEAT=0;
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.6.3 — 2026-07-10
+Bots at online tables.
+
+- Hosts can "Add a bot" in the lobby (Bazza, Shaz, Davo — removable with ✕, four seats max). Two mates plus a bot beats waiting for a third human — thin tables were online's biggest practical weakness.
+- Nearly free by architecture: the host runs the full engine, and every AI path (turns, payments, No Deal calls, discards) already works per-seat. The roster simply carries isAI, clients render bots like any opponent, and AI plays now broadcast the same showcase event human plays do, so everyone sees Bazza's move rise centre-stage.
+- Bots have no account, so their games are unrated exactly like guests: Elo records only among signed-in humans at the table (existing record_match participant rules cover it unchanged).
+
+**Tests** — 50/50 (bot roster + serialize assertions), flows 12/12, drop matrix 38/38.
+
 ## v0.6.2 — 2026-07-10
 Multiplayer resilience: reloads keep your seat, host departures speak.
 
