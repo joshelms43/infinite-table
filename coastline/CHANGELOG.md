@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.7.0 — 2026-07-10
+The produced-feel release.
+
+**Instant feedback, impossible double-taps** — Host, Join, Create Account and Sign In respond the moment they're touched (busy state with a pulsing ellipsis, input locked) and are guarded against double-fire — tapping Host twice can no longer open two phantom rooms.
+
+**Choreography** — the home screen enters as a sequence: wordmark, tagline, actions and whisper rise in a 40–60ms stagger on a single easing curve, over a subtle radial vignette that gives the felt depth without breaking the flat design system. The lobby page gets the same treatment. Reduced-motion users get instant layout as before.
+
+**Chrome** — proper page titles (the game's title tag had drifted to "v0.4.1" — now version-free and drift-proof), meta descriptions, and Open Graph tags so shared join links unfurl with the icon and a real description instead of a bare URL.
+
+**Discipline details** — tabular numerals everywhere (money, Elo and counts align like a product, not a document); every button label swept to consistent Title Case; press states unified (scale + brightness on one timing token).
+
+**Tests** — npm run check green: 58/58, 12/12, 38/38.
+
 ## v0.6.10 — 2026-07-10
 Online clients get the real game log.
 

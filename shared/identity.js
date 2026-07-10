@@ -89,7 +89,7 @@ const ID = {
         mini.innerHTML = `<span class="avatar" style="background:var(--money-gold);color:var(--table-night)">${nm[0]}</span>
           <span>${nm}</span><span class="minelo">· ${this.profile.elo}</span><span style="opacity:.5">›</span>`;
       } else {
-        mini.innerHTML = `<span class="avatar" style="background:var(--felt-highlight)">?</span><span>Sign in</span><span style="opacity:.5">›</span>`;
+        mini.innerHTML = `<span class="avatar" style="background:var(--felt-highlight)">?</span><span>Sign In</span><span style="opacity:.5">›</span>`;
       }
     }
     if(this.sheetOpen) this.renderProfileSheet();
@@ -141,15 +141,15 @@ const ID = {
           <input id="acctuser" class="namefield" maxlength="16" placeholder="username" autocomplete="off" style="margin-top:0">
           <input id="acctpass" class="namefield" type="password" maxlength="40" placeholder="password" autocomplete="new-password">
           <div class="homerow" style="margin-top:8px">
-            <button class="homebtn" onclick="ID.register()">Create account</button>
-            <button class="homebtn" onclick="ID.signIn()">Sign in</button>
+            <button class="homebtn" onclick="ID.register(this)">Create Account</button>
+            <button class="homebtn" onclick="ID.signIn(this)">Sign In</button>
           </div>
           
         </div>
         <button class="optbtn" style="margin-top:14px" onclick="ID.sheetOpen=false;closeSheet()">Done</button>`);
       return;
     }
-    const acct = `<div class="coderow"><span>Signed in as <b>@${this.uname()||''}</b></span><b class="fcode" onclick="ID.signOut()">Sign out</b></div>`;
+    const acct = `<div class="coderow"><span>Signed in as <b>@${this.uname()||''}</b></span><b class="fcode" onclick="ID.signOut()">Sign Out</b></div>`;
     openSheet(`<h3>Profile</h3>
       <input class="namefield" maxlength="12" value="${nm}" onchange="ID.saveName(this.value)" placeholder="Your name">
       ${stats}
@@ -183,7 +183,12 @@ const ID = {
     return (this.user && !this.user.is_anonymous && this.user.email) ? this.user.email.split('@')[0] : null;
   },
   sanitizeU(u){ return String(u||'').toLowerCase().replace(/[^a-z0-9_]/g,'').slice(0,16); },
-  async register(){
+  _busyBtn(btn, on){ if(btn && btn.classList){ btn.classList.toggle('busy', !!on); btn.disabled = !!on; } },
+  async register(btn){
+    if(this._authing) return; this._authing = true; this._busyBtn(btn, true);
+    try{ await this._register(); } finally { this._authing = false; this._busyBtn(btn, false); }
+  },
+  async _register(){
     const u = this.sanitizeU(($('#acctuser')||{}).value);
     const pw = (($('#acctpass')||{}).value)||'';
     if(u.length<3){ banner('USERNAME: 3+ LETTERS','var(--danger-red)'); return; }
@@ -204,7 +209,11 @@ const ID = {
       this.renderProfileSheet();
     }catch(e){ banner('COULD NOT CREATE ACCOUNT','var(--danger-red)'); }
   },
-  async signIn(){
+  async signIn(btn){
+    if(this._authing) return; this._authing = true; this._busyBtn(btn, true);
+    try{ await this._signIn(); } finally { this._authing = false; this._busyBtn(btn, false); }
+  },
+  async _signIn(){
     const u = this.sanitizeU(($('#acctuser')||{}).value);
     const pw = (($('#acctpass')||{}).value)||'';
     if(!u || !pw){ banner('USERNAME + PASSWORD','var(--danger-red)'); return; }

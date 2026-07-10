@@ -10,7 +10,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.4.1</title>
+<title>Coastline — Infinite Table</title>
+<meta name="description" content="Build sets, charge rent, raid your mates' tables. Solo or 2–4 online.">
+<meta property="og:title" content="Coastline — Infinite Table">
+<meta property="og:description" content="Build sets, charge rent, raid your mates' tables. Pull up a chair.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/icon-512.png">
+<meta name="twitter:card" content="summary">
 <link rel="manifest" href="../manifest.webmanifest">
 <meta name="theme-color" content="#121A16">
 <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
@@ -57,7 +63,8 @@
   --r:12px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%}
+html,body{
+  font-variant-numeric:tabular-nums;height:100%}
 body{
   animation:appin .35s ease;
   font-family:'Nunito Sans',system-ui,sans-serif;color:var(--foam);
@@ -414,6 +421,30 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
   opacity:0;pointer-events:none;transition:opacity .25s ease;
 }
 #home.show{opacity:1;pointer-events:auto}
+#home::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(130% 95% at 50% 28%, transparent 52%, rgba(6,10,8,.34));
+}
+.homecard{position:relative;z-index:1}
+.backlink{z-index:1}
+#home .homecard>*{opacity:0;transform:translateY(12px);animation:homein .55s cubic-bezier(.2,.9,.3,1) forwards}
+#home .homecard>*:nth-child(1){animation-delay:.04s}
+#home .homecard>*:nth-child(2){animation-delay:.10s}
+#home .homecard>*:nth-child(3){animation-delay:.16s}
+#home .homecard>*:nth-child(4){animation-delay:.22s}
+#homemain>*{opacity:0;transform:translateY(10px);animation:homein .5s cubic-bezier(.2,.9,.3,1) forwards}
+#homemain>*:nth-child(1){animation-delay:.20s}
+#homemain>*:nth-child(2){animation-delay:.26s}
+#homemain>*:nth-child(3){animation-delay:.30s}
+#homemain>*:nth-child(4){animation-delay:.32s}
+#homemain>*:nth-child(5){animation-delay:.36s}
+#homemain>*:nth-child(6){animation-delay:.40s}
+@keyframes homein{to{opacity:1;transform:none}}
+.homebtn{position:relative;transition:transform .12s ease, filter .12s ease}
+.homebtn:active{transform:scale(.97);filter:brightness(1.08)}
+.homebtn.busy{pointer-events:none;opacity:.75}
+.homebtn.busy::after{content:'…';position:absolute;right:14px;animation:busypulse 1s ease infinite}
+@keyframes busypulse{50%{opacity:.25}}
 .backlink{
   position:absolute;top:calc(16px + env(safe-area-inset-top));left:18px;
   font-size:12.5px;font-weight:800;color:var(--text-ivory);opacity:.55;text-decoration:none;
@@ -731,15 +762,15 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="hometag">Sunshine Coast property scramble</div>
     <div id="homemain">
       <button id="homeprimary" class="homebtn primary hero" onclick="closeHome()">Play Solo</button>
-      <button id="homenew" class="textbtn" style="display:none" onclick="location.reload()">New game</button>
+      <button id="homenew" class="textbtn" style="display:none" onclick="location.reload()">New Game</button>
       <button class="homebtn" onclick="toggleReveal('onlinepanel')">Play Online</button>
       <button id="rejoinbtn" class="homebtn" style="display:none"></button>
       <div id="onlinepanel" class="reveal">
         <div class="onlinebox">
-          <button class="homebtn" style="width:100%" onclick="NET.hostGame()">Host a room</button>
+          <button class="homebtn" style="width:100%" onclick="NET.hostGame(this)">Host a Room</button>
           <div class="joinrow" style="margin-top:8px">
             <input id="joincode" maxlength="4" placeholder="CODE" autocomplete="off">
-            <button class="homebtn" style="flex:1" onclick="NET.joinGame()">Join a room</button>
+            <button class="homebtn" style="flex:1" onclick="NET.joinGame(this)">Join a Room</button>
           </div>
         </div>
       </div>
@@ -749,8 +780,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
       <div class="sub" style="letter-spacing:1px">ROOM CODE</div>
       <div id="lobbycode" class="lobbycode" onclick="shareCode()"></div>
       <div id="lobbyseats"></div>
-      <button id="addbot" class="homebtn" style="display:none" onclick="NET.addBot()">Add a bot</button>
-      <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start game</button>
+      <button id="addbot" class="homebtn" style="display:none" onclick="NET.addBot()">Add a Bot</button>
+      <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start Game</button>
       <div id="lobbywait" class="sub"></div>
     </div>
   </div>
@@ -764,7 +795,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <h1 id="wintitle"></h1>
     <p id="winsub"></p>
     <div id="winstats"></div>
-    <button id="winagain" onclick="playAgain()">Play again</button>
+    <button id="winagain" onclick="playAgain()">Play Again</button>
   </div>
 </div>
 
@@ -1984,7 +2015,7 @@ function refreshWinBtn(){
   const b = $('#winagain'); if(!b) return;
   if(NET.mode==='client'){ b.textContent = 'Waiting for the host…'; b.disabled = true; }
   else if(NET.mode==='host'){ b.textContent = 'Rematch'; b.disabled = false; }
-  else { b.textContent = 'Play again'; b.disabled = false; }
+  else { b.textContent = 'Play Again'; b.disabled = false; }
 }
 function closeWin(){
   $('#winscreen').classList.remove('show');
@@ -2503,8 +2534,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0610"></script>
-<script src="../shared/identity.js?v=0610"></script>
+<script src="../shared/config.js?v=070"></script>
+<script src="../shared/identity.js?v=070"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2721,7 +2752,12 @@ const NET = {
     this.code = code;
     return true;
   },
-  async hostGame(){
+  _busyBtn(btn, on){ if(btn && btn.classList){ btn.classList.toggle('busy', !!on); btn.disabled = !!on; } },
+  async hostGame(btn){
+    if(this._connecting) return; this._connecting = true; this._busyBtn(btn, true);
+    try{ await this._hostGame(); } finally { this._connecting = false; this._busyBtn(btn, false); }
+  },
+  async _hostGame(){
     this.myName = (this.myName||'Host').slice(0,12) || 'Host';
     if(typeof localStorage!=='undefined' && localStorage.setItem) localStorage.setItem('it_name', this.myName);
     const code = this.makeCode();
@@ -2732,7 +2768,11 @@ const NET = {
     $('#lobbycode').textContent = code;
     this.renderLobby();
   },
-  async joinGame(){
+  async joinGame(btn){
+    if(this._connecting) return; this._connecting = true; this._busyBtn(btn, true);
+    try{ await this._joinGame(); } finally { this._connecting = false; this._busyBtn(btn, false); }
+  },
+  async _joinGame(){
     this.myName = (this.myName||'Guest').slice(0,12) || 'Guest';
     if(typeof localStorage!=='undefined' && localStorage.setItem) localStorage.setItem('it_name', this.myName);
     const code = (($('#joincode')&&$('#joincode').value)||'').toUpperCase().trim();

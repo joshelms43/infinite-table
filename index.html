@@ -5,6 +5,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Infinite Table</title>
+<meta name="description" content="Card games with your mates. No installs, no emails, no ads.">
+<meta property="og:title" content="Infinite Table">
+<meta property="og:description" content="Card games with your mates. Pull up a chair.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/icon-512.png">
+<meta name="twitter:card" content="summary">
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#121A16">
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
@@ -61,6 +67,24 @@ main{width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px}
 }
 .game.soon:active{transform:none}
 footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity:.3}
+body{font-variant-numeric:tabular-nums}
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(130% 95% at 50% 24%, transparent 52%, rgba(6,10,8,.34));
+}
+body>*{position:relative;z-index:1}
+header, header~*{opacity:0;transform:translateY(12px);animation:pagein .55s cubic-bezier(.2,.9,.3,1) forwards}
+header{animation-delay:.04s}
+header~*:nth-of-type(1){animation-delay:.14s}
+header~*:nth-of-type(2){animation-delay:.22s}
+header~*:nth-of-type(3){animation-delay:.30s}
+header~*:nth-of-type(4){animation-delay:.38s}
+@keyframes pagein{to{opacity:1;transform:none}}
+.homebtn{position:relative;transition:transform .12s ease, filter .12s ease}
+.homebtn:active{transform:scale(.97);filter:brightness(1.08)}
+.homebtn.busy{pointer-events:none;opacity:.75}
+.homebtn.busy::after{content:'…';position:absolute;right:14px;animation:busypulse 1s ease infinite}
+@keyframes busypulse{50%{opacity:.25}}
 
 /* ---- identity chrome (shared module renders into these) ---- */
 button{font-family:inherit;border:none;cursor:pointer;background:none;color:inherit;-webkit-tap-highlight-color:transparent}
