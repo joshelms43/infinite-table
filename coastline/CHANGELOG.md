@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.6.5 — 2026-07-10
+Infinite Table becomes installable.
+
+- Web app manifest + generated icon set (512/192/apple-touch/favicon): a dark felt tile with three fanned cards in ivory, coral and brass — drawn programmatically from the design tokens. Both pages carry manifest, theme-color and icon tags; the favicon 404 from the very first bug report is finally dead.
+- Add to Home Screen now yields a standalone app with the table-night splash. Deliberately no service worker yet: offline caching would fight the cache-busted module strategy, and a stale multiplayer client is worse than no offline mode. That trade can be revisited once update flow matures.
+
+**Tests** — 52/52, flows 12/12.
+
 ## v0.6.4 — 2026-07-10
 Remote players can double their rent — the last decision that discriminated by seat.
 
