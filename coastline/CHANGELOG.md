@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.7.8 — 2026-07-10
+Lobby renames done right, panels that fit small phones with four players.
+
+- **Rename ghosts** — renaming re-tracked presence and a duplicate player appeared while the original stayed. Fixed transport-agnostically: presence metas carry a revision, renames bump it, and the lobby dedupes by key keeping the highest revision — whatever the transport does with re-tracks, ghosts collapse.
+- **Renaming is a box now** — the ✎-on-your-seat-row was too subtle for a party (fair call). The room lobby has a proper centred name field under the code; change it and every lobby updates live. Seat rows just read "Josh · you · host". Same rename path syncs signed-in profiles.
+- **Panels stack name over stats** — "7 cards · $12M" moves under the name (smaller, quieter) instead of beside it, so four-player tables on small phones never cover anyone's name; both lines ellipsize independently.
+
+**Tests** — npm run check green: 58/58, wire 14/14, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.7.7 — 2026-07-10
 Four players fit on one screen. Also: the away-dimming that never was.
 
