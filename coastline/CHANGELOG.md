@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.6.10 — 2026-07-10
+Online clients get the real game log.
+
+- The log drawer was host-only knowledge: logs never travelled, so remote players' drawers missed every play, payment and block. State broadcasts now carry a 16-line tail and clients mirror it (asserted: host lines arrive, stale client-local lines are replaced).
+
+**Tests** — npm run check green: 58/58, 12/12, 38/38.
+
 ## v0.6.9 — 2026-07-10
 Presence on the table, codes that share themselves.
 

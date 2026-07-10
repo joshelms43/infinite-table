@@ -232,6 +232,18 @@ NET.onJoin([{key:'m'}]);
 T('rejoining clears away', NET.isGone(1)===false);
 NET.mode='off'; NET.roster=null; NET.gone={};
 
+
+// ===== online log sync =====
+newGame();
+log('host wrote this');
+const st2 = NET.serialize();
+T('serialize carries a log tail', Array.isArray(st2.logs) && st2.logs[0]==='host wrote this');
+NET.mode='client'; const savedSeat2=MYSEAT; MYSEAT=1;
+log('client-local line');
+NET.applyState(JSON.parse(JSON.stringify(st2)));
+T('applyState mirrors host logs on clients', logs[0]==='host wrote this' && !logs.includes('client-local line'));
+NET.mode='off'; MYSEAT=savedSeat2;
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

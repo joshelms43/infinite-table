@@ -2503,8 +2503,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=069"></script>
-<script src="../shared/identity.js?v=069"></script>
+<script src="../shared/config.js?v=0610"></script>
+<script src="../shared/identity.js?v=0610"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2594,6 +2594,7 @@ const NET = {
       turn:G.turn, playsLeft:G.playsLeft, turnCount:G.turnCount, over:G.over,
       deckN:G.deck.length, pile:{ label:top, n:G.discard.length },
       players:G.players.map(q=>({ name:q.name, isAI:!!q.isAI, handN:q.hand.length, bank:q.bank, props:q.props, bldg:q.bldg })),
+      logs: logs.slice(0,16),
       waitFor: Object.keys(this.pendingAsks).length ? +Object.keys(this.pendingAsks)[0] : null,
     };
   },
@@ -2612,6 +2613,12 @@ const NET = {
       name:q.name, isAI:q.isAI, bank:q.bank, props:q.props, bldg:q.bldg,
       hand: i===MYSEAT ? myHand : new Array(q.handN).fill(0).map((_,j)=>({ id:'h'+i+'_'+j, t:'money', v:0 })),
     }));
+    if(st.logs && st.logs.length){
+      logs.length = 0;
+      st.logs.forEach(l=>logs.push(l));
+      const ll = $('#loglist');
+      if(ll && ll.innerHTML!==undefined) ll.innerHTML = logs.slice(0,120).map(l=>`<div>${l}</div>`).join('');
+    }
     const wasOver = G.over; G.over = st.over;
     if(st.over){ try{ localStorage.removeItem('it_room'); }catch(e){} }
     if(this.lastTurn!==st.turn && !st.over){
