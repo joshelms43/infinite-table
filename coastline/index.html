@@ -403,7 +403,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 /* ---------- home / lobby ---------- */
 #home{
-  position:fixed;inset:0;z-index:82;background:var(--table);
+  position:fixed;inset:0;z-index:48;background:var(--table);
   display:flex;align-items:center;justify-content:center;padding:24px;
   opacity:0;pointer-events:none;transition:opacity .25s ease;
 }
@@ -2708,6 +2708,7 @@ const NET = {
       this.seat = bykey>=0 ? bykey : Math.max(0, names.indexOf(this.myName));
       MYSEAT = this.seat;
     }
+    GAME_STARTED = true;
     newGame();
     G.players = names.map(n=>({ name:n, isAI:false, hand:[], bank:[], props:{}, bldg:{} }));
     G.deck = shuffle(buildDeck());
@@ -2719,7 +2720,14 @@ const NET = {
     else renderAll();
   },
 };
-function closeHome(){ const h=$('#home'); if(h&&h.classList) h.classList.remove('show'); }
+let GAME_STARTED = false;
+function closeHome(){
+  const h=$('#home'); if(h&&h.classList) h.classList.remove('show');
+  if(!GAME_STARTED && NET.mode==='off'){
+    GAME_STARTED = true;
+    startSolo();
+  }
+}
 function toggleReveal(id){
   const el = document.getElementById(id); if(!el || !el.classList) return;
   el.classList.toggle('open');
@@ -2756,6 +2764,7 @@ const ID = {
         const r = await sb.auth.signInAnonymously();
         session = r.data && r.data.session;
       }
+      if(session && session.user) this.user = session.user;
       if(!session) { this.renderProfile(); return; }
       this.user = session.user;
       let { data: prof } = await sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
@@ -2835,9 +2844,29 @@ const ID = {
         <input id="friendcode" maxlength="6" placeholder="FRIEND CODE" autocomplete="off" style="width:150px;letter-spacing:2px">
         <button class="homebtn" style="flex:1" onclick="ID.addFriend()">Add</button>
       </div>` : '';
+    let acct = '';
+    if(this.user && this.sb){
+      if(this.uname()){
+        acct = `<div class="coderow"><span>Signed in as <b>@${this.uname()}</b></span><b class="fcode" onclick="ID.signOut()">Sign out</b></div>`;
+      } else {
+        acct = `<button class="disclosure" onclick="toggleReveal('acctpanel')" style="margin-top:10px"><span>Save account · use on any device</span><span class="chev">▾</span></button>
+        <div id="acctpanel" class="reveal">
+          <div class="onlinebox">
+            <input id="acctuser" class="namefield" maxlength="16" placeholder="username" autocomplete="off" style="margin-top:0">
+            <input id="acctpass" class="namefield" type="password" maxlength="40" placeholder="password" autocomplete="new-password">
+            <div class="homerow" style="margin-top:8px">
+              <button class="homebtn" onclick="ID.secure()">Create login</button>
+              <button class="homebtn" onclick="ID.signIn()">Sign in</button>
+            </div>
+            <div class="profsub" style="margin-top:8px;opacity:.4">No email — just a username and password. Your Elo and friends carry over.</div>
+          </div>
+        </div>`;
+      }
+    }
     openSheet(`<h3>Profile</h3>
       <input class="namefield" maxlength="12" value="${nm}" onchange="ID.saveName(this.value)" placeholder="Your name">
       ${stats}
+      ${acct}
       ${friendsBlock}
       <button class="optbtn" style="margin-top:14px" onclick="ID.sheetOpen=false;closeSheet()">Done</button>`);
   },
@@ -2862,6 +2891,43 @@ const ID = {
     const commit = ()=>{ this.saveName(inp.value); this.renderProfile(); };
     inp.addEventListener('blur', commit);
     inp.addEventListener('keydown', e=>{ if(e.key==='Enter') inp.blur(); });
+  },
+  uname(){
+    return (this.user && !this.user.is_anonymous && this.user.email) ? this.user.email.split('@')[0] : null;
+  },
+  sanitizeU(u){ return String(u||'').toLowerCase().replace(/[^a-z0-9_]/g,'').slice(0,16); },
+  async secure(){
+    const u = this.sanitizeU(($('#acctuser')||{}).value);
+    const pw = (($('#acctpass')||{}).value)||'';
+    if(u.length<3){ banner('USERNAME: 3+ LETTERS','var(--danger-red)'); return; }
+    if(pw.length<6){ banner('PASSWORD: 6+ CHARACTERS','var(--danger-red)'); return; }
+    try{
+      const { error } = await this.sb.auth.updateUser({ email: u+'@coastline.game', password: pw });
+      if(error){ banner(/already|exists|registered/i.test(error.message)?'USERNAME TAKEN':'COULD NOT SAVE','var(--danger-red)'); return; }
+      const { data:{ user } } = await this.sb.auth.getUser();
+      if(user) this.user = user;
+      banner('ACCOUNT SAVED','var(--success-green)');
+      this.renderProfile(); this.renderProfileSheet();
+    }catch(e){ banner('COULD NOT SAVE','var(--danger-red)'); }
+  },
+  async signIn(){
+    const u = this.sanitizeU(($('#acctuser')||{}).value);
+    const pw = (($('#acctpass')||{}).value)||'';
+    if(!u || !pw){ banner('USERNAME + PASSWORD','var(--danger-red)'); return; }
+    try{
+      const { data, error } = await this.sb.auth.signInWithPassword({ email: u+'@coastline.game', password: pw });
+      if(error || !data || !data.user){ banner('WRONG USERNAME OR PASSWORD','var(--danger-red)'); return; }
+      this.user = data.user; this.profile = null; this.friends = [];
+      await this.init();
+      banner('WELCOME BACK','var(--success-green)');
+      this.renderProfileSheet();
+    }catch(e){ banner('SIGN IN FAILED','var(--danger-red)'); }
+  },
+  async signOut(){
+    try{ await this.sb.auth.signOut(); }catch(e){}
+    this.user=null; this.profile=null; this.friends=[]; this.ready=false;
+    await this.init();
+    this.renderProfileSheet();
   },
   copyCode(){
     try{ navigator.clipboard && navigator.clipboard.writeText(this.profile.friend_code); banner('CODE COPIED','var(--gold-money)'); }catch(e){}
@@ -3315,13 +3381,17 @@ function aiStep(p){
 /* ================= BOOT ================= */
 newGame();
 try{ if(typeof ID!=='undefined'){ ID.renderProfile(); if(SUPABASE_URL) setTimeout(()=>ID.init(), 400); } }catch(e){}
-INITDEAL = true;
-me().hand.forEach(c=>NEWIDS.add(c.id));
 renderAll();
-INITDEAL = false;
-me().hand.forEach((c,i)=>setTimeout(()=>{ sfx('tick'); }, 140+i*95));
-log('Dealt 5 cards each. First to 3 complete sets wins.');
-setTimeout(startTurn, 700);
+function startSolo(){
+  newGame();
+  INITDEAL = true;
+  me().hand.forEach(c=>NEWIDS.add(c.id));
+  renderAll();
+  INITDEAL = false;
+  me().hand.forEach((c,i)=>setTimeout(()=>{ sfx('tick'); }, 140+i*95));
+  log('Dealt 5 cards each. First to 3 complete sets wins.');
+  setTimeout(startTurn, 700);
+}
 </script>
 </body>
 </html>

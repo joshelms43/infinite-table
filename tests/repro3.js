@@ -8,7 +8,9 @@ const sleep = ms => new Promise(r=>setTimeout(r,ms));
 const T = (n,c)=>console.log((c?'PASS':'FAIL')+' — '+n) || (c?0:process.exitCode=1);
 
 (async ()=>{
-  await sleep(1200);
+  await sleep(600);
+  win.closeHome && win.closeHome();
+  await sleep(1000);
   win.eval('window.__G=G; window.__MODE=MODE;');
   const G = win.__G, MODE = win.__MODE;
 

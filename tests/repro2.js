@@ -11,7 +11,9 @@ function fire(el, type, x, y){
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 
 (async ()=>{
-  await sleep(1200);
+  await sleep(600);
+  win.closeHome && win.closeHome();
+  await sleep(1000);
   win.eval('window.__G=G; window.__zones=()=>DRAG.zones; window.__setOver=i=>{DRAG.over=DRAG.zones[i];};');
   const G = win.__G;
   win.endTurn();

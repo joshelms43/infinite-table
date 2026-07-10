@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.4.5 — 2026-07-09
+Username + password accounts (no email, ever) — plus the dead profile tap, root-caused.
+
+**Why the profile tap did nothing**
+- Sheets render at z-50; the home overlay sat at z-82. The profile sheet has been opening perfectly — underneath the home screen. Home now sits at z-48 (below sheets, above the board), and the structural cause is gone too: solo no longer auto-runs behind the menu. The board renders as a quiet backdrop, and the game deals only when you choose Play Solo (or a lobby starts).
+
+**Accounts with no email**
+- The profile sheet gains a collapsed "Save account — use on any device" panel: username (3-16, letters/numbers) + password (6+). Creating a login converts your existing anonymous identity in place — same profile row, Elo and friends carry over. Sign in with the same panel on any other device; Sign out returns you to a fresh anonymous session.
+- Under the hood, Supabase keys the login to a synthetic internal address (username@coastline.game) that is never shown, never sent to, and never collected from anyone. Username uniqueness comes free from it.
+- Nothing is required: solo needs no account, online needs no account — this exists purely so your rating can follow you between devices.
+
+**Setup (Josh, three toggles in Supabase → Authentication):** enable the Email provider, turn OFF "Confirm email", and turn OFF "Secure email change". (The synthetic addresses can't receive confirmation mail, so both confirmations must be off.)
+
+**Tests** — 44/44; flows 12/12 and drop matrix 38/38 (both harnesses updated for solo-on-choice, plus a repro path re-pin after I broke it again — deterministic this time).
+
 ## v0.4.4 — 2026-07-09
 Identity becomes a whisper. There is no sign-up — and now it doesn't look like there is one either.
 
