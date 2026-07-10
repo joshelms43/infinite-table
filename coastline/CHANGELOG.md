@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.8.3 — 2026-07-10
+The rainbow lives, the duals speak swatch.
+
+- Rainbow Wild bands are now a continuously flowing spectrum — real rainbow hues sweeping slowly across the band, the kind of card only the online version can print. Reduced-motion users get a static rainbow by construction. When assigned, the flowing band carries the counting-as label.
+- Dual wilds drop the "Pink or Orange" prose for two clean swatch-labelled rows; the redundant "currently counting as" captions are culled everywhere (the band already says it).
+
+**Tests** — npm run check green.
+
 ## v0.8.2 — 2026-07-10
 The circles are gone (they sucked — direct quote). Property faces are band, breathing room, ladder; action cards are name and description on clean ivory. Whitespace is the medallion.
 
