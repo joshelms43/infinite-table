@@ -1,5 +1,10 @@
 # Coastline — Changelog
 
+## v0.6.7 — 2026-07-10
+Sound preference persists across sessions (muted stays muted; the button reflects the saved state on load).
+
+**Tests** — 53/53, flows 12/12.
+
 ## v0.6.6 — 2026-07-10
 Rematch — because nobody plays one game.
 

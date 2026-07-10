@@ -930,6 +930,7 @@ function takeNoDeal(p){
 const $ = q => document.querySelector(q);
 /* ----- feel / FX ----- */
 let SOUND = true;
+try{ SOUND = localStorage.getItem('it_sound') !== 'off'; }catch(e){}
 let AC = null;
 let INITDEAL = false;
 function ac(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; }
@@ -1051,7 +1052,11 @@ function openRules(){
     <div class="sub">Wilds count as either shown colour and can be moved freely on your turn. Granny Flats (+$3M) and Beach Resorts (+$4M) boost completed sets — not Transport.</div>
     <button class="optbtn" onclick="closeSheet()">Close</button>`);
 }
-$('#sndbtn').onclick = function(){ SOUND=!SOUND; this.textContent = SOUND?'🔊':'🔇'; };
+$('#sndbtn').onclick = function(){
+  SOUND=!SOUND; this.textContent = SOUND?'🔊':'🔇';
+  try{ localStorage.setItem('it_sound', SOUND?'on':'off'); }catch(e){}
+};
+try{ const sb=$('#sndbtn'); if(sb && sb.textContent!==undefined) sb.textContent = SOUND?'🔊':'🔇'; }catch(e){}
 $('#logclose').onclick = ()=> $('#logdrawer').classList.remove('show');
 
 /* ----- sheet (with lock for must-resolve flows) ----- */
@@ -2495,8 +2500,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=066"></script>
-<script src="../shared/identity.js?v=066"></script>
+<script src="../shared/config.js?v=067"></script>
+<script src="../shared/identity.js?v=067"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
