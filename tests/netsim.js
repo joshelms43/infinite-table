@@ -80,7 +80,7 @@ const m5 = k => dk.filter(c => c.t === 'money' && c.v === 5)[k];
 const rentC = dk.find(c => c.t === 'rent' && c.colors);
 const rcol = rentC.colors[0];
 const propC = dk.find(c => c.t === 'prop' && c.color === rcol);
-host.__B.G.players[0].hand = [m5(0), rentC];
+host.__B.G.players[0].hand = [m5(0), rentC, dk.find(c => c.t === 'money' && c.v === 1)];
 host.addProp(host.__B.G.players[0], propC, rcol);
 host.__B.G.players[1].hand = [m5(1), dk.find(c => c.t === 'action' && c.kind === 'nodeal')];
 host.__B.G.players[1].bank = [dk.find(c => c.t === 'money' && c.v === 3), dk.find(c => c.t === 'money' && c.v === 4)];  // assets must exceed rent or the engine auto-strips with no ask
@@ -100,6 +100,11 @@ host.__B.NET.ask = (seat, ask, cb) => { if(DBG) console.log('  host.ask called:'
 const realRP = host.requestPayment;
 host.doRent(rentC, rcol, 1, 0);
 T('the No Deal ask reaches the owing client first', asks.length === 1 && asks[0].seat === 1 && asks[0].ask.type === 'jsn');
+/* the demo bug: mid-ask, the charger tried to keep playing */
+const chargerBankBefore = host.__B.G.players[0].bank.length;
+const chargerHandBefore = host.__B.G.players[0].hand.length;
+host.bankCard(host.__B.G.players[0].hand[0]);
+T('the charger cannot act while a payment resolves', host.__B.G.players[0].bank.length === chargerBankBefore && host.__B.G.players[0].hand.length === chargerHandBefore);
 client.__B.NET.reply('jsn', { use: false });
 if(DBG) console.log('  asks after jsn reply:', JSON.stringify(asks.map(a=>a.ask)));
 if(DBG) console.log('  host pendingAsks:', JSON.stringify(Object.keys(host.__B.NET.pendingAsks)));

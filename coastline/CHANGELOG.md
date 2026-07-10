@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.7.3 — 2026-07-10
+The four-friends-demo fixes. Two bugs, both structural, both now impossible.
+
+**Charger could keep playing during rent** — netBusy() gated pointer input and End Turn, but the Options tap-menu calls executors directly and bypassed the gate. Fixed at the only level that can't be bypassed: the busy check now lives inside the executor gate itself, so drag, tap and menu all refuse with "Waiting for the payment to finish…" while any ask is outstanding (AI turns exempt — their chains are callback-sequenced). Pinned in the wire test: the charger attempts a bank mid-ask and is refused.
+
+**Rent broke while viewing someone's screen** — POV renders at z-68; sheets and pay-mode rendered under it at z-50. A payment ask or No Deal sheet arriving mid-POV opened invisibly underneath — the payer saw nothing tappable and the table hung on them. Same layering family as the dead profile tap. Two-layer fix: every ask and payment/discard entry force-closes POV first, and sheets now outrank POV (z-72) so no future path can hide an interrupt again.
+
+Thanks to the four friends who stress-tested a Thursday night. Their table found in twenty minutes what 1,200 simulated turns couldn't — because the simulator never thought to open the Options menu mid-rent or gawk at an opponent's board while owing money. Both moves are in the harness's vocabulary now.
+
+**Tests** — npm run check green: 58/58, wire 14/14, soak (~1,200 turns), flows 12/12, drop matrix 38/38.
+
 ## v0.7.2 — 2026-07-10
 The wire soak. The protocol's proof deepens from one rally to whole seasons.
 

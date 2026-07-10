@@ -236,7 +236,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .bandsplit{background:linear-gradient(90deg,var(--b1) 50%,var(--b2) 50%)!important}
 
 /* ---------- modal / sheet ---------- */
-#overlay{position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;z-index:50;opacity:0;pointer-events:none;transition:opacity .18s ease}
+#overlay{position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;z-index:72;opacity:0;pointer-events:none;transition:opacity .18s ease}
 #overlay.show{opacity:1;pointer-events:auto}
 #sheet{
   width:100%;max-width:520px;background:linear-gradient(180deg,var(--ui-highlight),var(--ui-deep) 50%);
@@ -1434,7 +1434,9 @@ function hudShow(text, cfg){
   $('#promptbar').classList.add('show');
 }
 /* ----- payment: pick straight off your table & bank ----- */
+function enterPayModeGuard(){ try{ if(typeof closePOVForce==='function' && POVIDX!=null) closePOVForce(); }catch(e){} }
 function enterPayMode(amount, receiverIdx, done){
+  enterPayModeGuard();
   closeSheet(); closePOVForce(); clearSelection(); endOppSelect();
   MODE.type='pay'; MODE.amount=amount; MODE.receiverIdx=receiverIdx; MODE.done=done;
   MODE.sel=new Set(); MODE.wasEnough=false;
@@ -2040,6 +2042,7 @@ function endTurn(){
       });
       return;
     }
+    if(!p.isAI){ try{ if(typeof closePOVForce==='function' && POVIDX!=null) closePOVForce(); }catch(e){} }
     if(p.isAI){
       while(p.hand.length>7){
         p.hand.sort((a,b)=>keepScore(a,p)-keepScore(b,p));
@@ -2534,8 +2537,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=071"></script>
-<script src="../shared/identity.js?v=071"></script>
+<script src="../shared/config.js?v=073"></script>
+<script src="../shared/identity.js?v=073"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2549,8 +2552,14 @@ const NET = {
 
   /* --- executor gate: on a client, local calls become intents --- */
   intercept(k, a){
-    if(this.mode!=='client' || this.applying) return false;
-    if(this.hold){ showPrompt('Hold on — someone is still responding…', false); return true; }
+    if(this.applying) return false;
+    if((this.mode==='host' || this.mode==='client')
+       && typeof netBusy==='function' && netBusy()
+       && !(G.players[G.turn] && G.players[G.turn].isAI)){
+      showPrompt('Waiting for the payment to finish…', false);
+      return true;   // blocks every entry: drag, tap, and the Options menu
+    }
+    if(this.mode!=='client') return false;
     this.tx.send('intent', { seat: this.seat, k, a });
     clearSelection(); hidePrompt(); closeSheet();
     this.sentWait = true;
@@ -2695,6 +2704,7 @@ const NET = {
       }
       if(type==='evt' && m.kind==='play' && m.seat!==this.seat && m.card) aiShowcase(m.card, m.seat);
       if(type==='ask' && m.seat===this.seat){
+        try{ if(typeof closePOVForce==='function' && POVIDX!=null) closePOVForce(); }catch(e){}
         const a = m.ask;
         if(a.type==='pay') visDefer(()=>enterPayMode(a.amount, a.recv, ()=>{}));
         if(a.type==='discard'){ MODE.type='discard'; MODE.need=a.need; MODE.sel=new Set(); sfx('alert'); renderAll(); updateDiscardHUD(); }
