@@ -1,5 +1,17 @@
 # Coastline — Changelog
 
+## v0.6.0 — 2026-07-09
+Accounts are credentials-only. No anonymous accounts exist anymore.
+
+**The model, final form**
+- An account is exactly a username + password (still zero email — synthetic internal addresses). No credentials means no profile, no Elo, no stats, no friends — and that's a normal, unlabelled state, not an error.
+- Playing stays fully open: solo and online rooms need only a table name. The profile sheet separates the two concepts explicitly: "Table name — for casual games" up top, "Account — for Elo, stats & friends" below with Create account / Sign in.
+- The chip reads as an invitation when signed out ("? Sign in ›") and as identity when signed in ("J Josh · 1240 ›").
+- Register signs you straight in (signUp with instant session; falls back to a sign-in if the project requires it); new profiles take the username as their initial display name. Anonymous conversion code removed entirely — you can switch the Anonymous provider back OFF in Supabase.
+- Online games with mixed company: Elo records only among account holders in the match; guests play unrated. If the winner is a guest, the game is simply unrated.
+
+**Tests** — 44/44, flows 12/12. Include tags busted to ?v=060.
+
 ## v0.5.2 — 2026-07-09
 Identity diagnostics — the silent "offline" becomes a named failure.
 

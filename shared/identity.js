@@ -36,17 +36,19 @@ const ID = {
       let sess = await sb.auth.getSession();
       let session = sess && sess.data && sess.data.session;
       if(!session){
-        const r = await sb.auth.signInAnonymously();
-        if(r.error){ this.fail('anonymous sign-in', r.error); return; }
-        session = r.data && r.data.session;
+        // signed out is a normal state now — accounts require username+password
+        this.user = null; this.profile = null; this.friends = [];
+        this.ready = true; this.lastError = null;
+        this.renderProfile();
+        if(this.sheetOpen) this.renderProfileSheet();
+        return;
       }
-      if(!session){ this.fail('auth', 'no session'); return; }
       this.user = session.user;
       const sel = await sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
       if(sel.error){ this.fail('profile read', sel.error); return; }
       let prof = sel.data;
       if(!prof){
-        const name = (this.myName_() || 'Player').slice(0,12);
+        const name = (this.uname() || this.myName_() || 'Player').slice(0,12);
         const ins = await sb.from('profiles').insert({ id:this.user.id, name, friend_code:this.makeFriendCode() });
         if(ins.error){ this.fail('profile create', ins.error); return; }
         const r2 = await sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
@@ -82,9 +84,13 @@ const ID = {
   renderProfile(){
     const mini = $('#profmini');
     if(mini && mini.innerHTML!==undefined){
-      const nm = (this.profile && this.profile.name) || this.myName_() || 'Player';
-      mini.innerHTML = `<span class="avatar" style="background:${this.profile?'var(--money-gold)':'var(--felt-highlight)'};color:${this.profile?'var(--table-night)':'var(--text-ivory)'}">${nm[0]}</span>
-        <span>${nm}</span>${this.profile?`<span class="minelo">· ${this.profile.elo}</span>`:''}<span style="opacity:.5">›</span>`;
+      if(this.profile){
+        const nm = this.profile.name || 'Player';
+        mini.innerHTML = `<span class="avatar" style="background:var(--money-gold);color:var(--table-night)">${nm[0]}</span>
+          <span>${nm}</span><span class="minelo">· ${this.profile.elo}</span><span style="opacity:.5">›</span>`;
+      } else {
+        mini.innerHTML = `<span class="avatar" style="background:var(--felt-highlight)">?</span><span>Sign in</span><span style="opacity:.5">›</span>`;
+      }
     }
     if(this.sheetOpen) this.renderProfileSheet();
     const el = $('#profcard'); if(!el || el.innerHTML===undefined) return;
@@ -126,25 +132,24 @@ const ID = {
         <input id="friendcode" maxlength="6" placeholder="FRIEND CODE" autocomplete="off" style="width:150px;letter-spacing:2px">
         <button class="homebtn" style="flex:1" onclick="ID.addFriend()">Add</button>
       </div>` : '';
-    let acct = '';
-    if(this.user && this.sb){
-      if(this.uname()){
-        acct = `<div class="coderow"><span>Signed in as <b>@${this.uname()}</b></span><b class="fcode" onclick="ID.signOut()">Sign out</b></div>`;
-      } else {
-        acct = `<button class="disclosure" onclick="toggleReveal('acctpanel')" style="margin-top:10px"><span>Save account · use on any device</span><span class="chev">▾</span></button>
-        <div id="acctpanel" class="reveal">
-          <div class="onlinebox">
-            <input id="acctuser" class="namefield" maxlength="16" placeholder="username" autocomplete="off" style="margin-top:0">
-            <input id="acctpass" class="namefield" type="password" maxlength="40" placeholder="password" autocomplete="new-password">
-            <div class="homerow" style="margin-top:8px">
-              <button class="homebtn" onclick="ID.secure()">Create login</button>
-              <button class="homebtn" onclick="ID.signIn()">Sign in</button>
-            </div>
-            <div class="profsub" style="margin-top:8px;opacity:.4">No email — just a username and password. Your Elo and friends carry over.</div>
+    if(!this.profile){
+      openSheet(`<h3>Profile</h3>
+        <div class="zone-label">Table name — for casual games</div>
+        <input class="namefield" maxlength="12" value="${nm}" onchange="ID.saveName(this.value)" placeholder="Your name" style="margin-top:0">
+        <div class="zone-label" style="margin-top:14px">Account — for Elo, stats &amp; friends</div>
+        <div class="onlinebox">
+          <input id="acctuser" class="namefield" maxlength="16" placeholder="username" autocomplete="off" style="margin-top:0">
+          <input id="acctpass" class="namefield" type="password" maxlength="40" placeholder="password" autocomplete="new-password">
+          <div class="homerow" style="margin-top:8px">
+            <button class="homebtn" onclick="ID.register()">Create account</button>
+            <button class="homebtn" onclick="ID.signIn()">Sign in</button>
           </div>
-        </div>`;
-      }
+          <div class="profsub" style="margin-top:8px;opacity:.4">Username + password only — no email, ever.</div>
+        </div>
+        <button class="optbtn" style="margin-top:14px" onclick="ID.sheetOpen=false;closeSheet()">Done</button>`);
+      return;
     }
+    const acct = `<div class="coderow"><span>Signed in as <b>@${this.uname()||''}</b></span><b class="fcode" onclick="ID.signOut()">Sign out</b></div>`;
     openSheet(`<h3>Profile</h3>
       <input class="namefield" maxlength="12" value="${nm}" onchange="ID.saveName(this.value)" placeholder="Your name">
       ${stats}
@@ -178,19 +183,26 @@ const ID = {
     return (this.user && !this.user.is_anonymous && this.user.email) ? this.user.email.split('@')[0] : null;
   },
   sanitizeU(u){ return String(u||'').toLowerCase().replace(/[^a-z0-9_]/g,'').slice(0,16); },
-  async secure(){
+  async register(){
     const u = this.sanitizeU(($('#acctuser')||{}).value);
     const pw = (($('#acctpass')||{}).value)||'';
     if(u.length<3){ banner('USERNAME: 3+ LETTERS','var(--danger-red)'); return; }
     if(pw.length<6){ banner('PASSWORD: 6+ CHARACTERS','var(--danger-red)'); return; }
     try{
-      const { error } = await this.sb.auth.updateUser({ email: u+'@coastline.game', password: pw });
-      if(error){ banner(/already|exists|registered/i.test(error.message)?'USERNAME TAKEN':'COULD NOT SAVE','var(--danger-red)'); return; }
-      const { data:{ user } } = await this.sb.auth.getUser();
-      if(user) this.user = user;
-      banner('ACCOUNT SAVED','var(--success-green)');
-      this.renderProfile(); this.renderProfileSheet();
-    }catch(e){ banner('COULD NOT SAVE','var(--danger-red)'); }
+      const sb = await this.ensureSB(); if(!sb) return;
+      const r = await sb.auth.signUp({ email: u+'@coastline.game', password: pw });
+      if(r.error){ banner(/already|exists|registered/i.test(r.error.message)?'USERNAME TAKEN':('SIGN UP: '+r.error.message).toUpperCase().slice(0,50),'var(--danger-red)'); return; }
+      let session = r.data && r.data.session;
+      if(!session){
+        const s2 = await sb.auth.signInWithPassword({ email: u+'@coastline.game', password: pw });
+        if(s2.error || !s2.data.session){ banner('CREATED — NOW SIGN IN','var(--warning-amber)'); return; }
+        session = s2.data.session;
+      }
+      this.user = session.user; this.profile = null;
+      await this.init();
+      banner('ACCOUNT CREATED','var(--success-green)');
+      this.renderProfileSheet();
+    }catch(e){ banner('COULD NOT CREATE ACCOUNT','var(--danger-red)'); }
   },
   async signIn(){
     const u = this.sanitizeU(($('#acctuser')||{}).value);
