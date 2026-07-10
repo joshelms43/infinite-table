@@ -1,5 +1,19 @@
 # Coastline — Changelog
 
+## v0.4.9 — 2026-07-10
+Determinized Monte Carlo built (roadmap item 4) + an unattended CI ladder for decisive verdicts. No gameplay changes on main — the MCTS brain awaits its pre-committed test on branch `mcts-experiment`.
+
+**ISMCTS-lite (branch `mcts-experiment`)**
+- On CONTENTIOUS decisions only (greedy's top two candidates within 2.0 ev — obvious plays stay instant), the brain deals out 8 worlds consistent with everything it can see — opponents' hands sampled from the counting layer's exact unseen multiset, respecting known hand sizes — plays each world forward 16 half-turns with a fast synchronous greedy policy (real effects: actual payments with no-change semantics, No Deal chains resolved with the dealt hands, real draws/reshuffles), and picks the root action with the best average outcome across worlds (common random numbers: all actions face the same worlds).
+- Overrides greedy on ~16% of decisions at full budget — by far the largest behavioural change of any engine iteration. Uses Math.random throughout, so seeded harness runs stay deterministic. Tests: determinized worlds conserve all 106 cards and respect hand knowledge; rollouts terminate and never touch the real game; the contentious gate skips Monte Carlo on forced wins. All suites green on the branch.
+- Exploratory ladder at a deliberately thin budget (5 worlds, horizon 12): 50.9% ± 2.2pp over 1,002 paired games — leaning, not conclusive, and underpowered for a small effect. Decision: raise to the full budget (~0.6s per contentious decision — fine for humans, heavy for harnesses) and settle it with one PRE-COMMITTED 3,000-game run, ship iff the share CI excludes 50%.
+
+**CI ladder (.github/workflows/engine-ladder.yml)**
+- Actions → "engine ladder" → Run workflow: plays a candidate branch against a frozen ref over paired seeds on a GitHub runner (~60–90 min for 3,000 games), enforces green suites first, prints the verdict in the job summary, and commits the report + compressed per-game log to `ladder-results/` on the candidate branch — the verdict lands in git where any future session can read it. The measurement standard, now unattended.
+
+**Tests** — main unchanged: 33/33 PASS (39/39 on the branch), flows 12/12, drops clean, trainer sanity 6/6, trainer parity 27/27.
+
+
 ## v0.4.8 — 2026-07-09
 Strength experiment logged: turn-sequence planning (roadmap item 2) is a NULL — measured, not vibes. No behaviour changes; the code lives on branch `seqplan-experiment`, unmerged per the measurement standard.
 
