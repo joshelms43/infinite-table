@@ -2534,8 +2534,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=070"></script>
-<script src="../shared/identity.js?v=070"></script>
+<script src="../shared/config.js?v=071"></script>
+<script src="../shared/identity.js?v=071"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2640,8 +2640,11 @@ const NET = {
     G.deck = new Array(st.deckN);
     G.discard = new Array(st.pile.n);
     this.pile = st.pile;
+    const cards = a => (a||[]).filter(c=>c && c.t);   // the wire turns undefined into null; never render a hole
     G.players = st.players.map((q,i)=>({
-      name:q.name, isAI:q.isAI, bank:q.bank, props:q.props, bldg:q.bldg,
+      name:q.name, isAI:q.isAI, bank:cards(q.bank),
+      props:Object.fromEntries(Object.entries(q.props||{}).map(([k,v])=>[k, cards(v)])),
+      bldg:q.bldg,
       hand: i===MYSEAT ? myHand : new Array(q.handN).fill(0).map((_,j)=>({ id:'h'+i+'_'+j, t:'money', v:0 })),
     }));
     if(st.logs && st.logs.length){

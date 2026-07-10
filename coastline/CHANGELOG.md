@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.7.1 — 2026-07-10
+The wire test — and the hardening it immediately earned.
+
+**tests/netsim.js** — the integration test deferred since v0.3.0: two complete game instances in isolated VM contexts joined by an in-process bus that plays Supabase Realtime (broadcast semantics, a real JSON serialization boundary). The host runs the real engine, the client sends real intents, asks travel and get answered like taps would. Thirteen assertions cover seating, public-state convergence, hand privacy, host plays reaching clients, the full JSN-then-pay ask chain, chosen-card payments, turn handoff, client intents executing as their seat, and out-of-turn intents being dropped. Now the second stage of npm run check.
+
+**What building it taught, for the record** — three of its "failures" were the engine being smarter than the test script: clients sort hands for display (same cards, local order); the JSN ask only goes to defenders who actually hold a No Deal; and rent that meets or exceeds a payer's assets auto-strips with no ask, because no decision exists. The scripts were wrong, the engine was right, and all three behaviours are now pinned by assertions.
+
+**One real fix** — the JSON wire turns undefined into null, and a null inside a broadcast bank array crashed the client renderer. applyState now sanitizes card arrays at the boundary; clients never render a hole.
+
+**Tests** — npm run check green: 58/58, wire 13/13, flows 12/12, drop matrix 38/38.
+
 ## v0.7.0 — 2026-07-10
 The produced-feel release.
 
