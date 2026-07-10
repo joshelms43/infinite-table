@@ -763,7 +763,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <h1 id="wintitle"></h1>
     <p id="winsub"></p>
     <div id="winstats"></div>
-    <button onclick="location.reload()">Play again</button>
+    <button id="winagain" onclick="playAgain()">Play again</button>
   </div>
 </div>
 
@@ -1956,6 +1956,7 @@ function checkAllWin(){
       setTimeout(()=>{
         const wc = document.querySelector('.wincard');
         if(wc && wc.style){ wc.style.animation='none'; void (wc.offsetWidth||0); wc.style.animation=''; }
+        refreshWinBtn();
         $('#winscreen').classList.add('show');
         sfx(p===me()?'win':'alert');
         haptic(p===me()?[12,60,12,60,24]:20);
@@ -1965,6 +1966,17 @@ function checkAllWin(){
     }
   }
   return false;
+}
+function playAgain(){
+  if(NET.mode==='host'){ NET.rematch(); return; }
+  if(NET.mode==='client'){ return; }   // host drives rematches
+  location.reload();
+}
+function refreshWinBtn(){
+  const b = $('#winagain'); if(!b) return;
+  if(NET.mode==='client'){ b.textContent = 'Waiting for the host…'; b.disabled = true; }
+  else if(NET.mode==='host'){ b.textContent = 'Rematch'; b.disabled = false; }
+  else { b.textContent = 'Play again'; b.disabled = false; }
 }
 function closeWin(){
   $('#winscreen').classList.remove('show');
@@ -2483,8 +2495,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=064"></script>
-<script src="../shared/identity.js?v=064"></script>
+<script src="../shared/config.js?v=066"></script>
+<script src="../shared/identity.js?v=066"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2610,7 +2622,7 @@ const NET = {
         $('#wintitle').textContent = w===me() ? 'You win' : w.name+' wins';
         $('#winsub').textContent = 'Three complete sets: ' + completeColors(w).map(c=>COLORS[c].label).join(', ');
         $('#winstats').textContent = 'Round '+G.turnCount+' · '+G.players.map(x=>x.name+' $'+bankTotal(x)+'M').join(' · ');
-        setTimeout(()=>{ $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); }, 500);
+        setTimeout(()=>{ refreshWinBtn(); $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); }, 500);
       }
     }
   },
@@ -2657,7 +2669,7 @@ const NET = {
       }
       return;
     }
-    if(type==='start' && (this.mode==='joining')) this.onStart(m, false);
+    if(type==='start' && (this.mode==='joining' || this.mode==='client')) this.onStart(m, false);
   },
 
   /* --- lobby --- */
@@ -2778,10 +2790,18 @@ const NET = {
     this.tx.send('start', { roster });
     this.onStart({ roster }, true);
   },
+  rematch(){
+    if(this.mode!=='host' || !this.roster) return;
+    this.tx.send('start', { roster: this.roster });
+    this.onStart({ roster: this.roster }, true);
+  },
   onStart(m, hosting){
     const roster = m.roster || (m.names||[]).map(n=>({key:n,name:n}));
     this.roster = roster;
+    this.lastTurn = null;
     try{ localStorage.setItem('it_room', JSON.stringify({ code:this.code, ts:Date.now() })); }catch(e){}
+    const ws=$('#winscreen'); if(ws&&ws.classList) ws.classList.remove('show');
+    const wp=$('#winpill'); if(wp&&wp.classList) wp.classList.remove('show');
     const names = roster.map(r=>r.name);
     if(hosting){ this.mode='host'; this.seat=0; MYSEAT=0; }
     else {

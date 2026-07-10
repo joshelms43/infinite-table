@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.6.6 — 2026-07-10
+Rematch — because nobody plays one game.
+
+- The win overlay's button is now seat-aware: hosts get Rematch (same table — humans and bots — fresh shuffle, everyone snaps straight back in), clients see "Waiting for the host…", and solo keeps Play again. Clients accept a start message at any time, not just while joining, and a fresh start clears win overlays and turn tracking on every screen.
+- Rating note: record_match's 45-second rate limit means only games shorter than 45 seconds would go unrated on an instant rematch — real games comfortably clear it.
+
+**Tests** — 53/53, flows 12/12, drop matrix 38/38.
+
 ## v0.6.5 — 2026-07-10
 Infinite Table becomes installable.
 

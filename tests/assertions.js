@@ -209,6 +209,16 @@ NET.applyIntent({seat:1,k:'reply',a:{rt:'hike',use:false}});
 T('hike reply resolves the chain and rent is paid', !NET.pendingAsks[1] && bankTotal(G.players[1])>0);
 NET.mode='off'; NET.tx=null; NET.roster=null; NET.pendingAsks={};
 
+
+// ===== rematch =====
+NET.mode='host'; NET.tx={ send(){}, track(){}, presence(){return{}} };
+NET.onStart({ roster:[{key:'h',name:'Josh'},{key:'b',name:'Bazza',isAI:true}] }, true);
+G.over = true;
+const preTurnCount = G.turnCount;
+NET.rematch();
+T('rematch redeals a fresh game with the same table', G.over===false && G.players.length===2 && G.players[1].name==='Bazza' && G.players.every(p=>p.hand.length===5));
+NET.mode='off'; NET.tx=null; NET.roster=null; MYSEAT=0;
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);
