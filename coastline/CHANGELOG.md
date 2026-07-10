@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.7.9 — 2026-07-10
+The name row finds its place.
+
+- Moved from under the room code (where it competed with the hero element) to below the seat list — code, who's here, fix your name, start. Committing is now an explicit Change Name button beside the field instead of keyboard/blur submission, with a NAME CHANGED confirmation on actual change.
+
+**Tests** — npm run check green.
+
 ## v0.7.8 — 2026-07-10
 *(Correction: this entry was pushed one commit before its code — a patch-script abort failed to halt the pipeline. set -e is now mandatory on every compound command; the code landed in the following commit.)*
 Lobby renames done right, panels that fit small phones with four players.

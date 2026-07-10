@@ -789,8 +789,11 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div id="homelobby" style="display:none">
       <div class="sub" style="letter-spacing:1px">ROOM CODE</div>
       <div id="lobbycode" class="lobbycode" onclick="shareCode()"></div>
-      <input id="lobbyname" class="namefield" maxlength="12" placeholder="Your name" autocomplete="off" onchange="NET.commitRename(this.value)" style="text-align:center">
       <div id="lobbyseats"></div>
+      <div class="joinrow" style="margin-top:2px">
+        <input id="lobbyname" class="namefield" maxlength="12" placeholder="Your name" autocomplete="off" style="flex:1;margin-top:0">
+        <button class="homebtn" style="flex:0 0 auto" onclick="NET.commitRename(($('#lobbyname')||{}).value)">Change Name</button>
+      </div>
       <button id="addbot" class="homebtn" style="display:none" onclick="NET.addBot()">Add a Bot</button>
       <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start Game</button>
       <div id="lobbywait" class="sub"></div>
@@ -2550,8 +2553,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=078"></script>
-<script src="../shared/identity.js?v=078"></script>
+<script src="../shared/config.js?v=079"></script>
+<script src="../shared/identity.js?v=079"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2880,6 +2883,7 @@ const NET = {
   },
   commitRename(v){
     v = (v||'').trim().slice(0,12) || this.myName || 'Player';
+    const changed = v !== this.myName;
     this.myName = v;
     try{ localStorage.setItem('it_name', v); }catch(e){}
     try{ if(typeof ID!=='undefined') ID.saveName(v); }catch(e){}
@@ -2889,6 +2893,7 @@ const NET = {
       this.tx.track(this._meta);
     }
     const ln = $('#lobbyname'); if(ln && ln.value!==undefined) ln.value = v;
+    if(changed) banner('NAME CHANGED','var(--success-green)');
     this.renderLobby();
   },
   renderLobby(){
