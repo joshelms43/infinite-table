@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.6.1 — 2026-07-09
+Navigation, honesty, and a subtitle cull.
+
+- Back from everywhere: Coastline's home carries "‹ Infinite Table" back to the lobby, and the in-game COASTLINE logo now returns to the home screen — resume-aware (primary button reads Resume mid-game, with a small New game link).
+- The lobby tile's hand-synced version number (stale at v0.2.19) is gone — replaced with "Solo & online · 2–4 players", which can't drift.
+- Subtitle cull across both pages: the explanatory subtexts are gone — "for casual games", "no email, ever", the friends empty-state, POV's "tap anywhere to return", verbose lobby waits. Labels say one word where one word does.
+
+**Tests** — 44/44, flows 12/12.
+
 ## v0.6.0 — 2026-07-09
 Accounts are credentials-only. No anonymous accounts exist anymore.
 

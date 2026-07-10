@@ -408,6 +408,11 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
   opacity:0;pointer-events:none;transition:opacity .25s ease;
 }
 #home.show{opacity:1;pointer-events:auto}
+.backlink{
+  position:absolute;top:calc(16px + env(safe-area-inset-top));left:18px;
+  font-size:12.5px;font-weight:800;color:var(--text-ivory);opacity:.55;text-decoration:none;
+}
+.textbtn{background:none;border:none;font-size:12px;font-weight:800;color:var(--text-faint);padding:2px;text-decoration:underline;text-underline-offset:3px}
 .homecard{display:flex;flex-direction:column;gap:12px;width:min(340px,100%);text-align:center}
 .homelogo{font-family:'Lilita One',cursive;font-size:38px;letter-spacing:1px}
 .hometag{font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;opacity:.4;margin-bottom:10px}
@@ -655,7 +660,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <header>
   <div>
     <div class="eyebrow">SUNSHINE COAST</div>
-    <div class="logo">COAST<span class="wave">LINE</span></div>
+    <div class="logo" onclick="openHome()" style="cursor:pointer">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
     <span class="ver">v0.4.1</span>
@@ -714,11 +719,13 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <div id="inspect" onclick="closeInspect()"></div>
 
 <div id="home" class="show">
+  <a class="backlink" href="../">‹ Infinite Table</a>
   <div class="homecard">
     <div class="homelogo"><span style="color:var(--money-gold)">COAST</span>LINE</div>
     <div class="hometag">Sunshine Coast property scramble</div>
     <div id="homemain">
-      <button class="homebtn primary hero" onclick="closeHome()">Play Solo</button>
+      <button id="homeprimary" class="homebtn primary hero" onclick="closeHome()">Play Solo</button>
+      <button id="homenew" class="textbtn" style="display:none" onclick="location.reload()">New game</button>
       <button class="homebtn" onclick="toggleReveal('onlinepanel')">Play Online</button>
       <div id="onlinepanel" class="reveal">
         <div class="onlinebox">
@@ -2176,7 +2183,7 @@ function renderPOV(idx){
   $('#pov').innerHTML = `
     <div class="povhdr">
       <span class="povname">${p.name}'s ${picking?'table':'seat'}</span>
-      <span class="povsub">${picking?'tap anywhere else to cancel':'tap anywhere to return'}</span>
+      <span class="povsub">${picking?'tap elsewhere to cancel':''}</span>
     </div>
     <div class="povopps">${others.map(i=>oppPanelHTML(i, false)).join('')}</div>
     <div class="povbody">
@@ -2461,8 +2468,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=060"></script>
-<script src="../shared/identity.js?v=060"></script>
+<script src="../shared/config.js?v=061"></script>
+<script src="../shared/identity.js?v=061"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2674,7 +2681,7 @@ const NET = {
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
     $('#lobbycode').textContent = code;
     const st=$('#lobbystart'); if(st&&st.style) st.style.display='none';
-    $('#lobbywait').textContent = 'Waiting for the host to start…';
+    $('#lobbywait').textContent = 'Waiting for the host…';
     this.renderLobby();
   },
   lobbySeats(){
@@ -2688,7 +2695,7 @@ const NET = {
     const el = $('#lobbyseats'); if(!el || !this.tx) return;
     const seats = this.lobbySeats();
     el.innerHTML = seats.map((mm,i)=>`<div class="lobbyseat"><span class="avatar" style="background:${i===0?'var(--money-gold)':'var(--felt-highlight)'}">${(mm.name||'?')[0]}</span>${mm.name}${mm.host?' · host':''}</div>`).join('')
-      + (seats.length<2 ? '<div class="sub" style="opacity:.5">Waiting for players… share the code</div>' : '');
+      + (seats.length<2 ? '<div class="sub" style="opacity:.5">Share the code</div>' : '');
     const st = $('#lobbystart'); if(st && this.mode==='lobby-host') st.disabled = seats.length<2;
   },
   startOnline(){
@@ -2723,6 +2730,11 @@ const NET = {
   },
 };
 let GAME_STARTED = false;
+function openHome(){
+  const h=$('#home'); if(h&&h.classList) h.classList.add('show');
+  const p=$('#homeprimary'); if(p) p.textContent = GAME_STARTED ? 'Resume' : 'Play Solo';
+  const n=$('#homenew'); if(n&&n.style) n.style.display = GAME_STARTED ? '' : 'none';
+}
 function closeHome(){
   const h=$('#home'); if(h&&h.classList) h.classList.remove('show');
   if(!GAME_STARTED && NET.mode==='off'){

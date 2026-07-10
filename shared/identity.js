@@ -134,9 +134,9 @@ const ID = {
       </div>` : '';
     if(!this.profile){
       openSheet(`<h3>Profile</h3>
-        <div class="zone-label">Table name — for casual games</div>
+        <div class="zone-label">Table name</div>
         <input class="namefield" maxlength="12" value="${nm}" onchange="ID.saveName(this.value)" placeholder="Your name" style="margin-top:0">
-        <div class="zone-label" style="margin-top:14px">Account — for Elo, stats &amp; friends</div>
+        <div class="zone-label" style="margin-top:14px">Account</div>
         <div class="onlinebox">
           <input id="acctuser" class="namefield" maxlength="16" placeholder="username" autocomplete="off" style="margin-top:0">
           <input id="acctpass" class="namefield" type="password" maxlength="40" placeholder="password" autocomplete="new-password">
@@ -144,7 +144,7 @@ const ID = {
             <button class="homebtn" onclick="ID.register()">Create account</button>
             <button class="homebtn" onclick="ID.signIn()">Sign in</button>
           </div>
-          <div class="profsub" style="margin-top:8px;opacity:.4">Username + password only — no email, ever.</div>
+          
         </div>
         <button class="optbtn" style="margin-top:14px" onclick="ID.sheetOpen=false;closeSheet()">Done</button>`);
       return;
@@ -165,7 +165,7 @@ const ID = {
         <span class="frelo">${f.elo}</span>
         <button class="frinvite" onclick="ID.sheetOpen=false;closeSheet();ID.invite('${f.id}')">Invite</button>
         <button class="frremove" onclick="ID.removeFriend('${f.id}')">✕</button>
-      </div>`).join('') || '<div class="profsub" style="text-align:center;opacity:.5;padding:4px 0">Add mates with their friend code</div>';
+      </div>`).join('') || '';
   },
   editName(){
     const nameEl = document.querySelector('#profcard .profname');

@@ -4,8 +4,8 @@ let html = fs.readFileSync(require('path').join(__dirname,'..','coastline','inde
 const _p=require('path'),_f=require('fs');
 const _shared=(n)=>{const a=_p.join(__dirname,'..','shared',n),b=_p.join(__dirname,n.replace('identity.js','shared_identity.js'));return _f.readFileSync(_f.existsSync(a)?a:b,'utf8');};
 html = html
-  .replace('<script src="../shared/config.js?v=060"></script>', '<scr'+'ipt>window.SUPABASE_URL="";window.SUPABASE_ANON="";</scr'+'ipt>')
-  .replace('<script src="../shared/identity.js?v=060"></script>', '<scr'+'ipt>'+_shared('identity.js')+'</scr'+'ipt>');
+  .replace('<script src="../shared/config.js?v=061"></script>', '<scr'+'ipt>window.SUPABASE_URL="";window.SUPABASE_ANON="";</scr'+'ipt>')
+  .replace('<script src="../shared/identity.js?v=061"></script>', '<scr'+'ipt>'+_shared('identity.js')+'</scr'+'ipt>');
 const errors = [];
 const dom = new JSDOM(html, { runScripts:'dangerously', pretendToBeVisual:true, url:'https://localhost/' });
 const win = dom.window;
