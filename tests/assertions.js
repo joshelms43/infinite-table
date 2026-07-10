@@ -220,6 +220,18 @@ NET.rematch();
 T('rematch redeals a fresh game with the same table', G.over===false && G.players.length===2 && G.players[1].name==='Bazza' && G.players.every(p=>p.hand.length===5));
 NET.mode='off'; NET.tx=null; NET.roster=null; MYSEAT=0;
 
+
+// ===== away tracking =====
+NET.mode='client'; NET.gone={};
+NET.roster=[{key:'h',name:'Host'},{key:'m',name:'Mick'},{key:'bot-bazza',name:'Bazza',isAI:true}];
+NET.onLeave([{key:'m'}]);
+T('a dropped player is marked away', NET.isGone(1)===true && NET.isGone(0)===false);
+T('bots are never away', (NET.gone['bot-bazza']=true, NET.isGone(2)===false));
+delete NET.gone['bot-bazza'];
+NET.onJoin([{key:'m'}]);
+T('rejoining clears away', NET.isGone(1)===false);
+NET.mode='off'; NET.roster=null; NET.gone={};
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

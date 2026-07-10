@@ -406,6 +406,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 @keyframes appin{from{opacity:0}}
 
+.opp.away{opacity:.5;filter:saturate(.4)}
 /* ---------- home / lobby ---------- */
 #home{
   position:fixed;inset:0;z-index:48;background:var(--table);
@@ -746,7 +747,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     </div>
     <div id="homelobby" style="display:none">
       <div class="sub" style="letter-spacing:1px">ROOM CODE</div>
-      <div id="lobbycode" class="lobbycode"></div>
+      <div id="lobbycode" class="lobbycode" onclick="shareCode()"></div>
       <div id="lobbyseats"></div>
       <button id="addbot" class="homebtn" style="display:none" onclick="NET.addBot()">Add a bot</button>
       <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start game</button>
@@ -1175,12 +1176,14 @@ function renderAll(){
 let HAND_MINE = null;
 function oppPanelHTML(idx, clickable){
   const p = G.players[idx];
-  const label = idx===MYSEAT ? 'You' : p.name;
+  const away = (typeof NET!=='undefined') && NET.isGone && NET.isGone(idx);
+  const label = (idx===MYSEAT ? 'You' : p.name) + (away ? ' · away' : '');
   const avs = ['var(--action-info)','var(--c-orange)','var(--c-purple)','var(--c-teal)'];
   const av = idx===MYSEAT ? 'var(--action-info)' : avs[idx%avs.length];
+  const awayCls = away ? ' away' : '';
   const sets = Object.entries(p.props).map(([color,cards])=>{
     const done = isComplete(p,color);
-    return `<span class="chipset" title="${COLORS[color].label} ${cards.length}/${COLORS[color].size}">${cards.map(()=>`<span class="chip ${done?'done-mark':''}" style="background:${COLORS[color].hex}"></span>`).join('')}${p.bldg[color]?`<span class="opp-bldg">${p.bldg[color].granny?'⌂':''}${p.bldg[color].resort?'✦':''}</span>`:''}</span>`;
+    return `<span class="chipset" title="${COLORS[color].label} ${cards.length}/${COLORS[color].size}">${cards.map(()=>`<span class="chip ${done?'done-mark':''}" style="background:${COLORS[color].hex}"></span>`).join('')}${p.bldg[color]?`<span class="opp${awayCls}-bldg">${p.bldg[color].granny?'⌂':''}${p.bldg[color].resort?'✦':''}</span>`:''}</span>`;
   }).join('');
   return `<div class="opp ${G.turn===idx?'active':''}" data-idx="${idx}" ${clickable?`onclick="oppTapped(${idx})"`:''}>
     <div class="opp-top">
@@ -2500,8 +2503,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=067"></script>
-<script src="../shared/identity.js?v=067"></script>
+<script src="../shared/config.js?v=069"></script>
+<script src="../shared/identity.js?v=069"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2706,6 +2709,7 @@ const NET = {
     });
     ch.on('presence', { event:'sync' }, ()=>self.renderLobby());
     ch.on('presence', { event:'leave' }, (ev)=>self.onLeave((ev && ev.leftPresences)||[]));
+    ch.on('presence', { event:'join' }, (ev)=>self.onJoin((ev && ev.newPresences)||[]));
     await new Promise(res=>ch.subscribe(st=>{ if(st==='SUBSCRIBED') res(); }));
     this.code = code;
     return true;
@@ -2736,8 +2740,21 @@ const NET = {
     $('#lobbywait').textContent = 'Waiting for the host…';
     this.renderLobby();
   },
+  gone: {},
+  isGone(idx){
+    if(this.mode!=='host' && this.mode!=='client') return false;
+    const r = this.roster && this.roster[idx];
+    return !!(r && !r.isAI && this.gone[r.key]);
+  },
+  onJoin(joined){
+    let changed = false;
+    joined.forEach(p=>{ if(p && p.key && this.gone[p.key]){ delete this.gone[p.key]; changed = true; } });
+    if(changed && this.roster && !G.over){ banner('RECONNECTED','var(--success-green)'); renderAll(); }
+  },
   onLeave(left){
+    left.forEach(p=>{ if(p && p.key) this.gone[p.key] = true; });
     if(!this.roster || G.over) return;
+    renderAll();
     if(this.mode==='client'){
       const hostKey = this.roster[0] && this.roster[0].key;
       if(left.some(p=>p && p.key===hostKey)){
@@ -2827,6 +2844,12 @@ const NET = {
     else renderAll();
   },
 };
+function shareCode(){
+  const code = NET.code; if(!code) return;
+  const url = location.origin + location.pathname + '?join=' + code;
+  if(navigator.share){ navigator.share({ title:'Coastline', text:'Join my table: '+code, url }).catch(()=>{}); return; }
+  try{ navigator.clipboard.writeText(url); banner('LINK COPIED','var(--gold-money)'); }catch(e){}
+}
 let GAME_STARTED = false;
 function refreshRejoin(){
   const b = $('#rejoinbtn'); if(!b || !b.style) return;
