@@ -79,8 +79,9 @@ const dk = host.buildDeck();
 const m5 = k => dk.filter(c => c.t === 'money' && c.v === 5)[k];
 const rentC = dk.find(c => c.t === 'rent' && c.colors);
 const rcol = rentC.colors[0];
+const rentC2 = dk.filter(c => c.t === 'rent' && c.colors && c.colors[0] === rentC.colors[0] && c.colors[1] === rentC.colors[1])[1];
 const propC = dk.find(c => c.t === 'prop' && c.color === rcol);
-host.__B.G.players[0].hand = [m5(0), rentC, dk.find(c => c.t === 'money' && c.v === 1)];
+host.__B.G.players[0].hand = [m5(0), rentC, rentC2];
 host.addProp(host.__B.G.players[0], propC, rcol);
 host.__B.G.players[1].hand = [m5(1), dk.find(c => c.t === 'action' && c.kind === 'nodeal')];
 host.__B.G.players[1].bank = [dk.find(c => c.t === 'money' && c.v === 3), dk.find(c => c.t === 'money' && c.v === 4)];  // assets must exceed rent or the engine auto-strips with no ask
@@ -90,26 +91,28 @@ host.__B.NET.pushState();
 host.bankCard(host.__B.G.players[0].hand[0]);
 T('host local play reaches the client', pub(client) === pub(host) && client.__B.G.players[0].bank.length === 1);
 
-/* rent at the client: JSN ask first, then payment ask */
+/* rent at the client: no JSN popup — the pay ask itself carries the block option */
 const asks = [];
 const realOnMessage = client.__B.NET.onMessage.bind(client.__B.NET);
 client.__B.NET.onMessage = (t, m) => { if (t === 'ask') asks.push(m); realOnMessage(t, m); };
 const payId = client.__B.G.players[1].bank[0].id;
-const realAsk = host.__B.NET.ask.bind(host.__B.NET);
-host.__B.NET.ask = (seat, ask, cb) => { if(DBG) console.log('  host.ask called:', seat, ask.type); return realAsk(seat, ask, cb); };
-const realRP = host.requestPayment;
+const ndCard = host.__B.G.players[1].hand.find(c => c.t === 'action' && c.kind === 'nodeal');
 host.doRent(rentC, rcol, 1, 0);
-T('the No Deal ask reaches the owing client first', asks.length === 1 && asks[0].seat === 1 && asks[0].ask.type === 'jsn');
+T('the pay ask arrives directly, carrying the block option', asks.length === 1 && asks[0].seat === 1 && asks[0].ask.type === 'pay' && asks[0].ask.canBlock === true);
 /* the demo bug: mid-ask, the charger tried to keep playing */
 const chargerBankBefore = host.__B.G.players[0].bank.length;
 const chargerHandBefore = host.__B.G.players[0].hand.length;
 host.bankCard(host.__B.G.players[0].hand[0]);
 T('the charger cannot act while a payment resolves', host.__B.G.players[0].bank.length === chargerBankBefore && host.__B.G.players[0].hand.length === chargerHandBefore);
-client.__B.NET.reply('jsn', { use: false });
-if(DBG) console.log('  asks after jsn reply:', JSON.stringify(asks.map(a=>a.ask)));
-if(DBG) console.log('  host pendingAsks:', JSON.stringify(Object.keys(host.__B.NET.pendingAsks)));
-if(DBG) console.log('  full ask stream:', JSON.stringify(asks.map(a=>[a.seat,a.ask.type])));
-T('declining No Deal produces the payment ask', asks.length === 2 && asks[1].ask.type === 'pay');
+/* the client blocks by playing its No Deal through the pay reply */
+const bank1Pre = host.__B.G.players[1].bank.length;
+client.__B.NET.reply('pay', { block: true, id: ndCard.id });
+T('the block cancels the rent — no money moves', host.__B.G.players[1].bank.length === bank1Pre && host.__B.G.players[0].bank.length === 1);
+T('the No Deal leaves the hand for the discard', !host.__B.G.players[1].hand.some(c => c.id === ndCard.id) && host.__B.G.discard.some(c => c.id === ndCard.id));
+T('post-block state converges', pub(client) === pub(host));
+/* second rent: the No Deal is spent, so this one gets paid */
+host.doRent(rentC2, rcol, 1, 0);
+T('the second pay ask has no block option', asks.length === 2 && asks[1].ask.type === 'pay' && !asks[1].ask.canBlock);
 client.__B.NET.reply('pay', { ids: [payId] });
 T('client payment reply moves the chosen card on the host', host.__B.G.players[0].bank.some(c => c.id === payId) && !host.__B.G.players[1].bank.some(c => c.id === payId) && host.__B.G.players[1].bank.length === 1);
 T('post-payment state converges', pub(client) === pub(host));

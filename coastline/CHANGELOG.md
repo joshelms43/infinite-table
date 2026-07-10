@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.8.6 — 2026-07-11
+No Deal is a card again: drag it, don't dialog it.
+
+**The change** — when rent, a favour or a shout demands payment, there's no interrupting "Use No Deal?" popup anymore. You go straight into the payment flow — and if you're holding a No Deal, the HUD says so and the card is simply draggable from your hand onto the play pile, off-turn, costing no play. Drop it: the demand dies. Pay instead: it never comes up. The block is a physical act now, same grammar as every other card in the game.
+
+**What kept its sheet, deliberately** — counter-No-Deals (the attacker isn't inside a payment flow, so a sheet is the only surface) and Hostile Takeover / Sneaky Swipe / Swap Meet blocks (no payment UI exists to host a drag). Only the payment path changed.
+
+**Under the hood** — the block chain (jsnChain) is hoisted out of resolveBlock so the payment UI can re-enter it at count 1 after a drag; requestPayment threads a block context with the demand's cancel continuation; remote payers get canBlock on the pay ask and answer with a block reply the host validates (the No Deal must actually be in their hand). The hand-drag guard learned that paying happens off-turn, so blocking must too — and blocking skips the plays-left check, because reactions are free.
+
+**Tests** — engine 70/70 (five new: no popup fires, the pay UI arms the block, the drag cancels the demand, the No Deal discards, no money moves) and the wire rally rewritten end-to-end: pay ask carries canBlock, block reply cancels with zero transfer and full convergence, and a second rent — the No Deal now spent — arrives without the option and gets paid. npm run check green across all five stages.
+
 ## v0.8.5 — 2026-07-11
 Drag refinements from live play: completed sets, ride-along rainbows, and the flip.
 

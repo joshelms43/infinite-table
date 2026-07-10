@@ -1472,10 +1472,12 @@ function hudShow(text, cfg){
 }
 /* ----- payment: pick straight off your table & bank ----- */
 function enterPayModeGuard(){ try{ if(typeof closePOVForce==='function' && POVIDX!=null) closePOVForce(); }catch(e){} }
-function enterPayMode(amount, receiverIdx, done){
+function enterPayMode(amount, receiverIdx, done, jsnCtx){
   enterPayModeGuard();
   closeSheet(); closePOVForce(); clearSelection(); endOppSelect();
   MODE.type='pay'; MODE.amount=amount; MODE.receiverIdx=receiverIdx; MODE.done=done;
+  MODE.jsn = jsnCtx || null;
+  MODE.payArgs = { amount, receiverIdx, done };
   MODE.sel=new Set(); MODE.wasEnough=false;
   sfx('alert'); haptic([10,50,10]);
   banner('PAY $'+amount+'M', 'var(--danger-red)');
@@ -1498,7 +1500,7 @@ function updatePayHUD(){
   const enough = tot>=amount;
   if(enough && !MODE.wasEnough){ sfx('good'); haptic(8); }
   MODE.wasEnough = enough;
-  hudShow(`Pay ${r.name} — $${tot}M of $${amount}M${tot>amount?' · no change':''}`,
+  hudShow(`Pay ${r.name} — $${tot}M of $${amount}M${tot>amount?' · no change':''}${MODE.jsn?' · or drag No Deal! onto the pile':''}`,
     { meter:{val:tot,max:amount}, auto:true, go:{label:'Pay', disabled:!enough} });
 }
 function payAutoM(){
@@ -1513,11 +1515,31 @@ function payAutoM(){
   for(const o of order){ if(t>=MODE.amount) break; MODE.sel.add(o.id); t+=o.v; }
   sfx('pick'); renderAll(); updatePayHUD();
 }
+function blockWithNoDeal(c){
+  if(MODE.type!=='pay' || !MODE.jsn) return;
+  if(!c || c.t!=='action' || c.kind!=='nodeal') return;
+  const ctx = MODE.jsn, args = MODE.payArgs;
+  MODE.type=null; MODE.sel=null; MODE.jsn=null; hidePrompt();
+  if(NET.mode==='client'){
+    NET.reply('pay', { block:true, id:c.id });
+    renderAll(); return;
+  }
+  const p=me();
+  const i=p.hand.findIndex(x=>x.id===c.id);
+  if(i<0){ renderAll(); return; }
+  p.hand.splice(i,1); G.discard.push(c);
+  log('You played No Deal!'); sfx('alert'); haptic([10,40,10]);
+  renderAll();
+  jsnChain(ctx.by, MYSEAT, 1, ctx.desc, blocked=>{
+    if(blocked) ctx.onCancel();
+    else requestPayment(MYSEAT, args.amount, args.receiverIdx, args.done, null);
+  });
+}
 function payConfirm(){
   if(MODE.type!=='pay') return;
   if(NET.mode==='client'){
     NET.reply('pay', { ids: [...MODE.sel] });
-    MODE.type=null; MODE.sel=null; hidePrompt(); renderAll(); return;
+    MODE.type=null; MODE.sel=null; MODE.jsn=null; hidePrompt(); renderAll(); return;
   }
   const payer=me(), receiver=G.players[MODE.receiverIdx], amount=MODE.amount, done=MODE.done;
   payer.bank.filter(c=>MODE.sel.has(c.id)).forEach(c=>transferBank(payer,receiver,c));
@@ -1706,9 +1728,10 @@ document.addEventListener('click', e=>{
 const DRAG = { pend:null, active:false, card:null, clone:null, srcW:null, px0:0, py0:0, zones:[], over:null };
 let SUPPRESSTAP = false;
 document.getElementById('hand').addEventListener('pointerdown', e=>{
-  if((!isMyTurn() && !G.over) || document.querySelector('#overlay.show')) return;
-  if(typeof netBusy==='function' && netBusy()) return;
-  if(MODE.type && MODE.type!=='discard') return;
+  const payBlock = MODE.type==='pay' && !!MODE.jsn;   // paying happens off-turn; the block must too
+  if((!isMyTurn() && !G.over && !payBlock) || document.querySelector('#overlay.show')) return;
+  if(typeof netBusy==='function' && netBusy() && !payBlock) return;
+  if(MODE.type && MODE.type!=='discard' && !payBlock) return;
   const w = e.target.closest ? e.target.closest('.cardw') : null;
   if(!w) return;
   const c = findInHand(me(), +w.dataset.cid);
@@ -1853,6 +1876,19 @@ function nearestZone(cx, cy, maxDist){
 }
 function buildZones(c){
   DRAG.zones = [];
+  if(MODE.type==='pay'){
+    if(MODE.jsn && c.t==='action' && c.kind==='nodeal'){
+      const el = $('#playpile');
+      if(el && el.classList){
+        el.classList.add('droppable');
+        DRAG.zones.push({ el, act: ()=>blockWithNoDeal(c), hint:'', rect: inflate(el.getBoundingClientRect(), 30) });
+      }
+      showPrompt('Drop it on the pile — cancel the demand', false);
+    } else {
+      showPrompt('Pay up — or drag a No Deal! onto the pile', false);
+    }
+    return;
+  }
   const free = G.playsLeft > 0;
   const add = (el, act, hint) => { if(!el) return; el.classList.add('droppable'); DRAG.zones.push({ el, act, hint, rect: inflate(el.getBoundingClientRect(), 22) }); };
   const group = col => document.querySelector(`#myprops .setgroup[data-color="${col}"]`);
@@ -2420,8 +2456,7 @@ function spendAction(c, actor){
   closeSheet(); renderAll();
 }
 /* No Deal chain. cb(blocked:boolean) */
-function resolveBlock(defIdx, atkIdx, desc, cb){
-  function chain(aIdx,bIdx,count){
+function jsnChain(aIdx, bIdx, count, desc, cb, viaPay){
     const p = G.players[aIdx];
     if(!hasNoDeal(p)) return cb(count%2===1);
     if(p.isAI){
@@ -2429,9 +2464,13 @@ function resolveBlock(defIdx, atkIdx, desc, cb){
         const nd = takeNoDeal(p); log(p.name+' played No Deal!');
         if(aIdx>0) aiShowcase(nd, aIdx);
         renderAll();
-        setTimeout(()=>chain(bIdx,aIdx,count+1), Math.max(700, visWait()+200));
+        setTimeout(()=>jsnChain(bIdx,aIdx,count+1,desc,cb), Math.max(700, visWait()+200));
       } else cb(count%2===1);
       return;
+    }
+    if(count===0 && viaPay){
+      // no popup: the payment UI itself offers the block (drag No Deal! onto the pile)
+      return cb(false, { jsn:{ by:bIdx, desc } });
     }
     if(aIdx!==MYSEAT && NET.mode==='host'){
       NET.ask(aIdx, {type:'jsn', desc, count}, m=>{
@@ -2439,7 +2478,7 @@ function resolveBlock(defIdx, atkIdx, desc, cb){
           const nd = takeNoDeal(p); log(G.players[aIdx].name+' played No Deal!');
           NET.evt(aIdx, nd);
           renderAll();
-          setTimeout(()=>chain(bIdx,aIdx,count+1), 400);
+          setTimeout(()=>jsnChain(bIdx,aIdx,count+1,desc,cb), 400);
         } else cb(count%2===1);
       });
       return;
@@ -2459,11 +2498,12 @@ function resolveBlock(defIdx, atkIdx, desc, cb){
     });
     window._jsn = (use)=>{
       closeSheet();
-      if(use){ takeNoDeal(p); log('You played No Deal!'); renderAll(); chain(bIdx,aIdx,count+1); }
+      if(use){ takeNoDeal(p); log('You played No Deal!'); renderAll(); jsnChain(bIdx,aIdx,count+1,desc,cb); }
       else cb(count%2===1);
     };
-  }
-  chain(defIdx, atkIdx, 0);
+}
+function resolveBlock(defIdx, atkIdx, desc, cb, viaPay){
+  jsnChain(defIdx, atkIdx, 0, desc, cb, viaPay);
 }
 /* ----- payments ----- */
 function payAssetsTotal(p){ return bankTotal(p) + propList(p).reduce((s,x)=>s+x.card.v,0); }
@@ -2478,7 +2518,7 @@ function transferProp(payer,receiver,card){
     addProp(receiver,card,color);
   }
 }
-function requestPayment(payerIdx, amount, receiverIdx, done){
+function requestPayment(payerIdx, amount, receiverIdx, done, jsnCtx){
   const payer=G.players[payerIdx], receiver=G.players[receiverIdx];
   if(amount<=0) return done();
   const worth = payAssetsTotal(payer);
@@ -2535,13 +2575,29 @@ function requestPayment(payerIdx, amount, receiverIdx, done){
   }
   // human payer
   if(payerIdx!==MYSEAT && NET.mode==='host'){
-    NET.ask(payerIdx, {type:'pay', amount, recv:receiverIdx}, m=>{
+    const canBlock = !!(jsnCtx && hasNoDeal(payer));
+    NET.ask(payerIdx, {type:'pay', amount, recv:receiverIdx, canBlock}, m=>{
+      if(m && m.block && canBlock){
+        const i = payer.hand.findIndex(x=>x.t==='action' && x.kind==='nodeal' && (m.id==null || x.id===m.id));
+        const nd = i>=0 ? payer.hand.splice(i,1)[0] : null;
+        if(nd){
+          G.discard.push(nd);
+          log(payer.name+' played No Deal!');
+          NET.evt(payerIdx, nd);
+          renderAll();
+          jsnChain(jsnCtx.by, payerIdx, 1, jsnCtx.desc, blocked=>{
+            if(blocked) jsnCtx.onCancel();
+            else requestPayment(payerIdx, amount, receiverIdx, done, null);
+          });
+          return;
+        }
+      }
       NET.applyPaymentIds(payerIdx, receiverIdx, amount, (m&&m.ids)||[]);
       done();
     });
     return;
   }
-  visDefer(()=>enterPayMode(amount, receiverIdx, done));
+  visDefer(()=>enterPayMode(amount, receiverIdx, done, jsnCtx));
 }
 function processQueue(idxs, perFn, done){
   const q=[...idxs];
@@ -2553,10 +2609,11 @@ function doFavour(c,targetIdx,by){
   const b=(by==null?MYSEAT:by); NET.evt(b,c);
   spendAction(c,b);
   log(nameOf(b)+' played Call In a Favour on '+nameOf(targetIdx)+'.');
-  resolveBlock(targetIdx,b,'Call In a Favour',blocked=>{
+  resolveBlock(targetIdx,b,'Call In a Favour',(blocked,x)=>{
     if(blocked){ log(nameOf(targetIdx)+' blocked it.'); checkAllWin(); renderAll(); return; }
-    requestPayment(targetIdx,5,b,()=>{ checkAllWin(); renderAll(); flashOpp(targetIdx); sfx('coin'); });
-  });
+    const jc = x&&x.jsn ? {...x.jsn, onCancel:()=>{ log(nameOf(targetIdx)+' blocked it.'); checkAllWin(); renderAll(); }} : null;
+    requestPayment(targetIdx,5,b,()=>{ checkAllWin(); renderAll(); flashOpp(targetIdx); sfx('coin'); }, jc);
+  }, true);
 }
 function doShout(c,by){
   if(NET.intercept('shout',{id:c.id})) return;
@@ -2564,10 +2621,11 @@ function doShout(c,by){
   spendAction(c,b);
   log(nameOf(b)+' shouted a round — everyone owes them $2M.');
   processQueue(othersOf(b),(t,next)=>{
-    resolveBlock(t,b,'Shout a Round',blocked=>{
+    resolveBlock(t,b,'Shout a Round',(blocked,x)=>{
       if(blocked){ log(G.players[t].name+' blocked it.'); return next(); }
-      requestPayment(t,2,b,next);
-    });
+      const jc = x&&x.jsn ? {...x.jsn, onCancel:()=>{ log(G.players[t].name+' blocked it.'); next(); }} : null;
+      requestPayment(t,2,b,next,jc);
+    }, true);
   },()=>{ checkAllWin(); renderAll(); });
 }
 function doRent(c,color,targetIdx,by){
@@ -2601,10 +2659,11 @@ function execRent(c,color,targetIdx,hikeCard,base,by){
   const targets = targetIdx!=null ? [targetIdx] : othersOf(b);
   log(nameOf(b)+' charged $'+amount+'M '+COLORS[color].label+' rent.');
   processQueue(targets,(t,next)=>{
-    resolveBlock(t,b,'Rent',blocked=>{
+    resolveBlock(t,b,'Rent',(blocked,x)=>{
       if(blocked){ log(nameOf(t)+' blocked the rent.'); return next(); }
-      requestPayment(t,amount,b,()=>{ flashOpp(t); sfx('coin'); next(); });
-    });
+      const jc = x&&x.jsn ? {...x.jsn, onCancel:()=>{ log(nameOf(t)+' blocked the rent.'); next(); }} : null;
+      requestPayment(t,amount,b,()=>{ flashOpp(t); sfx('coin'); next(); }, jc);
+    }, true);
   },()=>{ checkAllWin(); renderAll(); });
 }
 function stealTargetsOf(pIdx){ // props not in complete sets
@@ -2672,8 +2731,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=085"></script>
-<script src="../shared/identity.js?v=085"></script>
+<script src="../shared/config.js?v=086"></script>
+<script src="../shared/identity.js?v=086"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2843,7 +2902,7 @@ const NET = {
       if(type==='ask' && m.seat===this.seat){
         try{ if(typeof closePOVForce==='function' && POVIDX!=null) closePOVForce(); }catch(e){}
         const a = m.ask;
-        if(a.type==='pay') visDefer(()=>enterPayMode(a.amount, a.recv, ()=>{}));
+        if(a.type==='pay') visDefer(()=>enterPayMode(a.amount, a.recv, ()=>{}, a.canBlock ? { by:null, desc:'' } : null));
         if(a.type==='discard'){ MODE.type='discard'; MODE.need=a.need; MODE.sel=new Set(); sfx('alert'); renderAll(); updateDiscardHUD(); }
         if(a.type==='hike'){
           openSheet(`<h3>Rent Hike?</h3><div class="sub">Double this rent to $${a.base*2}M — costs one extra play.</div>
@@ -3335,10 +3394,11 @@ function brainCandidates(p, idx, next){
     banner('RENT — $'+amount+'M','var(--coral)');
     renderAll();
     processQueue(targets,(t,go)=>{
-      resolveBlock(t,idx,'Rent',blocked=>{
+      resolveBlock(t,idx,'Rent',(blocked,x)=>{
         if(blocked){ log((t===0?'You':G.players[t].name)+' blocked the rent.'); return go(); }
-        requestPayment(t,amount,idx,go);
-      });
+        const jc = x&&x.jsn ? {...x.jsn, onCancel:()=>{ log((t===0?'You':G.players[t].name)+' blocked the rent.'); go(); }} : null;
+        requestPayment(t,amount,idx,go,jc);
+      }, true);
     },()=>{ if(!checkAllWin()) next(); });
   }
 
@@ -3406,10 +3466,11 @@ function brainCandidates(p, idx, next){
     add(jsnAdjusted(Math.min(5, liquidOf(G.players[t]))*0.85, t, idx), ()=>{
       spendAI(fv,p); renderAll();
       log(p.name+' called in a favour from '+(t===0?'you':G.players[t].name)+' — $5M.');
-      resolveBlock(t,idx,'Call In a Favour',blocked=>{
+      resolveBlock(t,idx,'Call In a Favour',(blocked,x)=>{
         if(blocked){ log('Favour blocked.'); return next(); }
-        requestPayment(t,5,idx,()=>{ if(!checkAllWin()) next(); });
-      });
+        const jc = x&&x.jsn ? {...x.jsn, onCancel:()=>{ log('Favour blocked.'); next(); }} : null;
+        requestPayment(t,5,idx,()=>{ if(!checkAllWin()) next(); }, jc);
+      }, true);
     }, {cardId:fv.id, mode:'play', label:'Call In a Favour → '+(t===0?'you':G.players[t].name)});
   }
 
@@ -3421,10 +3482,11 @@ function brainCandidates(p, idx, next){
       spendAI(sh,p); renderAll();
       log(p.name+' shouted a round — everyone owes them $2M.');
       processQueue(enemies,(t,go)=>{
-        resolveBlock(t,idx,'Shout a Round',blocked=>{
+        resolveBlock(t,idx,'Shout a Round',(blocked,x)=>{
           if(blocked){ log('Blocked.'); return go(); }
-          requestPayment(t,2,idx,go);
-        });
+          const jc = x&&x.jsn ? {...x.jsn, onCancel:()=>{ log('Blocked.'); go(); }} : null;
+          requestPayment(t,2,idx,go,jc);
+        }, true);
       },()=>{ if(!checkAllWin()) next(); });
     }, {cardId:sh.id, mode:'play', label:'Shout a Round'});
   }
