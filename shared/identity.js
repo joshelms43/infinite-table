@@ -195,14 +195,22 @@ const ID = {
     if(pw.length<6){ banner('PASSWORD: 6+ CHARACTERS','var(--danger-red)'); return; }
     try{
       const sb = await this.ensureSB(); if(!sb) return;
-      const r = await sb.auth.signUp({ email: u+'@coastline.game', password: pw });
-      if(r.error){ banner(/already|exists|registered/i.test(r.error.message)?'USERNAME TAKEN':('SIGN UP: '+r.error.message).toUpperCase().slice(0,50),'var(--danger-red)'); return; }
-      let session = r.data && r.data.session;
-      if(!session){
-        const s2 = await sb.auth.signInWithPassword({ email: u+'@coastline.game', password: pw });
-        if(s2.error || !s2.data.session){ banner('CREATED — NOW SIGN IN','var(--warning-amber)'); return; }
-        session = s2.data.session;
+      // registration goes through an Edge Function: the public signup endpoint
+      // MX-validates email domains, which rejects our synthetic no-email addresses
+      const res = await fetch(SUPABASE_URL + '/functions/v1/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON },
+        body: JSON.stringify({ username: u, password: pw }),
+      });
+      let out = null; try{ out = await res.json(); }catch(e){}
+      if(!res.ok || !out || !out.ok){
+        const err = (out && out.err) || 'failed';
+        banner(err==='taken' ? 'USERNAME TAKEN' : ('SIGN UP: '+err).toUpperCase().slice(0,50), 'var(--danger-red)');
+        return;
       }
+      const s2 = await sb.auth.signInWithPassword({ email: u+'@coastline.game', password: pw });
+      if(s2.error || !s2.data.session){ banner('CREATED — NOW SIGN IN','var(--warning-amber)'); return; }
+      const session = s2.data.session;
       this.user = session.user; this.profile = null;
       await this.init();
       banner('ACCOUNT CREATED','var(--success-green)');

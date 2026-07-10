@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.7.4 — 2026-07-10
+Registration actually works now — the no-email model meets Supabase's abuse filters.
+
+**Root cause** — hosted Supabase validates email deliverability (MX records) on the public signup endpoint as anti-abuse. coastline.game isn't a registered domain, so every Create Account died with "email invalid". Sign-in was never affected (the password grant doesn't deliverability-check), but no account could exist to sign into: registration has been broken in production since v0.6.0, surfaced by the first real attempt at the four-friends table.
+
+**Fix** — registration moves server-side: a new Edge Function (supabase/functions/register) creates the user through the admin API — which skips the deliverability check — pre-confirmed, then the client signs in with the same credentials as before. The no-email model is unchanged: username + password, synthetic internal address, nothing sent anywhere, ever. Username validation happens in the function too (server-enforced 3–16 chars a-z0-9_).
+
+**Setup (Josh, once)** — Supabase dashboard → Edge Functions → Deploy a new function → name it exactly `register` → paste supabase/functions/register/index.ts → Deploy. No secrets to configure (the service key is injected automatically). Then Create Account works from the profile sheet.
+
+**Field note** — everyone at the table played as guests without being pushed to sign up, which is the design working as intended. Accounts are for people who want a rating that follows them; the table asks nothing.
+
+**Tests** — npm run check green: 58/58, wire 14/14, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.7.3 — 2026-07-10
 The four-friends-demo fixes. Two bugs, both structural, both now impossible.
 
