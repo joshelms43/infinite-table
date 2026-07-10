@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.7.6 — 2026-07-10
+Your name, where you actually see it.
+
+- The room lobby's own seat row is now tap-to-edit (✎): fix your name right where it's wrong, Enter to save. The rename re-tracks presence with the original join order preserved, so every lobby at the table updates live, and signed-in players' edits sync to their profile through the existing path. The profile sheet's name field remains, but nobody has to find it mid-party anymore.
+- Field lesson from the four-friends table: identity editing belongs at the point of need, not behind a settings door.
+
+**Tests** — npm run check green: 58/58, wire 14/14, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.7.5 — 2026-07-10
 The faded lobby — an entrance animation that dressed the whole page in the sheet scrim.
 

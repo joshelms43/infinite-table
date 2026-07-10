@@ -2539,8 +2539,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=075"></script>
-<script src="../shared/identity.js?v=075"></script>
+<script src="../shared/config.js?v=076"></script>
+<script src="../shared/identity.js?v=076"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2778,7 +2778,8 @@ const NET = {
     const code = this.makeCode();
     if(!(await this.connect(code, true))) return;
     this.mode = 'lobby-host';
-    this.tx.track({ key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:true, joined:Date.now() });
+    this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:true, joined:Date.now() };
+    this.tx.track(this._meta);
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
     $('#lobbycode').textContent = code;
     this.renderLobby();
@@ -2795,7 +2796,8 @@ const NET = {
     if(!(await this.connect(code, false))) return;
     this.mode = 'joining';
     this.tx.send('hello', { key:this.pkey });
-    this.tx.track({ key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:false, joined:Date.now() });
+    this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:false, joined:Date.now() };
+    this.tx.track(this._meta);
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
     $('#lobbycode').textContent = code;
     const st=$('#lobbystart'); if(st&&st.style) st.style.display='none';
@@ -2858,10 +2860,34 @@ const NET = {
   tableSeats(){
     return [...this.lobbySeats(), ...this.bots].slice(0,4);
   },
+  renameSeat(){
+    const span = $('#myseatname'); if(!span || span.innerHTML===undefined) return;
+    const cur = this.myName || 'Player';
+    span.innerHTML = `<input class="nameedit" maxlength="12" value="${cur}">`;
+    const inp = span.querySelector && span.querySelector('input');
+    if(!inp) return;
+    inp.focus(); inp.select && inp.select();
+    const commit = ()=>{
+      const v = (inp.value||'').trim().slice(0,12) || cur;
+      this.myName = v;
+      try{ localStorage.setItem('it_name', v); }catch(e){}
+      try{ if(typeof ID!=='undefined') ID.saveName(v); }catch(e){}
+      if(this._meta){ this._meta.name = v; this.tx.track(this._meta); }
+      this.renderLobby();
+    };
+    inp.addEventListener('blur', commit);
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter') inp.blur(); });
+  },
   renderLobby(){
     const el = $('#lobbyseats'); if(!el || !this.tx) return;
     const seats = this.tableSeats();
-    el.innerHTML = seats.map((mm,i)=>`<div class="lobbyseat"><span class="avatar" style="background:${mm.isAI?'var(--felt-highlight)':(i===0?'var(--money-gold)':'var(--felt-highlight)')}">${mm.isAI?'☺':(mm.name||'?')[0]}</span><span style="flex:1;text-align:left">${mm.name}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>${mm.isAI&&this.mode==='lobby-host'?`<button class="frremove" onclick="NET.removeBot('${mm.key}')">✕</button>`:''}</div>`).join('')
+    el.innerHTML = seats.map((mm,i)=>{
+      const mine = !mm.isAI && mm.key===this.pkey;
+      const nameCell = mine
+        ? `<span id="myseatname" style="flex:1;text-align:left" onclick="NET.renameSeat()">${mm.name} <span style="opacity:.35;font-size:11px">✎</span>${mm.host?' · host':''}</span>`
+        : `<span style="flex:1;text-align:left">${mm.name}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
+      return `<div class="lobbyseat"><span class="avatar" style="background:${mm.isAI?'var(--felt-highlight)':(i===0?'var(--money-gold)':'var(--felt-highlight)')}">${mm.isAI?'☺':(mm.name||'?')[0]}</span>${nameCell}${mm.isAI&&this.mode==='lobby-host'?`<button class="frremove" onclick="NET.removeBot('${mm.key}')">✕</button>`:''}</div>`;
+    }).join('')
       + (seats.length<2 ? '<div class="sub" style="opacity:.5">Share the code</div>' : '');
     const ab = $('#addbot'); if(ab && ab.style) ab.style.display = (this.mode==='lobby-host' && seats.length<4) ? '' : 'none';
     const st = $('#lobbystart'); if(st && this.mode==='lobby-host') st.disabled = seats.length<2;
