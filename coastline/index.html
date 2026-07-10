@@ -337,6 +337,14 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 .snapped{animation:snapin .28s cubic-bezier(.2,1.4,.4,1)}
 @keyframes snapin{35%{transform:scale(1.06)}}
+.tcard.twild{touch-action:none}
+.wildfly{
+  position:fixed;z-index:90;width:68px;pointer-events:none;
+  transform:rotate(-4deg) scale(1.06);
+  filter:drop-shadow(0 10px 18px rgba(8,12,10,.5));
+}
+.wildfly .card{width:68px;height:104px}
+.setgroup.dropready{outline:2px solid var(--money-gold);outline-offset:3px;border-radius:14px}
 .setghost{
   flex:0 0 102px;width:102px;height:150px;border:2px dashed rgba(217,160,63,.5);
   border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
@@ -1190,7 +1198,7 @@ function renderAll(){
   updatePile(false);
   $('#turnbadge').textContent = G.over ? 'Game over' : (isMyTurn()? 'Your turn' : cur().name+"'s turn");
   const p = me();
-  let boardOpts = null, boardTap = color=>`onclick="viewSet('${color}')"`;
+  let boardOpts = { wildDrag: isMyTurn() && !G.over }, boardTap = color=>`onclick="viewSet('${color}')"`;
   if(MODE.type==='pay'){ boardTap = ()=>''; boardOpts = { sel:MODE.sel, cardPick:(c)=>`payToggle(${c.id})` }; }
   else if(MODE.type==='minepick'){ boardTap = ()=>''; boardOpts = { dimComplete:true, cardPick:(c,color,done)=> done?null:`minePick(${c.id})` }; }
   $('#myprops').innerHTML = Object.entries(p.props).map(([color,cards])=>
@@ -1354,7 +1362,8 @@ function setStackHTML(p, color, cards, tapAttr, opts){
     <div class="tstack" style="height:${h}px">${cards.map((c,i)=>{
       const pick = (!dim && opts.cardPick) ? opts.cardPick(c, color, done) : null;
       const sel = opts.sel && opts.sel.has(c.id);
-      return `<div class="tcard ${pick?'pickable':''} ${sel?'paysel':''}" style="top:${i*28}px;z-index:${i+1}" ${pick?`onclick="event.stopPropagation();${pick}"`:''}>${staticCardHTML(c, c.t!=='prop'?color:null)}</div>`;
+      const draggable = opts.wildDrag && c.t!=='prop' && !done;
+      return `<div class="tcard ${pick?'pickable':''} ${sel?'paysel':''} ${draggable?'twild':''}" style="top:${i*28}px;z-index:${i+1}" ${draggable?`data-cid="${c.id}" data-from="${color}" onpointerdown="wildDragDown(event,${c.id},'${color}')"`:''} ${pick?`onclick="event.stopPropagation();${pick}"`:''}>${staticCardHTML(c, c.t!=='prop'?color:null)}</div>`;
     }).join('')}</div>
     <div class="tsetfoot"><span class="setdot" style="background:${COLORS[color].hex}"></span>${done?'<span style="color:var(--money-gold)">✓ complete</span>':cards.length+'/'+COLORS[color].size}
       ${p.bldg[color]?`<span class="bldg-tags">${p.bldg[color].granny?'<span class="bldg-tag">FLAT</span>':''}${p.bldg[color].resort?'<span class="bldg-tag">RESORT</span>':''}</span>`:''}
@@ -1380,9 +1389,8 @@ function faceHTML(c, assignedColor){
       const col=COLORS[assignedColor];
       const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
       return `${coin}<div class="band bandsplit">${col.label}</div>
-        <div class="body"><div class="cname">Wild</div></div>
-        <div class="ladder">${ladder}</div>
-        <div class="wildnote">★ ${a.label} / ${b.label} wild</div>`;
+        <div class="propfield"></div>
+        <div class="ladder">${ladder}</div>`;
     }
     return `${coin}<div class="band bandsplit">Wild</div>
       <div class="body">
@@ -1393,9 +1401,10 @@ function faceHTML(c, assignedColor){
   if(c.t==='wildall'){
     if(assignedColor){
       const col=COLORS[assignedColor];
+      const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
       return `${coin}<div class="band">${col.label}</div>
-        <div class="body"><div class="cname">Rainbow Wild</div></div>
-        <div class="wildnote">★ any-colour wild · no cash value</div>`;
+        <div class="propfield"></div>
+        <div class="ladder">${ladder}</div>`;
     }
     return `${coin}<div class="band">Wild</div>
       <div class="body"><div class="cname">Rainbow Wild</div>
@@ -2110,7 +2119,11 @@ function openOptions(c){
   if(c.t==='wild'){
     c.colors.forEach(col=>opts.push({label:'Play as '+COLORS[col].label,hint:'',fn:()=>playProp(c,col),disabled:noPlays}));
   }
-  if(c.t==='wildall') play('Play as any colour','pick a colour',()=>pickColor(Object.keys(COLORS),col=>playProp(c,col)));
+  if(c.t==='wildall'){
+    const occ = Object.keys(COLORS).filter(col=>(me().props[col]||[]).length);
+    if(occ.length) play('Play as any colour','joins an existing set',()=>pickColor(occ,col=>playProp(c,col)));
+    else opts.push({label:'Rainbow Wild', hint:"can't start a set — play a property first", fn:null, disabled:true});
+  }
   if(c.t==='action'){
     const k=c.kind;
     if(k==='payday') play('Play — draw 2','',()=>playPayday(c));
@@ -2160,6 +2173,10 @@ function removeHandOf(p,c){ const i=p.hand.findIndex(x=>x.id===c.id); if(i>-1) p
 function playProp(c,color,by){
   if(NET.intercept('prop',{id:c.id,color})) return;
   const b=(by==null?MYSEAT:by), p=G.players[b];
+  if(c.t==='wildall' && !((p.props[color]||[]).length)){
+    if(b===MYSEAT) banner("RAINBOWS CAN'T START A SET",'var(--warning-amber)');
+    return;
+  }
   removeHandOf(p,c); addProp(p,c,color);
   log(nameOf(b)+' played '+cardName(c)+' ('+COLORS[color].label+').');
   NET.evt(b,c);
@@ -2175,20 +2192,100 @@ function placeBldg(c,color,slot,by){
   NET.evt(b,c);
   usePlay(); sfx('good'); closeSheet();
 }
+function canMoveWildFrom(p,color){
+  const b = p.bldg[color];
+  return !(b && (b.granny || b.resort));
+}
+function wildTargets(p, c, fromColor){
+  const pool = c.t==='wild' ? c.colors : Object.keys(COLORS);
+  return pool.filter(col=>{
+    if(col===fromColor) return false;
+    if(c.t==='wildall' && !((p.props[col]||[]).length)) return false;   // rainbows never sit alone
+    return true;
+  });
+}
+function moveWildTo(id, toColor, by){
+  if(NET.intercept('rewild',{id,to:toColor})) return;
+  const b=(by==null?MYSEAT:by), p=G.players[b];
+  const entry = propList(p).find(x=>x.card.id===id);
+  if(!entry || entry.card.t==='prop') return;
+  const c = entry.card;
+  if(!canMoveWildFrom(p, entry.color)){
+    if(b===MYSEAT) banner('BUILDINGS LOCK WILDS','var(--warning-amber)');
+    return;
+  }
+  if(c.t==='wild' && !c.colors.includes(toColor)) return;
+  if(c.t==='wildall' && toColor!==entry.color && !((p.props[toColor]||[]).length)){
+    if(b===MYSEAT) banner("RAINBOWS CAN'T SIT ALONE",'var(--warning-amber)');
+    return;
+  }
+  removeProp(p,c); addProp(p,c,toColor);   // push: rejoining lands at the bottom
+  loseBuildingsIfBroken(p, entry.color);
+  log(nameOf(b)+' moved a wild to '+COLORS[toColor].label+'.');
+  sfx('tick'); checkAllWin(); renderAll();
+}
+let WDRAG = null;
+function wildDragDown(ev, id, fromColor){
+  if(!isMyTurn() || netBusy() || MODE.type || SELECT.active || POVIDX!=null) return;
+  if(!canMoveWildFrom(me(), fromColor)) return;   // locked sets don't even start a drag
+  ev.stopPropagation();
+  WDRAG = { id, fromColor, sx:ev.clientX, sy:ev.clientY, live:false, el:null, targets:[] };
+  window.addEventListener('pointermove', wildDragMove);
+  window.addEventListener('pointerup', wildDragUp, { once:true });
+}
+function wildDragMove(ev){
+  if(!WDRAG) return;
+  const dx = ev.clientX-WDRAG.sx, dy = ev.clientY-WDRAG.sy;
+  if(!WDRAG.live){
+    if(Math.hypot(dx,dy) < 10) return;
+    WDRAG.live = true;
+    // visual pop: the card leaves its set the moment the drag is real
+    const src = document.querySelector(`.tcard[data-cid="${WDRAG.id}"]`);
+    if(src && src.style) src.style.visibility = 'hidden';
+    const entry = propList(me()).find(x=>x.card.id===WDRAG.id);
+    const valid = entry ? wildTargets(me(), entry.card, null).filter(c=>c!==null) : [];
+    WDRAG.valid = new Set(valid);
+    document.querySelectorAll('#myprops .setgroup').forEach(g=>{
+      const col = g.getAttribute && g.getAttribute('data-color');
+      if(col && WDRAG.valid.has(col) && g.classList) g.classList.add('dropready');
+    });
+    const fly = document.createElement('div');
+    fly.className = 'wildfly';
+    fly.innerHTML = entry ? staticCardHTML(entry.card, null) : '';
+    document.body.appendChild(fly);
+    WDRAG.el = fly;
+    sfx('tick'); haptic(6);
+  }
+  if(WDRAG.el && WDRAG.el.style){
+    WDRAG.el.style.left = (ev.clientX-34)+'px';
+    WDRAG.el.style.top = (ev.clientY-52)+'px';
+  }
+}
+function wildDragUp(ev){
+  window.removeEventListener('pointermove', wildDragMove);
+  const d = WDRAG; WDRAG = null;
+  if(!d) return;
+  if(d.el && d.el.remove) d.el.remove();
+  document.querySelectorAll('.dropready').forEach(g=>g.classList.remove('dropready'));
+  if(!d.live){ return; }   // it was a tap; viewSet's own handlers take it
+  let target = null;
+  try{
+    const under = document.elementFromPoint(ev.clientX, ev.clientY);
+    const grp = under && under.closest && under.closest('#myprops .setgroup');
+    if(grp) target = grp.getAttribute('data-color');
+  }catch(e){}
+  if(target && d.valid && d.valid.has(target)) moveWildTo(d.id, target);
+  else renderAll();   // cancel: the hidden card reappears where it was
+}
 function reassignWild(id){
-  if(!isMyTurn()) return;
+  if(!isMyTurn() || netBusy()) return;
   const p=me();
   const entry = propList(p).find(x=>x.card.id===id);
   if(!entry) return;
-  const c = entry.card;
-  const choices = (c.t==='wild'? c.colors : Object.keys(COLORS)).filter(col=>col!==entry.color);
-  pickColor(choices, col=>{
-    removeProp(p,c); addProp(p,c,col);
-    loseBuildingsIfBroken(p,entry.color);
-    log('You moved a wild to '+COLORS[col].label+'.');
-    sfx('tick');
-    checkAllWin(); renderAll(); closeSheet();
-  }, 'Move wild card (free)');
+  if(!canMoveWildFrom(p, entry.color)){ banner('BUILDINGS LOCK WILDS','var(--warning-amber)'); return; }
+  const choices = wildTargets(p, entry.card, entry.color);
+  if(!choices.length){ banner('NOWHERE TO MOVE IT','var(--warning-amber)'); return; }
+  pickColor(choices, col=>{ moveWildTo(id, col); closeSheet(); }, 'Move wild card (free)');
 }
 function pickColor(colors, cb, title){
   openSheet(`<h3>${title||'Pick a colour'}</h3><div class="colorpickrow">${colors.map(col=>`<button class="colorpick" style="background:${COLORS[col].hex}" onclick="window._colcb('${col}')">${COLORS[col].label.slice(0,4)}</button>`).join('')}</div>
@@ -2565,8 +2662,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=083"></script>
-<script src="../shared/identity.js?v=083"></script>
+<script src="../shared/config.js?v=084"></script>
+<script src="../shared/identity.js?v=084"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2636,6 +2733,7 @@ const NET = {
     const findHand = id => p.hand.find(c=>c.id===id);
     this.applying = true;
     try{
+      if(k==='rewild'){ this.applying=true; try{ moveWildTo(a.id, a.to, seat); } finally { this.applying=false; } renderAll(); return; }
       const c = a.id!=null ? findHand(a.id) : null;
       if(k==='endturn') endTurn();
       else if(!c) {}
@@ -2649,6 +2747,7 @@ const NET = {
       else if(k==='swipe') execSwipe(c, a.t, a.cid, seat);
       else if(k==='takeover') execTakeoverD(c, a.t, a.color, seat);
       else if(k==='swap') execSwapFinal(c, a.t, a.cid, a.mid, seat);
+      else if(k==='rewild') moveWildTo(a.id, a.to, seat);
     } finally {
       this.applying = false;
     }
@@ -3034,7 +3133,7 @@ function aiPlayVis(card){
 }
 function othersOf(idx){ return G.players.map((_,i)=>i).filter(i=>i!==idx); }
 function aiWildColor(p,c){
-  const choices = c.t==='wild' ? c.colors : Object.keys(COLORS);
+  const choices = c.t==='wild' ? c.colors : Object.keys(COLORS).filter(col=>(p.props[col]||[]).length);
   let best=null,score=-1;
   for(const col of choices){
     const n=countIn(p,col), size=COLORS[col].size;

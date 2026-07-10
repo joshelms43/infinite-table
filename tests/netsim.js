@@ -128,5 +128,16 @@ const bankBefore = host.__B.G.players[1].bank.length;
 client.__B.NET.tx.send('intent', { seat: 1, k: 'bank', a: { id: (client.__B.G.players[1].hand[0] || {}).id } });
 T('out-of-turn intents are dropped by the host', host.__B.G.players[1].bank.length === bankBefore);
 
+/* a client moves its own wild over the wire */
+const dual = dk.find(c => c.t === 'wild');
+const wcA = dual.colors[0], wcB = dual.colors[1];
+const anchorProp = dk.find(c => c.t === 'prop' && c.color === wcA);
+host.addProp(host.__B.G.players[1], anchorProp, wcA);
+host.addProp(host.__B.G.players[1], dual, wcA);
+host.__B.G.turn = 1; host.__B.NET.pushState();
+client.moveWildTo(dual.id, wcB);
+T('client rewild intent moves the wild on the host', (host.__B.G.players[1].props[wcB] || []).some(c => c.id === dual.id));
+T('rewild state converges', pub(client) === pub(host));
+
 console.log(fails === 0 ? 'NETSIM: ALL PASS' : 'NETSIM FAILURES: ' + fails);
 process.exit(fails === 0 ? 0 : 1);

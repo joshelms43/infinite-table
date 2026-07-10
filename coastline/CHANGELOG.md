@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.8.4 — 2026-07-11
+Wilds grow up: draggable, lawful, and dressed like the properties they're pretending to be.
+
+**Faces** — the wildnote footers are gone from both wild types. An assigned wild now renders exactly like a property of its colour — band, breathing room, rent ladder — with the band itself carrying the tell: the 50/50 split on duals, the flowing rainbow on Rainbow Wilds. The header tells you what's obvious; nothing else repeats it.
+
+**Drag to move** — wilds sitting in your sets are now draggable on your turn: past ten pixels the card visually pops out of its set, floats under your finger, and every legal destination outlines in gold. Drop to commit; anywhere else cancels it home. Because a move is remove-then-push, dragging a wild out and back into the same set lands it at the bottom — as specified. Complete sets and building-locked sets never start a drag.
+
+**Rules** — two new laws, engine-enforced and host-validated: a set with a Granny Flat or Beach Resort locks its wilds in place (BUILDINGS LOCK WILDS), and Rainbow Wilds can never be alone — they can't start a set from hand (the Options menu explains why instead of offering it) and can't move into an empty colour. The AI obeys both.
+
+**Online correctness** — the old sheet-based reassign mutated local state with no intercept: a client "moving" a wild was quietly desyncing from the table. Wild movement is now a first-class executor (moveWildTo) behind a rewild intent — host-validated, turn-checked, free as before. Pinned in the wire test: a client moves its wild through the host and both sides converge.
+
+**Tests** — npm run check green: engine 62/62 (four new rule assertions), wire 16/16, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.8.3 — 2026-07-10
 The rainbow lives, the duals speak swatch.
 

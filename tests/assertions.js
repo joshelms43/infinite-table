@@ -244,6 +244,32 @@ NET.applyState(JSON.parse(JSON.stringify(st2)));
 T('applyState mirrors host logs on clients', logs[0]==='host wrote this' && !logs.includes('client-local line'));
 NET.mode='off'; MYSEAT=savedSeat2;
 
+
+// ===== wild movement rules =====
+newGame();
+const dkw = buildDeck();
+const dual = dkw.find(c=>c.t==='wild' && c.colors.includes('teal'));
+const rain = dkw.find(c=>c.t==='wildall');
+const tprop = dkw.find(c=>c.t==='prop' && c.color==='teal');
+const oprop = dkw.find(c=>c.t==='prop' && c.color===dual.colors.find(x=>x!=='teal'));
+G.turn=0; G.playsLeft=3; G.over=false; MYSEAT=0;
+addProp(me(), tprop, 'teal'); addProp(me(), dual, 'teal'); addProp(me(), oprop, dual.colors.find(x=>x!=='teal'));
+const other = dual.colors.find(x=>x!=='teal');
+me().bldg['teal'] = { granny:{id:99001,t:'action',kind:'granny',v:3} };
+moveWildTo(dual.id, other);
+T('buildings lock wilds in place', (me().props['teal']||[]).some(c=>c.id===dual.id));
+me().bldg['teal'] = null;
+moveWildTo(dual.id, other);
+const dest = me().props[other]||[];
+T('unlocked wild moves and lands at the bottom', dest.length===2 && dest[1].id===dual.id);
+const handN2 = (me().hand=[rain], me().hand.length);
+playProp(rain, 'sage');
+T("rainbows can't start a set", me().hand.length===handN2 && !(me().props['sage']||[]).length);
+addProp(me(), dkw.find(c=>c.t==='prop'&&c.color==='sage'), 'sage');
+playProp(rain, 'sage');
+T('rainbows join occupied sets', (me().props['sage']||[]).some(c=>c.id===rain.id));
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);
