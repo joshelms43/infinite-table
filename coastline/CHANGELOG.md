@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.6.4 — 2026-07-10
+Remote players can double their rent — the last decision that discriminated by seat.
+
+- v0.3.x boundary closed: when a remote player plays rent while holding a Rent Hike, the host now routes a hike ask through the standard decision protocol instead of silently charging base rent. The remote player gets the identical Rent Hike sheet the host would see; their choice threads back into execRent with the hike card spent only if used.
+- Asserted end-to-end with genuine deck cards: the ask registers and transmits, and the reply resolves the full payment chain (the first draft of the assertion fabricated a card kind that doesn't exist and crashed cardName — real cards only in tests from now on).
+- With this, every mid-turn decision — pay, No Deal, discard, hike — reaches whichever human owns it, wherever they sit.
+
+**Tests** — 52/52, flows 12/12, drop matrix 38/38.
+
 ## v0.6.3 — 2026-07-10
 Bots at online tables.
 

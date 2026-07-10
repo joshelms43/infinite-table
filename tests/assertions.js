@@ -187,6 +187,28 @@ T('online roster seats bots as AI players', G.players.length===3 && G.players[1]
 T('serialize carries isAI so clients render bots', NET.serialize().players[1].isAI===true);
 NET.mode='off'; NET.tx=null; NET.roster=null; MYSEAT=0;
 
+
+// ===== remote Double-Rent ask =====
+newGame();
+NET.mode='host'; NET.pendingAsks={};
+const hbox=[]; NET.tx={ send:(t,p)=>hbox.push({t,p}) };
+NET.roster=[{key:'h',name:'Host'},{key:'r',name:'Remote'},{key:'x',name:'Other'}];
+G.players[1].isAI=false; G.players[2].isAI=true;
+G.turn=1; G.playsLeft=3; G.over=false;
+const dk=buildDeck();
+const rentC=dk.find(c=>c.t==='rent'&&c.colors);
+const hikeC=dk.find(c=>c.t==='action'&&c.kind==='hike');
+const rcol=rentC.colors[0];
+const propC=dk.find(c=>c.t==='prop'&&c.color===rcol);
+G.players[1].hand=[rentC,hikeC];
+addProp(G.players[1],propC,rcol);
+G.players[2].bank=[dk.find(c=>c.t==='money'&&c.v===5)];
+doRent(rentC,rcol,2,1);
+T('remote rent with hike in hand becomes an ask', hbox.some(m=>m.t==='ask' && m.p.ask && m.p.ask.type==='hike') && !!NET.pendingAsks[1]);
+NET.applyIntent({seat:1,k:'reply',a:{rt:'hike',use:false}});
+T('hike reply resolves the chain and rent is paid', !NET.pendingAsks[1] && bankTotal(G.players[1])>0);
+NET.mode='off'; NET.tx=null; NET.roster=null; NET.pendingAsks={};
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

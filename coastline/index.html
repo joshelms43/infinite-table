@@ -2382,6 +2382,12 @@ function doRent(c,color,targetIdx,by){
   const actor = G.players[b];
   const base = rentFor(actor,color);
   const hikeCard = actor.hand.find(x=>x.t==='action'&&x.kind==='hike');
+  if(hikeCard && G.playsLeft>=2 && b!==MYSEAT && NET.mode==='host' && !G.players[b].isAI){
+    NET.ask(b, { type:'hike', base, color }, m=>{
+      execRent(c, color, targetIdx, (m && m.use) ? hikeCard : null, base, b);
+    });
+    return;
+  }
   if(hikeCard && G.playsLeft>=2 && b===MYSEAT){
     const who = targetIdx!=null ? G.players[targetIdx].name+' pays' : 'everyone pays';
     openSheet(`<h3>Rent Hike?</h3><div class="sub">You hold a Rent Hike — double this to $${base*2}M (${who}). Costs one extra play.</div>
@@ -2472,8 +2478,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=063"></script>
-<script src="../shared/identity.js?v=063"></script>
+<script src="../shared/config.js?v=064"></script>
+<script src="../shared/identity.js?v=064"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2626,6 +2632,13 @@ const NET = {
         const a = m.ask;
         if(a.type==='pay') visDefer(()=>enterPayMode(a.amount, a.recv, ()=>{}));
         if(a.type==='discard'){ MODE.type='discard'; MODE.need=a.need; MODE.sel=new Set(); sfx('alert'); renderAll(); updateDiscardHUD(); }
+        if(a.type==='hike'){
+          openSheet(`<h3>Rent Hike?</h3><div class="sub">Double this rent to $${a.base*2}M — costs one extra play.</div>
+            <div class="optlist">
+              <button class="optbtn primary" onclick="NET.reply('hike',{use:true});closeSheet()">Charge $${a.base*2}M</button>
+              <button class="optbtn" onclick="NET.reply('hike',{use:false});closeSheet()">Just $${a.base}M</button>
+            </div>`, true);
+        }
         if(a.type==='jsn'){
           sfx('alert'); haptic([10,50,10]);
           const nds = me().hand.filter(x=>x.t==='action'&&x.kind==='nodeal').length;
