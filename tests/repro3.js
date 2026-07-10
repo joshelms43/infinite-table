@@ -1,7 +1,13 @@
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const errors = [];
-const dom = new JSDOM(fs.readFileSync(require('path').join(__dirname,'..','coastline','index.html'),'utf8'), { runScripts:'dangerously', pretendToBeVisual:true, url:'https://localhost/' });
+let html = fs.readFileSync(require('path').join(__dirname,'..','coastline','index.html'),'utf8');
+const _p = require('path'), _f = require('fs');
+const _shared = n => _f.readFileSync(_p.join(__dirname,'..','shared',n),'utf8');
+html = html
+  .replace('<script src="../shared/config.js"></script>', '<scr'+'ipt>window.SUPABASE_URL="";window.SUPABASE_ANON="";</scr'+'ipt>')
+  .replace('<script src="../shared/identity.js"></script>', '<scr'+'ipt>'+_shared('identity.js')+'</scr'+'ipt>');
+const dom = new JSDOM(html, { runScripts:'dangerously', pretendToBeVisual:true, url:'https://localhost/' });
 const win = dom.window;
 win.addEventListener('error', e => errors.push((e.message||'?')+':'+(e.lineno||'?')));
 const sleep = ms => new Promise(r=>setTimeout(r,ms));

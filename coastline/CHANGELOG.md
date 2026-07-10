@@ -1,5 +1,22 @@
 # Coastline — Changelog
 
+## v0.5.0 — 2026-07-09
+Identity becomes platform infrastructure. First deliberate multi-file split.
+
+**Shared modules (new top-level /shared)**
+- shared/config.js — Supabase keys, single source of truth for every page.
+- shared/identity.js — the entire ID module (accounts, username+password login, profile sheet, friends, invites, stats, Elo) extracted and decoupled: NET is now optional, so any page can host it by providing a handful of UI primitives.
+
+**The lobby is the front door now**
+- infinite-table's root page gains the profile chip under its header and the full profile sheet — log in, edit your name, see Elo/W-L, manage friends, all before ever entering a game. The lobby implements a minimal adapter (sheet, toast) on the same token system.
+- Cross-page invites: inviting from the lobby deep-links your friend through ./coastline/?join=CODE; the invite button itself routes through ?invite=FRIEND, which auto-hosts a room and fires the invite on arrival. Coastline reads both params at boot.
+
+**Coastline** — inline keys and identity removed in favour of the shared modules (with headless-safe fallbacks); everything else unchanged.
+
+**Harnesses** — test suite and both jsdom harnesses now inline the shared module (external script tags don't execute headless); one more self-inflicted repro-path mangling caught and rebuilt by hand.
+
+**Tests** — 44/44, flows 12/12, drop matrix 38/38, all from the repo.
+
 ## v0.4.5 — 2026-07-09
 Username + password accounts (no email, ever) — plus the dead profile tap, root-caused.
 

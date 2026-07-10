@@ -56,6 +56,67 @@ main{width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px}
 }
 .game.soon:active{transform:none}
 footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity:.3}
+
+/* ---- identity chrome (shared module renders into these) ---- */
+button{font-family:inherit;border:none;cursor:pointer;background:none;color:inherit;-webkit-tap-highlight-color:transparent}
+#profmini{
+  display:inline-flex;align-items:center;gap:8px;margin:18px auto 0;
+  font-size:12.5px;font-weight:800;color:var(--text-ivory);opacity:.65;
+  background:rgba(255,255,255,.05);border:1px solid var(--line-soft);border-radius:20px;padding:8px 16px;
+}
+#profmini:active{transform:scale(.96)}
+.avatar{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:10px}
+#profmini .minelo{color:var(--money-gold)}
+#overlay{position:fixed;inset:0;background:rgba(12,17,14,.78);backdrop-filter:blur(2px);display:flex;align-items:flex-end;justify-content:center;z-index:50;opacity:0;pointer-events:none;transition:opacity .18s ease}
+#overlay.show{opacity:1;pointer-events:auto}
+#sheet{
+  width:min(440px,100%);max-height:82dvh;overflow-y:auto;background:linear-gradient(180deg,#29392F,#121A16 50%);
+  border-radius:22px 22px 0 0;border:1px solid rgba(242,238,226,.13);border-bottom:none;
+  padding:20px 18px calc(20px + env(safe-area-inset-bottom));color:var(--text-ivory);
+  transform:translateY(52px);transition:transform .24s cubic-bezier(.2,1,.3,1);
+}
+#overlay.show #sheet{transform:none}
+#sheet h3{font-family:'Lilita One',cursive;font-size:20px;margin-bottom:4px}
+.sub{font-size:12px;font-weight:700;opacity:.6;line-height:1.45}
+.zone-label{font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;opacity:.42;margin:10px 0 6px}
+.optbtn{width:100%;font-family:'Lilita One',cursive;font-size:15px;color:var(--text-ivory);background:rgba(255,255,255,.07);border:1px solid rgba(242,238,226,.13);border-radius:12px;padding:13px;margin-top:6px}
+.namefield{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(242,238,226,.13);border-radius:12px;color:var(--text-ivory);font-family:'Nunito Sans',sans-serif;font-weight:800;font-size:15px;padding:11px 13px;outline:none;margin-top:4px}
+.sheetstat{display:flex;gap:10px;margin:10px 0 4px}
+.sheetstat .stat{flex:1;background:rgba(255,255,255,.05);border-radius:12px;padding:10px 4px;text-align:center}
+.sheetstat .stat b{font-family:'Lilita One',cursive;font-size:20px;display:block;color:var(--money-gold)}
+.sheetstat .stat span{font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;opacity:.45}
+.coderow{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.04);border-radius:12px;padding:10px 13px;margin-top:8px;font-size:12px;font-weight:700;opacity:.85}
+.fcode{letter-spacing:1.5px;color:var(--money-gold);cursor:pointer}
+.friendrow{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:12px;padding:8px 10px;font-weight:800;font-size:13px;margin-top:6px}
+.frname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frelo{font-size:11px;color:var(--money-gold)}
+.frinvite{font-family:'Lilita One',cursive;font-size:11.5px;color:#fff;background:linear-gradient(180deg,var(--primary-coral),var(--primary-coral-dark, #BC4F37));border-radius:9px;padding:6px 12px}
+.frremove{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.08);color:rgba(242,238,226,.55);font-size:11px}
+.joinrow{display:flex;gap:8px;align-items:stretch}
+.homerow{display:flex;gap:10px}
+.homerow .homebtn{flex:1}
+.homebtn{font-family:'Lilita One',cursive;font-size:14px;color:var(--text-ivory);background:rgba(255,255,255,.07);border:1px solid rgba(242,238,226,.13);border-radius:12px;padding:12px}
+.onlinebox{background:rgba(255,255,255,.04);border-radius:14px;padding:12px}
+.disclosure{display:flex;align-items:center;gap:8px;width:100%;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--text-ivory);opacity:.55;padding:8px 4px 2px}
+.disclosure .chev{margin-left:auto;transition:transform .2s}
+.disclosure.open .chev{transform:rotate(180deg)}
+.reveal{display:none}
+.reveal.open{display:block}
+.profsub{font-size:11px;font-weight:700;opacity:.55}
+.itbanner{
+  position:fixed;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:80;
+  font-family:'Lilita One',cursive;font-size:15px;color:var(--card-ivory);background:rgba(18,26,22,.94);
+  border:1px solid rgba(242,238,226,.2);border-radius:14px;padding:10px 20px;box-shadow:0 8px 22px rgba(8,12,10,.5);
+  animation:itbin .25s ease;
+}
+@keyframes itbin{from{opacity:0;transform:translateX(-50%) translateY(-8px)}}
+.invitetoast{
+  position:fixed;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+  z-index:96;display:flex;align-items:center;gap:12px;max-width:92vw;
+  background:#29392F;border:1px solid rgba(242,238,226,.13);border-radius:14px;padding:11px 14px;
+  font-size:13px;font-weight:700;box-shadow:0 8px 22px rgba(8,12,10,.5);
+}
+.invitetoast button{font-family:'Lilita One',cursive;font-size:13px;color:var(--table-night);background:linear-gradient(180deg,#E3C588,var(--money-gold));border-radius:10px;padding:7px 16px}
 </style>
 </head>
 <body>
@@ -63,6 +124,7 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
 <header>
   <div class="logo"><span class="inf">INFINITE</span> TABLE</div>
   <div class="tag">Pull up a chair</div>
+  <button id="profmini"></button>
 </header>
 
 <main>
@@ -88,6 +150,31 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
 </main>
 
 <footer>Infinite Table</footer>
+
+<div id="overlay" onclick="if(event.target===this){ID.sheetOpen=false;closeSheet()}"><div id="sheet"></div></div>
+
+<script src="./shared/config.js"></script>
+<script src="./shared/identity.js"></script>
+<script>
+/* ---- minimal host-page adapter for the shared identity module ---- */
+function $(q){ return document.querySelector(q); }
+function openSheet(html){ $('#sheet').innerHTML = html; $('#overlay').classList.add('show'); }
+function closeSheet(){ $('#overlay').classList.remove('show'); }
+function banner(text){
+  const b = document.createElement('div'); b.className='itbanner'; b.textContent=text;
+  document.body.appendChild(b); setTimeout(()=>b.remove(), 2200);
+}
+function sfx(){} function haptic(v){ try{ if(navigator.vibrate) navigator.vibrate(v); }catch(e){} }
+function toggleReveal(id){
+  const el = document.getElementById(id); if(!el) return;
+  el.classList.toggle('open');
+  const btn = document.querySelector(`[onclick="toggleReveal('${id}')"]`);
+  if(btn) btn.classList.toggle('open', el.classList.contains('open'));
+}
+document.getElementById('profmini').onclick = ()=> ID.openProfile();
+ID.renderProfile();
+if(window.SUPABASE_URL) setTimeout(()=>ID.init(), 300);
+</script>
 
 </body>
 </html>
