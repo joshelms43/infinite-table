@@ -95,8 +95,9 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 #opponents{display:flex;gap:8px;padding:4px 16px 8px}
 #opponents .opp{min-width:0}
 .opp-top{min-width:0}
+.opp-id{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.25}
 .opp-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.opp-meta{white-space:nowrap;flex-shrink:0}
+.opp-meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;opacity:.6}
 .tidebar{overflow:hidden}
 .opp{transition:box-shadow .3s ease, opacity .3s ease;
   flex:1;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.1)), var(--table-deep);
@@ -788,6 +789,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div id="homelobby" style="display:none">
       <div class="sub" style="letter-spacing:1px">ROOM CODE</div>
       <div id="lobbycode" class="lobbycode" onclick="shareCode()"></div>
+      <input id="lobbyname" class="namefield" maxlength="12" placeholder="Your name" autocomplete="off" onchange="NET.commitRename(this.value)" style="text-align:center">
       <div id="lobbyseats"></div>
       <button id="addbot" class="homebtn" style="display:none" onclick="NET.addBot()">Add a Bot</button>
       <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start Game</button>
@@ -1228,8 +1230,10 @@ function oppPanelHTML(idx, clickable){
   return `<div class="opp ${G.turn===idx?'active':''}${awayCls}" data-idx="${idx}" ${clickable?`onclick="oppTapped(${idx})"`:''}>
     <div class="opp-top">
       <span class="avatar" style="background:${av}">${label[0]}</span>
-      <span class="opp-name">${label}</span>
-      <span class="opp-meta">${p.hand.length} cards · $${bankTotal(p)}M</span>
+      <span class="opp-id">
+        <span class="opp-name">${label}</span>
+        <span class="opp-meta">${p.hand.length} cards · $${bankTotal(p)}M</span>
+      </span>
     </div>
     <div class="tidebar">${sets||'<span class="emptynote">no properties yet</span>'}</div>
   </div>`;
@@ -2546,8 +2550,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=077"></script>
-<script src="../shared/identity.js?v=077"></script>
+<script src="../shared/config.js?v=078"></script>
+<script src="../shared/identity.js?v=078"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2785,10 +2789,11 @@ const NET = {
     const code = this.makeCode();
     if(!(await this.connect(code, true))) return;
     this.mode = 'lobby-host';
-    this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:true, joined:Date.now() };
+    this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:true, joined:Date.now(), rev:0 };
     this.tx.track(this._meta);
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
     $('#lobbycode').textContent = code;
+    const ln=$('#lobbyname'); if(ln && ln.value!==undefined) ln.value = this.myName || '';
     this.renderLobby();
   },
   async joinGame(btn){
@@ -2803,10 +2808,11 @@ const NET = {
     if(!(await this.connect(code, false))) return;
     this.mode = 'joining';
     this.tx.send('hello', { key:this.pkey });
-    this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:false, joined:Date.now() };
+    this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:false, joined:Date.now(), rev:0 };
     this.tx.track(this._meta);
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
     $('#lobbycode').textContent = code;
+    const ln2=$('#lobbyname'); if(ln2 && ln2.value!==undefined) ln2.value = this.myName || '';
     const st=$('#lobbystart'); if(st&&st.style) st.style.display='none';
     $('#lobbywait').textContent = 'Waiting for the host…';
     this.renderLobby();
@@ -2846,8 +2852,13 @@ const NET = {
   },
   lobbySeats(){
     const pres = this.tx ? this.tx.presence() : {};
-    const list = [];
-    Object.values(pres).forEach(arr=>arr.forEach(mm=>list.push(mm)));
+    const byKey = {};
+    Object.values(pres).forEach(arr=>arr.forEach(mm=>{
+      if(!mm || !mm.key) return;
+      const cur = byKey[mm.key];
+      if(!cur || (mm.rev||0) > (cur.rev||0)) byKey[mm.key] = mm;   // renames replace, never duplicate
+    }));
+    const list = Object.values(byKey);
     list.sort((a,b)=>((b.host?1:0)-(a.host?1:0)) || (a.joined-b.joined));
     return list.slice(0,4);
   },
@@ -2867,32 +2878,25 @@ const NET = {
   tableSeats(){
     return [...this.lobbySeats(), ...this.bots].slice(0,4);
   },
-  renameSeat(){
-    const span = $('#myseatname'); if(!span || span.innerHTML===undefined) return;
-    const cur = this.myName || 'Player';
-    span.innerHTML = `<input class="nameedit" maxlength="12" value="${cur}">`;
-    const inp = span.querySelector && span.querySelector('input');
-    if(!inp) return;
-    inp.focus(); inp.select && inp.select();
-    const commit = ()=>{
-      const v = (inp.value||'').trim().slice(0,12) || cur;
-      this.myName = v;
-      try{ localStorage.setItem('it_name', v); }catch(e){}
-      try{ if(typeof ID!=='undefined') ID.saveName(v); }catch(e){}
-      if(this._meta){ this._meta.name = v; this.tx.track(this._meta); }
-      this.renderLobby();
-    };
-    inp.addEventListener('blur', commit);
-    inp.addEventListener('keydown', e=>{ if(e.key==='Enter') inp.blur(); });
+  commitRename(v){
+    v = (v||'').trim().slice(0,12) || this.myName || 'Player';
+    this.myName = v;
+    try{ localStorage.setItem('it_name', v); }catch(e){}
+    try{ if(typeof ID!=='undefined') ID.saveName(v); }catch(e){}
+    if(this._meta && this.tx){
+      this._meta.name = v;
+      this._meta.rev = (this._meta.rev||0) + 1;
+      this.tx.track(this._meta);
+    }
+    const ln = $('#lobbyname'); if(ln && ln.value!==undefined) ln.value = v;
+    this.renderLobby();
   },
   renderLobby(){
     const el = $('#lobbyseats'); if(!el || !this.tx) return;
     const seats = this.tableSeats();
     el.innerHTML = seats.map((mm,i)=>{
       const mine = !mm.isAI && mm.key===this.pkey;
-      const nameCell = mine
-        ? `<span id="myseatname" style="flex:1;text-align:left" onclick="NET.renameSeat()">${mm.name} <span style="opacity:.35;font-size:11px">✎</span>${mm.host?' · host':''}</span>`
-        : `<span style="flex:1;text-align:left">${mm.name}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
+      const nameCell = `<span style="flex:1;text-align:left">${mm.name}${mine?' · you':''}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
       return `<div class="lobbyseat"><span class="avatar" style="background:${mm.isAI?'var(--felt-highlight)':(i===0?'var(--money-gold)':'var(--felt-highlight)')}">${mm.isAI?'☺':(mm.name||'?')[0]}</span>${nameCell}${mm.isAI&&this.mode==='lobby-host'?`<button class="frremove" onclick="NET.removeBot('${mm.key}')">✕</button>`:''}</div>`;
     }).join('')
       + (seats.length<2 ? '<div class="sub" style="opacity:.5">Share the code</div>' : '');

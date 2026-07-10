@@ -1,6 +1,7 @@
 # Coastline — Changelog
 
 ## v0.7.8 — 2026-07-10
+*(Correction: this entry was pushed one commit before its code — a patch-script abort failed to halt the pipeline. set -e is now mandatory on every compound command; the code landed in the following commit.)*
 Lobby renames done right, panels that fit small phones with four players.
 
 - **Rename ghosts** — renaming re-tracked presence and a duplicate player appeared while the original stayed. Fixed transport-agnostically: presence metas carry a revision, renames bump it, and the lobby dedupes by key keeping the highest revision — whatever the transport does with re-tracks, ghosts collapse.
