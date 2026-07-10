@@ -181,6 +181,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .cardw{flex:0 0 102px;width:102px;position:relative;touch-action:pan-x;transition:transform .26s cubic-bezier(.34,1.56,.64,1)}
 .cardw.pressed{z-index:40!important}
 .cardw.pressed .card{
+  box-shadow:inset 0 0 0 1px rgba(36,36,29,.07);
   transform:scale(.955) translateY(2px);
   box-shadow:0 1px 4px rgba(8,12,10,.45);
   transition:transform .07s ease, box-shadow .07s ease;
@@ -205,10 +206,10 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 .card.static{cursor:default}
 .card .band{
-  height:27px;flex:0 0 27px;display:flex;align-items:center;justify-content:center;
-  font-size:9.5px;font-weight:800;color:#fff;letter-spacing:.9px;text-transform:uppercase;
-  text-shadow:0 1px 2px rgba(0,0,0,.45);padding:0 5px;text-align:center;
-  box-shadow:inset 0 -3px 4px rgba(0,0,0,.18);
+  height:30px;flex:0 0 30px;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:800;color:#fff;letter-spacing:1.3px;text-transform:uppercase;
+  text-shadow:0 1px 2px rgba(0,0,0,.4);padding:0 6px;text-align:center;
+  box-shadow:inset 0 -3px 5px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.22);
 }
 .card .body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 7px;text-align:center;gap:3px}
 .card .cname{font-weight:800;font-size:11.5px;line-height:1.18}
@@ -220,8 +221,17 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
   border-radius:9px;padding:1.5px 5px;border:1px solid rgba(96,70,20,.4);
   box-shadow:0 1px 2px rgba(0,0,0,.3);
 }
-.ladder{padding:0 10px 8px;display:flex;flex-direction:column;gap:2.5px}
-.rrow{display:flex;justify-content:space-between;font-size:8.6px;font-weight:700;color:var(--ink-soft)}
+.ladder{padding:0 11px 9px;display:flex;flex-direction:column}
+.rrow{display:flex;justify-content:space-between;align-items:baseline;font-size:9px;font-weight:700;color:var(--ink-soft);padding:2.5px 0}
+.rrow + .rrow{border-top:1px solid rgba(36,36,29,.08)}
+.propfield{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+.propdot{width:36px;height:36px;border-radius:50%;opacity:.16;box-shadow:inset 0 0 0 3px rgba(36,36,29,.2)}
+.amedal{
+  width:26px;height:26px;border-radius:50%;margin:0 auto 5px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--ink);color:var(--card-ivory);
+  font-family:'Lilita One',cursive;font-size:13px;
+}
 .rrow b{color:var(--ink)}
 .rrow .star{color:var(--gold-deep)}
 .card.moneycard .mband{
@@ -818,15 +828,15 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <script>
 /* ================= ENGINE ================= */
 const COLORS = {
-  gold:  {label:'Gold',   hex:'#E8B93B', size:2, rent:[3,8]},
+  gold:  {label:'Yellow', hex:'#E8C63B', ink:'#24241D', size:2, rent:[3,8]},
   teal:  {label:'Teal',   hex:'#1FA8A0', size:3, rent:[2,4,7]},
-  coral: {label:'Coral',  hex:'#F26D5B', size:3, rent:[2,3,6]},
-  green: {label:'Green',  hex:'#3F9142', size:2, rent:[2,5]},
-  purple:{label:'Purple', hex:'#8E5EA8', size:3, rent:[1,2,4]},
+  coral: {label:'Red',    hex:'#C8433A', size:3, rent:[2,3,6]},
+  green: {label:'Blue',   hex:'#2E5EAA', size:2, rent:[2,5]},
+  purple:{label:'Pink',   hex:'#DE559C', size:3, rent:[1,2,4]},
   orange:{label:'Orange', hex:'#F08A24', size:3, rent:[1,3,5]},
   brown: {label:'Brown',  hex:'#8A5A38', size:2, rent:[1,2]},
-  sky:   {label:'Sky',    hex:'#5BB7E0', size:3, rent:[1,2,4]},
-  sage:  {label:'Sage',   hex:'#7C9A5C', size:3, rent:[1,3,5]},
+  sky:   {label:'Cyan',   hex:'#4FC3E8', ink:'#24241D', size:3, rent:[1,2,4]},
+  sage:  {label:'Green',  hex:'#3F9142', size:3, rent:[1,3,5]},
   black: {label:'Black',  hex:'#2B2F33', size:4, rent:[1,2,3,5]},
 };
 function rainbowBand(seed){
@@ -841,17 +851,17 @@ function rainbowBand(seed){
   return 'linear-gradient(90deg,'+hues.map((h,i)=>`${h} ${i*step}%,${h} ${(i+1)*step}%`).join(',')+')';
 }
 const PROPS = [
-  ['gold','Honey',4],['gold','Brass',4],
-  ['teal','Lagoon',3],['teal','Aqua',3],['teal','Marine',3],
-  ['coral','Salmon',3],['coral','Blush',3],['coral','Ember',3],
-  ['green','Emerald',3],['green','Jade',3],
-  ['purple','Violet',2],['purple','Amethyst',2],['purple','Plum',2],
-  ['orange','Amber',2],['orange','Tangerine',2],['orange','Marigold',2],
-  ['brown','Umber',1],['brown','Sepia',1],
-  ['sky','Powder',2],['sky','Ice',2],['sky','Azure',2],
-  ['sage','Fern',2],['sage','Moss',2],['sage','Olive',2],
-  ['black','Onyx',2],['black','Charcoal',2],
-  ['black','Slate',2],['black','Jet',2],
+  ['gold','',4],['gold','',4],
+  ['teal','',3],['teal','',3],['teal','',3],
+  ['coral','',3],['coral','',3],['coral','',3],
+  ['green','',3],['green','',3],
+  ['purple','',2],['purple','',2],['purple','',2],
+  ['orange','',2],['orange','',2],['orange','',2],
+  ['brown','',1],['brown','',1],
+  ['sky','',2],['sky','',2],['sky','',2],
+  ['sage','',2],['sage','',2],['sage','',2],
+  ['black','',2],['black','',2],
+  ['black','',2],['black','',2],
 ];
 const ACTIONS = {
   takeover:{n:'Hostile Takeover', d:'Steal a complete set from any player', v:5, c:2},
@@ -888,9 +898,9 @@ function buildDeck(){
 }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function cardName(c){
-  if(c.t==='prop') return c.name;
+  if(c.t==='prop') return COLORS[c.color].label+' property';
   if(c.t==='wild') return COLORS[c.colors[0]].label+' / '+COLORS[c.colors[1]].label;
-  if(c.t==='wildall') return 'Coastal Wild';
+  if(c.t==='wildall') return 'Rainbow Wild';
   if(c.t==='money') return '$'+c.v+'M';
   if(c.t==='action') return ACTIONS[c.kind].n;
   if(c.t==='rent') return 'Rent: '+COLORS[c.colors[0]].label+' / '+COLORS[c.colors[1]].label;
@@ -1369,8 +1379,8 @@ function faceHTML(c, assignedColor){
   if(c.t==='prop'){
     const col=COLORS[c.color];
     const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
-    return `${coin}<div class="band" style="background:${col.hex}">${col.label}</div>
-      <div class="body"><div class="cname">${c.name}</div></div>
+    return `${coin}<div class="band" style="background:${col.hex};${col.ink?`color:${col.ink};text-shadow:none;`:''}">${col.label}</div>
+      <div class="propfield"><span class="propdot" style="background:${col.hex}"></span></div>
       <div class="ladder">${ladder}</div>`;
   }
   if(c.t==='wild'){
@@ -1403,7 +1413,7 @@ function faceHTML(c, assignedColor){
   if(c.t==='action'){
     const a=ACTIONS[c.kind];
     return `${coin}<div class="band">Action</div>
-      <div class="body"><div class="cname">${a.n}</div>
+      <div class="body"><div class="amedal">${a.n[0]}</div><div class="cname">${a.n}</div>
       <div class="cdesc">${a.d}</div></div>`;
   }
   if(c.t==='rent'){
@@ -2564,8 +2574,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=080"></script>
-<script src="../shared/identity.js?v=080"></script>
+<script src="../shared/config.js?v=081"></script>
+<script src="../shared/identity.js?v=081"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

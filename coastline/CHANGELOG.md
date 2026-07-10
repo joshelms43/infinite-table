@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.8.1 — 2026-07-10
+The classic palette, nameless properties, and a card production pass.
+
+**Palette** — sets are Brown, Pink, Orange, Red, Yellow, Green, Blue, Black, Teal, Cyan. Every label landed on a natural key (the 2-set premium is Blue, the 4-set is Black), hexes retuned to match, and the two light bands (Yellow, Cyan) switch to dark ink automatically — no white-on-lemon.
+
+**Properties have no names** — the colour is the card: band, a quiet oversized colour medallion in the middle, rent ladder. Logs and titles say "Teal property". Engine, deck maths and all five suites untouched by construction.
+
+**The production pass** — a printed hairline inside every card edge; taller bands with a top highlight and tighter letterspacing; ladder rows separated by hairlines with baseline-aligned numerals; action cards get an ink medallion bearing their initial; wild/rent split bands inherit it all.
+
+**Tests** — npm run check green across all five stages.
+
 *(This file chronicles the game now called **M Deal** — renamed at v0.8.0; earlier entries use its original name.)*
 
 ## v0.8.0 — 2026-07-10
