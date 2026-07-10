@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.6.8 — 2026-07-10
+Test infrastructure hardening.
+
+- The drop matrix always exited 0 — even with errors — so it could green-light any automated gate it was part of. It now exits nonzero on any error.
+- npm run check: all three suites (engine, flows, drop matrix) in one command, each gating the next. This is the pre-ship gate from now on.
+- Audited the reduced-motion path while in here: the blanket CSS rule already exists and flyCard cleans up on timers rather than transitionend, so motion-sensitive users get instant-snap behaviour with no stuck elements — no changes needed.
+
+**Tests** — npm run check: 53/53, 12/12, 38/38.
+
 ## v0.6.7 — 2026-07-10
 Sound preference persists across sessions (muted stays muted; the button reflects the saved state on load).
 

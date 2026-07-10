@@ -90,5 +90,5 @@ const sleep = ms => new Promise(r=>setTimeout(r,ms));
     }
   }
   console.log('TOTAL errors:', errors.length);
-  process.exit(0);
+  process.exit(errors.length > 0 ? 1 : 0);
 })();
