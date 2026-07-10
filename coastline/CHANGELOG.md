@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.8.7 — 2026-07-11
+The No Deal actually lights up now.
+
+- Pay mode dimmed the whole hand at the container (opacity + pointer-events:none), which no child rule can override — so the blockable No Deal was dark and dead despite the drag plumbing underneath. When a block is armed, dimming is now per-card: everything sleeps except the No Deal, lit at full brightness and draggable. A lit card in a dark hand is its own instruction.
+- The "or drag No Deal!" HUD subtitle is gone, per the house rule about subtitles.
+
+**Tests** — npm run check green.
+
 ## v0.8.6 — 2026-07-11
 No Deal is a card again: drag it, don't dialog it.
 

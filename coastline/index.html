@@ -438,6 +438,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 @keyframes notein{from{transform:translateY(10px) scale(.6);opacity:0}}
 .cardw.paysel .card{outline:3px solid var(--warning-amber)}
 #handwrap.dimmed{opacity:.35;pointer-events:none}
+#handwrap.dimsoft .cardw{opacity:.35;pointer-events:none}
+#handwrap.dimsoft .cardw.blockable{opacity:1;pointer-events:auto}
 
 @keyframes appin{from{opacity:0}}
 
@@ -1208,7 +1210,11 @@ function renderAll(){
   $('#mybank').innerHTML = p.bank.map((c,i)=>`<span class="note ${c.t!=='money'?'notealt':''} ${payMode&&MODE.sel.has(c.id)?'paysel':''}" title="${cardName(c)}" style="z-index:${i+1};${i>0?'margin-left:-14px;':''}" ${payMode?`onclick="payToggle(${c.id})"`:''}><b>$${c.v}M</b></span>`).join('')
     + `<span class="banktotal" style="margin-left:10px">$${bankTotal(p)}M</span>`;
   const hw = $('#handwrap');
-  if(hw && hw.classList) hw.classList.toggle('dimmed', MODE.type==='pay' || MODE.type==='minepick');
+  if(hw && hw.classList){
+    const armed = MODE.type==='pay' && !!MODE.jsn;
+    hw.classList.toggle('dimmed', (MODE.type==='pay' && !armed) || MODE.type==='minepick');
+    hw.classList.toggle('dimsoft', armed);
+  }
   const bt = bankTotal(p);
   if(typeof PREVBANK==='number' && PREVBANK>=0 && bt!==PREVBANK){
     const el = document.querySelector('#mybank .banktotal');
@@ -1269,7 +1275,8 @@ function renderHand(p){
   const stag = INITDEAL ? 95 : 70;
   const browser = hand && typeof hand.children === 'object';
   if(!browser){ // headless test fallback
-    $('#hand').innerHTML = p.hand.map(c=>`<div class="cardw" data-cid="${c.id}">${handCardHTML(c)}</div>`).join('');
+    const armedND = MODE.type==='pay' && !!MODE.jsn;
+    $('#hand').innerHTML = p.hand.map(c=>`<div class="cardw${armedND && c.t==='action' && c.kind==='nodeal' ? ' blockable' : ''}" data-cid="${c.id}">${handCardHTML(c)}</div>`).join('');
     NEWIDS.clear();
     return;
   }
@@ -1500,7 +1507,7 @@ function updatePayHUD(){
   const enough = tot>=amount;
   if(enough && !MODE.wasEnough){ sfx('good'); haptic(8); }
   MODE.wasEnough = enough;
-  hudShow(`Pay ${r.name} — $${tot}M of $${amount}M${tot>amount?' · no change':''}${MODE.jsn?' · or drag No Deal! onto the pile':''}`,
+  hudShow(`Pay ${r.name} — $${tot}M of $${amount}M${tot>amount?' · no change':''}`,
     { meter:{val:tot,max:amount}, auto:true, go:{label:'Pay', disabled:!enough} });
 }
 function payAutoM(){
@@ -2731,8 +2738,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=086"></script>
-<script src="../shared/identity.js?v=086"></script>
+<script src="../shared/config.js?v=087"></script>
+<script src="../shared/identity.js?v=087"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
