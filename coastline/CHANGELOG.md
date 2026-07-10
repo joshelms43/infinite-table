@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.7.2 — 2026-07-10
+The wire soak. The protocol's proof deepens from one rally to whole seasons.
+
+- tests/netsoak.js: eight random games per run between two live instances over the bus — the host plays a property-hungry random strategy (rents, favours, banking), the client plays by real intents (props, paydays, banking), and every ask that reaches the client is answered like a compliant human (greedy payments, first-n discards, coin-flip hikes). After every single turn, two hard invariants: public state must be byte-identical on both sides, and all 106 physical cards must exist exactly once on the host — no dupes, no leaks, ever.
+- First run: 1,281 turns, zero divergence, zero leaks — and two games ran start-to-victory entirely over the wire, win overlay and all. Three further randomized runs green (1,000–1,600 turns each). Four seconds per run, so it slots into npm run check as stage three of five.
+- Between netsim (scripted precision) and netsoak (random breadth), the multiplayer protocol now has the same two-pillar test structure the solo engine has had since v0.2.x.
+
+**Tests** — npm run check green: 58/58, wire 13/13, soak 16/16 (~1,200 turns), flows 12/12, drop matrix 38/38.
+
 ## v0.7.1 — 2026-07-10
 The wire test — and the hardening it immediately earned.
 
