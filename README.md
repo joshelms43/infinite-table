@@ -8,7 +8,7 @@ The lobby is the front door; games live in subfolders. Add to Home Screen for th
 
 | Game | Status | Players |
 |---|---|---|
-| [Coastline](./coastline/) — Deal-style property scramble, Sunshine Coast theme | Live | Solo vs AI, or 2–4 online (bots can fill seats) |
+| [M Deal](./coastline/) — Deal-style property scramble | Live | Solo vs AI, or 2–4 online (bots can fill seats) |
 
 ## Structure
 
@@ -17,7 +17,7 @@ index.html              — lobby (front door, profile chip)
 manifest.webmanifest    — PWA manifest + generated icon set
 shared/config.js        — Supabase keys (single source of truth)
 shared/identity.js      — accounts, friends, invites, stats, Elo (page-agnostic)
-coastline/index.html    — the game (engine + UI + NET, single file by design)
+coastline/index.html    — M Deal (path unchanged for link stability) (engine + UI + NET, single file by design)
 coastline/CHANGELOG.md  — every version, every root cause
 supabase/schema.sql     — full backend: run once in the Supabase SQL editor
 tests/                  — three suites (see below)

@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+*(This file chronicles the game now called **M Deal** — renamed at v0.8.0; earlier entries use its original name.)*
+
+## v0.8.0 — 2026-07-10
+Coastline becomes M Deal. The theme becomes the colours themselves.
+
+**The rename** — wordmark, home logo, page title, OG tags, share sheet, lobby tile and README all read M Deal. The URL path (/coastline/) is deliberately unchanged so every existing join link, rejoin entry and PWA install keeps working; the internal account domain likewise stays as invisible plumbing (zero accounts exist yet, nothing to migrate). Tagline: "The property scramble."
+
+**Colour-identity reskin** — sets are named by their colour (Gold, Teal, Coral, Green, Purple, Orange, Brown, Sky, Sage, Black) and the 28 properties are shades of their set: Honey and Brass; Lagoon, Aqua, Marine; Salmon, Blush, Ember; Emerald, Jade; Violet, Amethyst, Plum; Amber, Tangerine, Marigold; Umber, Sepia; Powder, Ice, Azure; Fern, Moss, Olive; Onyx, Charcoal, Slate, Jet. Keys, sizes, rents and values untouched — the engine and every test see the same deck.
+
+**Wilds** — dual wilds now keep their 50/50 two-colour band even while assigned (the band names what it's counting as; the split says what it is). The rainbow wilds are Rainbow Wilds: all ten set colours across the top in an order seeded from the card's id — each of the two has its own random arrangement, stable across renders.
+
+**Tests** — npm run check green: 58/58, wire 14/14, soak, flows 12/12, drop matrix 38/38 (deck identity by keys, unaffected by the reskin — as designed).
+
 ## v0.7.9 — 2026-07-10
 The name row finds its place.
 
