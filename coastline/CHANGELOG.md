@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.5.2 — 2026-07-09
+Identity diagnostics — the silent "offline" becomes a named failure.
+
+- init() previously swallowed every failure into a mute offline state. Each step now reports itself: config, anonymous sign-in, profile read, profile create, re-read — surfacing the actual Supabase error as a red banner, in the console, and inside the profile sheet ("Last attempt — anonymous sign-in: Anonymous sign-ins are disabled"), with a Connect retry button.
+- Script includes are now version-busted (?v=052) on both pages so cached module + fresh page can never desync again (the cause of the ghost error this morning).
+- Likeliest culprits the diagnostics will name: anonymous provider toggle, or a v1→v2 policy remnant blocking the profile insert/read.
+
+**Tests** — 44/44, flows 12/12.
+
 ## v0.5.1 — 2026-07-09
 Hotfix: identity crashed on both pages ("this.myName_ is not a function").
 

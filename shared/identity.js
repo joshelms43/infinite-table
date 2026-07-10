@@ -22,24 +22,38 @@ const ID = {
 
   makeFriendCode(){ const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c=''; for(let i=0;i<6;i++) c+=A[Math.floor(Math.random()*A.length)]; return c; },
 
+  fail(step, err){
+    this.lastError = step + ': ' + ((err && (err.message||err.error_description)) || String(err||'unknown'));
+    try{ console.error('[identity]', this.lastError, err); }catch(e){}
+    try{ banner(('PROFILE — '+this.lastError).toUpperCase().slice(0,60), 'var(--danger-red)'); }catch(e){}
+    this.renderProfile();
+    if(this.sheetOpen) this.renderProfileSheet();
+  },
   async init(){
     try{
-      const sb = await this.ensureSB(); if(!sb) return;
-      let { data:{ session } } = await sb.auth.getSession();
+      const sb = await this.ensureSB();
+      if(!sb){ this.fail('config', 'no supabase keys'); return; }
+      let sess = await sb.auth.getSession();
+      let session = sess && sess.data && sess.data.session;
       if(!session){
         const r = await sb.auth.signInAnonymously();
+        if(r.error){ this.fail('anonymous sign-in', r.error); return; }
         session = r.data && r.data.session;
       }
-      if(session && session.user) this.user = session.user;
-      if(!session) { this.renderProfile(); return; }
+      if(!session){ this.fail('auth', 'no session'); return; }
       this.user = session.user;
-      let { data: prof } = await sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
+      const sel = await sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
+      if(sel.error){ this.fail('profile read', sel.error); return; }
+      let prof = sel.data;
       if(!prof){
         const name = (this.myName_() || 'Player').slice(0,12);
-        await sb.from('profiles').insert({ id:this.user.id, name, friend_code:this.makeFriendCode() });
+        const ins = await sb.from('profiles').insert({ id:this.user.id, name, friend_code:this.makeFriendCode() });
+        if(ins.error){ this.fail('profile create', ins.error); return; }
         const r2 = await sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
+        if(r2.error){ this.fail('profile re-read', r2.error); return; }
         prof = r2.data;
       }
+      if(!prof){ this.fail('profile', 'row missing after create'); return; }
       if(prof){
         const { data: code } = await sb.rpc('my_friend_code');
         prof.friend_code = code || '——————';
@@ -50,7 +64,8 @@ const ID = {
       this.renderProfile();
       this.loadFriends();
       this.listenInvites();
-    }catch(e){ this.renderProfile(); }
+      this.lastError = null;
+    }catch(e){ this.fail('unexpected', e); }
   },
 
   async saveName(name){
@@ -103,7 +118,8 @@ const ID = {
         <div class="stat"><b>${p.wins}</b><span>Wins</span></div>
         <div class="stat"><b>${Math.max(0,p.games-p.wins)}</b><span>Losses</span></div>
       </div>
-      <div class="coderow"><span>Friend code</span><b class="fcode" onclick="ID.copyCode()">${p.friend_code}</b></div>` : `<div class="sub" style="margin:8px 0">Playing offline — stats and friends connect automatically when online.</div>`;
+      <div class="coderow"><span>Friend code</span><b class="fcode" onclick="ID.copyCode()">${p.friend_code}</b></div>` : `<div class="sub" style="margin:8px 0">Playing offline — stats and friends connect automatically when online.${this.lastError?`<br><span style="color:var(--danger-red)">Last attempt — ${this.lastError}</span>`:''}</div>
+      <button class="homebtn" style="width:100%;margin-top:6px" onclick="ID.init()">Connect</button>`;
     const friendsBlock = p ? `<div class="zone-label" style="margin-top:14px">Friends</div>
       <div id="friendlist">${this._friendRows()}</div>
       <div class="joinrow" style="margin-top:8px">
