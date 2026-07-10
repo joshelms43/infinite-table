@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.7.7 — 2026-07-10
+Four players fit on one screen. Also: the away-dimming that never was.
+
+**The sideways swipe** — three opponent panels (a 4-player table) overflowed the viewport and inflated the whole page, leaving blank margin to swipe into. Root cause: the panels are flex:1, but flexbox's default min-width:auto refuses to shrink an item below its content, so names and set chips propped the row open. Fixed with min-width:0 down the chain — names ellipsize, chip strips clip — so three panels always compress to fit; and html/body are now hard-locked against horizontal expansion, so no future element can ever push the page sideways again.
+
+**Found while reading the markup** — the v0.6.9 away-state class was inserted onto the wrong element by an index-based patch: it landed on the building chip (breaking its class when a player dropped) instead of the panel wrapper (so the away-dimming CSS never actually applied). Both corrected: panels genuinely dim with "· away" now, and building icons survive disconnects. Index-based patching is hereby beneath this project's standards — anchors only.
+
+**Tests** — npm run check green: 58/58, wire 14/14, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.7.6 — 2026-07-10
 Your name, where you actually see it.
 

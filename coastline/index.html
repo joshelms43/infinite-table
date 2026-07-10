@@ -63,7 +63,9 @@
   --r:12px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{
+html,html{overflow-x:hidden}
+body{
+  overflow-x:hidden;max-width:100vw;
   font-variant-numeric:tabular-nums;height:100%}
 body{
   animation:appin .35s ease;
@@ -91,6 +93,11 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 /* ---------- opponents ---------- */
 #opponents{display:flex;gap:8px;padding:4px 16px 8px}
+#opponents .opp{min-width:0}
+.opp-top{min-width:0}
+.opp-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.opp-meta{white-space:nowrap;flex-shrink:0}
+.tidebar{overflow:hidden}
 .opp{transition:box-shadow .3s ease, opacity .3s ease;
   flex:1;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.1)), var(--table-deep);
   border:1px solid var(--line-soft);border-radius:14px;padding:9px 10px 8px;
@@ -1216,9 +1223,9 @@ function oppPanelHTML(idx, clickable){
   const awayCls = away ? ' away' : '';
   const sets = Object.entries(p.props).map(([color,cards])=>{
     const done = isComplete(p,color);
-    return `<span class="chipset" title="${COLORS[color].label} ${cards.length}/${COLORS[color].size}">${cards.map(()=>`<span class="chip ${done?'done-mark':''}" style="background:${COLORS[color].hex}"></span>`).join('')}${p.bldg[color]?`<span class="opp${awayCls}-bldg">${p.bldg[color].granny?'⌂':''}${p.bldg[color].resort?'✦':''}</span>`:''}</span>`;
+    return `<span class="chipset" title="${COLORS[color].label} ${cards.length}/${COLORS[color].size}">${cards.map(()=>`<span class="chip ${done?'done-mark':''}" style="background:${COLORS[color].hex}"></span>`).join('')}${p.bldg[color]?`<span class="opp-bldg">${p.bldg[color].granny?'⌂':''}${p.bldg[color].resort?'✦':''}</span>`:''}</span>`;
   }).join('');
-  return `<div class="opp ${G.turn===idx?'active':''}" data-idx="${idx}" ${clickable?`onclick="oppTapped(${idx})"`:''}>
+  return `<div class="opp ${G.turn===idx?'active':''}${awayCls}" data-idx="${idx}" ${clickable?`onclick="oppTapped(${idx})"`:''}>
     <div class="opp-top">
       <span class="avatar" style="background:${av}">${label[0]}</span>
       <span class="opp-name">${label}</span>
@@ -2539,8 +2546,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=076"></script>
-<script src="../shared/identity.js?v=076"></script>
+<script src="../shared/config.js?v=077"></script>
+<script src="../shared/identity.js?v=077"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
