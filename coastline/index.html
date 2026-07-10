@@ -427,18 +427,20 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 .homecard{position:relative;z-index:1}
 .backlink{z-index:1}
-#home .homecard>*{opacity:0;transform:translateY(12px);animation:homein .55s cubic-bezier(.2,.9,.3,1) forwards}
-#home .homecard>*:nth-child(1){animation-delay:.04s}
-#home .homecard>*:nth-child(2){animation-delay:.10s}
-#home .homecard>*:nth-child(3){animation-delay:.16s}
-#home .homecard>*:nth-child(4){animation-delay:.22s}
-#homemain>*{opacity:0;transform:translateY(10px);animation:homein .5s cubic-bezier(.2,.9,.3,1) forwards}
-#homemain>*:nth-child(1){animation-delay:.20s}
-#homemain>*:nth-child(2){animation-delay:.26s}
-#homemain>*:nth-child(3){animation-delay:.30s}
-#homemain>*:nth-child(4){animation-delay:.32s}
-#homemain>*:nth-child(5){animation-delay:.36s}
-#homemain>*:nth-child(6){animation-delay:.40s}
+@media (prefers-reduced-motion: no-preference){
+  #home .homecard>*{opacity:0;transform:translateY(12px);animation:homein .55s cubic-bezier(.2,.9,.3,1) forwards}
+  #home .homecard>*:nth-child(1){animation-delay:.04s}
+  #home .homecard>*:nth-child(2){animation-delay:.10s}
+  #home .homecard>*:nth-child(3){animation-delay:.16s}
+  #home .homecard>*:nth-child(4){animation-delay:.22s}
+  #homemain>*{opacity:0;transform:translateY(10px);animation:homein .5s cubic-bezier(.2,.9,.3,1) forwards}
+  #homemain>*:nth-child(1){animation-delay:.20s}
+  #homemain>*:nth-child(2){animation-delay:.26s}
+  #homemain>*:nth-child(3){animation-delay:.30s}
+  #homemain>*:nth-child(4){animation-delay:.32s}
+  #homemain>*:nth-child(5){animation-delay:.36s}
+  #homemain>*:nth-child(6){animation-delay:.40s}
+}
 @keyframes homein{to{opacity:1;transform:none}}
 .homebtn{position:relative;transition:transform .12s ease, filter .12s ease}
 .homebtn:active{transform:scale(.97);filter:brightness(1.08)}
@@ -2537,8 +2539,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=074"></script>
-<script src="../shared/identity.js?v=074"></script>
+<script src="../shared/config.js?v=075"></script>
+<script src="../shared/identity.js?v=075"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

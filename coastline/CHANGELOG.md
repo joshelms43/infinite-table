@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.7.5 — 2026-07-10
+The faded lobby — an entrance animation that dressed the whole page in the sheet scrim.
+
+- The lobby's v0.7.0 entrance selector (header ~ *) animated every sibling after the header — including the profile sheet's overlay scrim, whose fill-forwards animation locked it permanently visible: a dark blurred veil over the entire page. The scrim is now excluded and pinned.
+- The audit found worse hiding behind it: entrance styles start elements at opacity 0 and animate them in — but Coastline's blanket reduced-motion rule disables animations, which left prefers-reduced-motion users staring at an invisible home screen since v0.7.0. All entrance choreography on both pages now lives inside prefers-reduced-motion: no-preference, so the no-animation default is fully visible. The lesson, pinned for good: any animation that starts from invisible must be opt-in by media query, never opt-out.
+
+**Tests** — npm run check green: 58/58, wire 14/14, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.7.4 — 2026-07-10
 Registration actually works now — the no-email model meets Supabase's abuse filters.
 
