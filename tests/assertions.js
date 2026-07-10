@@ -270,6 +270,29 @@ playProp(rain, 'sage');
 T('rainbows join occupied sets', (me().props['sage']||[]).some(c=>c.id===rain.id));
 newGame();
 
+
+// ===== wilds in completed sets + rainbow ride-along =====
+newGame();
+const dkw2 = buildDeck();
+const dual2 = dkw2.find(c=>c.t==='wild' && c.colors.includes('teal'));
+const rain2 = dkw2.find(c=>c.t==='wildall');
+const other2 = dual2.colors.find(x=>x!=='teal');
+G.turn=0; G.playsLeft=3; G.over=false; MYSEAT=0;
+const tprops = dkw2.filter(c=>c.t==='prop'&&c.color==='teal').slice(0, COLORS.teal.size-1);
+tprops.forEach(c=>addProp(me(), c, 'teal'));
+addProp(me(), dual2, 'teal');
+T('setup: teal complete via wild', isComplete(me(),'teal'));
+moveWildTo(dual2.id, other2);
+T('wilds move out of completed sets (no building)', (me().props[other2]||[]).some(c=>c.id===dual2.id) && !isComplete(me(),'teal'));
+moveWildTo(dual2.id, 'teal');
+addProp(me(), dkw2.find(c=>c.t==='prop'&&c.color===other2), other2);
+me().props['teal'] = [dual2];
+addProp(me(), rain2, 'teal');
+moveWildTo(dual2.id, other2);
+const dst2 = me().props[other2]||[];
+T('rainbow rides along when its anchor moves', !((me().props['teal']||[]).length) && dst2.some(c=>c.id===rain2.id) && dst2.some(c=>c.id===dual2.id));
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

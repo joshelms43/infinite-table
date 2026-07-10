@@ -1362,7 +1362,7 @@ function setStackHTML(p, color, cards, tapAttr, opts){
     <div class="tstack" style="height:${h}px">${cards.map((c,i)=>{
       const pick = (!dim && opts.cardPick) ? opts.cardPick(c, color, done) : null;
       const sel = opts.sel && opts.sel.has(c.id);
-      const draggable = opts.wildDrag && c.t!=='prop' && !done;
+      const draggable = opts.wildDrag && c.t!=='prop';
       return `<div class="tcard ${pick?'pickable':''} ${sel?'paysel':''} ${draggable?'twild':''}" style="top:${i*28}px;z-index:${i+1}" ${draggable?`data-cid="${c.id}" data-from="${color}" onpointerdown="wildDragDown(event,${c.id},'${color}')"`:''} ${pick?`onclick="event.stopPropagation();${pick}"`:''}>${staticCardHTML(c, c.t!=='prop'?color:null)}</div>`;
     }).join('')}</div>
     <div class="tsetfoot"><span class="setdot" style="background:${COLORS[color].hex}"></span>${done?'<span style="color:var(--money-gold)">✓ complete</span>':cards.length+'/'+COLORS[color].size}
@@ -2220,6 +2220,11 @@ function moveWildTo(id, toColor, by){
     return;
   }
   removeProp(p,c); addProp(p,c,toColor);   // push: rejoining lands at the bottom
+  const left = p.props[entry.color]||[];
+  if(left.length && left.every(x=>x.t==='wildall')){
+    left.slice().forEach(r=>{ removeProp(p,r); addProp(p,r,toColor); });   // rainbows can't sit alone: they follow
+    log(nameOf(b)+"'s rainbow wild went along for the ride.");
+  }
   loseBuildingsIfBroken(p, entry.color);
   log(nameOf(b)+' moved a wild to '+COLORS[toColor].label+'.');
   sfx('tick'); checkAllWin(); renderAll();
@@ -2274,8 +2279,13 @@ function wildDragUp(ev){
     const grp = under && under.closest && under.closest('#myprops .setgroup');
     if(grp) target = grp.getAttribute('data-color');
   }catch(e){}
+  const entry = propList(me()).find(x=>x.card.id===d.id);
   if(target && d.valid && d.valid.has(target)) moveWildTo(d.id, target);
-  else renderAll();   // cancel: the hidden card reappears where it was
+  else if(!target && entry && entry.card.t==='wild'){
+    const other = entry.card.colors.find(x=>x!==d.fromColor);
+    moveWildTo(d.id, other);   // dragged off the table: the 50/50 flips
+  }
+  renderAll();   // whatever happened (move, refuse, cancel), nothing stays hidden
 }
 function reassignWild(id){
   if(!isMyTurn() || netBusy()) return;
@@ -2662,8 +2672,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=084"></script>
-<script src="../shared/identity.js?v=084"></script>
+<script src="../shared/config.js?v=085"></script>
+<script src="../shared/identity.js?v=085"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

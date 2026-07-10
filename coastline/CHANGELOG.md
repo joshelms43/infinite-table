@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.8.5 — 2026-07-11
+Drag refinements from live play: completed sets, ride-along rainbows, and the flip.
+
+- Wilds now drag out of completed sets (breaking your own set is legal; buildings still lock everything — asserted both ways).
+- The orphan exploit is closed the fun way: moving a wild that was anchoring rainbow wilds takes the rainbows with it — "went along for the ride" in the log. A set of only rainbows can no longer exist by construction.
+- A 50/50 wild dragged off the table entirely flips to its other colour — drag toward a set to aim it, drag into the void to flip it.
+- Safety fix found in review: a refused drop could leave the visually-popped card hidden (refusal paths didn't re-render). Every drag now ends in a render, whatever happened.
+- Known edge, on the ledger: a Sneaky Swipe stealing a rainbow's anchor could still orphan it. Different code path, noted for the next rules pass.
+
+**Tests** — npm run check green: engine 65/65, wire 16/16, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.8.4 — 2026-07-11
 Wilds grow up: drag them, and they follow the real rules.
 
