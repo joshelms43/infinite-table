@@ -17,5 +17,5 @@ global.DONE=function(){ console.log(fails===0?'ALL TESTS PASS':'FAILURES: '+fail
 const _P=require('path'),_F=require('fs');
 const identPath=_F.existsSync(_P.join(__dirname,'shared_identity.js'))?_P.join(__dirname,'shared_identity.js'):_P.join(__dirname,'..','shared','identity.js');
 const identCode=_F.readFileSync(identPath,'utf8');
-const testCode=fs.readFileSync('assertions.js','utf8');
+const testCode=fs.readFileSync(require('path').join(__dirname,'assertions.js'),'utf8');
 eval(gameCode + '\n' + identCode + '\n' + testCode);

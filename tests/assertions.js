@@ -201,6 +201,7 @@ const hikeC=dk.find(c=>c.t==='action'&&c.kind==='hike');
 const rcol=rentC.colors[0];
 const propC=dk.find(c=>c.t==='prop'&&c.color===rcol);
 G.players[1].hand=[rentC,hikeC];
+G.players[2].hand=[];   // deterministic: no No Deal in the target's hand, rent cannot be blocked
 addProp(G.players[1],propC,rcol);
 G.players[2].bank=[dk.find(c=>c.t==='money'&&c.v===5)];
 doRent(rentC,rcol,2,1);
