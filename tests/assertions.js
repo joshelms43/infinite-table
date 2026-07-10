@@ -162,6 +162,23 @@ NET.mode='off'; NET.tx=null; MYSEAT=0;
 T('elo: equal ratings -> +16', eloDelta(1000,1000)===16);
 T('elo: favourite beating underdog gains little', eloDelta(1400,1000)<8 && eloDelta(1000,1400)>24);
 
+
+// ===== resilience: rejoin + host-leave =====
+newGame();
+NET.mode='host'; NET.roster=[{key:'hk',name:'Host'},{key:'ck',name:'Client'}];
+const outbox=[]; NET.tx={ send:(t,p)=>outbox.push({t,p}) };
+NET.onMessage('hello', { key:'ck' });
+T('rejoin: host re-sends roster to a known key', outbox.some(m=>m.t==='start' && m.p.roster && m.p.roster.length===2));
+outbox.length=0;
+NET.onMessage('hello', { key:'stranger' });
+T('rejoin: unknown keys get state only, no roster', !outbox.some(m=>m.t==='start') && outbox.some(m=>m.t==='state'));
+NET.mode='client'; G.over=false;
+NET.onLeave([{ key:'hk' }]);
+T('host leaving ends the table for clients', G.over===true);
+G.over=false; NET.onLeave([{ key:'ck' }]);
+T('a non-host leaving does not end the table', G.over===false);
+NET.mode='off'; NET.tx=null; NET.roster=null;
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

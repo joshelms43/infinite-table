@@ -1,5 +1,15 @@
 # Coastline — Changelog
 
+## v0.6.2 — 2026-07-10
+Multiplayer resilience: reloads keep your seat, host departures speak.
+
+- Persistent seat identity: the presence key now lives in localStorage, so a refresh mid-game keeps who you are. On rejoining, the host recognises the returning key and re-sends the roster — you land back in your seat with current state (asserted: known keys get the roster back, strangers get state only).
+- The home screen offers "Rejoin CODE" whenever a room was joined within the last 30 minutes (cleared when a game ends).
+- Host departure is now a clear ending for clients — banner, prompt, table closed — instead of a silent hang; hosts get a disconnect banner when a client drops (asserted both ways).
+- Process note for the record: this patch silently failed to apply on first attempt — a diagnostic grep at the head of the command chain exited non-zero and short-circuited everything after it, while unrelated output made it look applied. The new assertions caught it immediately by failing against the unpatched file. Rule added to the drill: no diagnostic greps chained ahead of patches.
+
+**Tests** — 48/48, flows 12/12, drop matrix 38/38.
+
 ## v0.6.1 — 2026-07-09
 Navigation, honesty, and a subtitle cull.
 

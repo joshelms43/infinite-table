@@ -727,6 +727,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
       <button id="homeprimary" class="homebtn primary hero" onclick="closeHome()">Play Solo</button>
       <button id="homenew" class="textbtn" style="display:none" onclick="location.reload()">New game</button>
       <button class="homebtn" onclick="toggleReveal('onlinepanel')">Play Online</button>
+      <button id="rejoinbtn" class="homebtn" style="display:none"></button>
       <div id="onlinepanel" class="reveal">
         <div class="onlinebox">
           <button class="homebtn" style="width:100%" onclick="NET.hostGame()">Host a room</button>
@@ -1940,6 +1941,7 @@ function checkAllWin(){
   for(const p of G.players){
     if(checkWin(p)){
       G.over = true; renderAll();
+      if(NET.mode!=='off'){ try{ localStorage.removeItem('it_room'); }catch(e){} }
       if(NET.mode==='host' && typeof ID!=='undefined') ID.recordMatch(G.players.indexOf(p));
       $('#wintitle').textContent = p===me() ? 'You win' : p.name+' wins';
       $('#winsub').textContent = 'Three complete sets: ' + completeColors(p).map(c=>COLORS[c].label).join(', ');
@@ -2468,8 +2470,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=061"></script>
-<script src="../shared/identity.js?v=061"></script>
+<script src="../shared/config.js?v=062"></script>
+<script src="../shared/identity.js?v=062"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2578,6 +2580,7 @@ const NET = {
       hand: i===MYSEAT ? myHand : new Array(q.handN).fill(0).map((_,j)=>({ id:'h'+i+'_'+j, t:'money', v:0 })),
     }));
     const wasOver = G.over; G.over = st.over;
+    if(st.over){ try{ localStorage.removeItem('it_room'); }catch(e){} }
     if(this.lastTurn!==st.turn && !st.over){
       this.lastTurn = st.turn;
       banner(st.turn===this.seat ? 'YOUR TURN' : st.players[st.turn].name.toUpperCase()+"'S TURN", st.turn===this.seat ? 'var(--gold-money)' : null);
@@ -2602,7 +2605,12 @@ const NET = {
   onMessage(type, m){
     if(this.mode==='host'){
       if(type==='intent') this.applyIntent(m);
-      if(type==='hello') this.pushState();
+      if(type==='hello'){
+        if(m && m.key && this.roster && this.roster.some(r=>r.key===m.key)){
+          this.tx.send('start', { roster: this.roster });   // returning player: hand their seat back
+        }
+        this.pushState();
+      }
       return;
     }
     if(this.mode==='client'){
@@ -2643,7 +2651,12 @@ const NET = {
       await new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; sc.onload=res; sc.onerror=()=>rej(new Error('supabase cdn failed')); document.head.appendChild(sc); });
     }
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-    this.pkey = this.pkey || (Math.random().toString(36).slice(2,10));
+    if(!this.pkey){
+      let pk = null;
+      try{ pk = localStorage.getItem('it_pkey'); }catch(e){}
+      if(!pk){ pk = Math.random().toString(36).slice(2,10); try{ localStorage.setItem('it_pkey', pk); }catch(e){} }
+      this.pkey = pk;
+    }
     const ch = sb.channel('room-'+code, { config:{ broadcast:{ self:false }, presence:{ key: this.pkey } } });
     const self = this;
     this.tx = {
@@ -2655,6 +2668,7 @@ const NET = {
       ch.on('broadcast', { event:ev }, (msg)=>self.onMessage(ev, msg.payload));
     });
     ch.on('presence', { event:'sync' }, ()=>self.renderLobby());
+    ch.on('presence', { event:'leave' }, (ev)=>self.onLeave((ev && ev.leftPresences)||[]));
     await new Promise(res=>ch.subscribe(st=>{ if(st==='SUBSCRIBED') res(); }));
     this.code = code;
     return true;
@@ -2677,12 +2691,33 @@ const NET = {
     if(code.length!==4){ alert('Enter the 4-letter room code.'); return; }
     if(!(await this.connect(code, false))) return;
     this.mode = 'joining';
+    this.tx.send('hello', { key:this.pkey });
     this.tx.track({ key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:false, joined:Date.now() });
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
     $('#lobbycode').textContent = code;
     const st=$('#lobbystart'); if(st&&st.style) st.style.display='none';
     $('#lobbywait').textContent = 'Waiting for the host…';
     this.renderLobby();
+  },
+  onLeave(left){
+    if(!this.roster || G.over) return;
+    if(this.mode==='client'){
+      const hostKey = this.roster[0] && this.roster[0].key;
+      if(left.some(p=>p && p.key===hostKey)){
+        G.over = true;
+        try{ localStorage.removeItem('it_room'); }catch(e){}
+        banner('HOST LEFT — TABLE CLOSED','var(--danger-red)');
+        showPrompt('The host left. Tap COASTLINE to head home.', false);
+        renderAll();
+      }
+      return;
+    }
+    if(this.mode==='host'){
+      left.forEach(p=>{
+        const r = p && this.roster.find(x=>x.key===p.key);
+        if(r) banner((r.name||'A player').toUpperCase()+' DISCONNECTED','var(--warning-amber)');
+      });
+    }
   },
   lobbySeats(){
     const pres = this.tx ? this.tx.presence() : {};
@@ -2709,6 +2744,7 @@ const NET = {
   onStart(m, hosting){
     const roster = m.roster || (m.names||[]).map(n=>({key:n,name:n}));
     this.roster = roster;
+    try{ localStorage.setItem('it_room', JSON.stringify({ code:this.code, ts:Date.now() })); }catch(e){}
     const names = roster.map(r=>r.name);
     if(hosting){ this.mode='host'; this.seat=0; MYSEAT=0; }
     else {
@@ -2730,8 +2766,20 @@ const NET = {
   },
 };
 let GAME_STARTED = false;
+function refreshRejoin(){
+  const b = $('#rejoinbtn'); if(!b || !b.style) return;
+  let room = null;
+  try{ room = JSON.parse(localStorage.getItem('it_room')||'null'); }catch(e){}
+  const fresh = room && room.code && (Date.now()-room.ts) < 30*60*1000;
+  if(fresh && NET.mode==='off'){
+    b.style.display='';
+    b.textContent = 'Rejoin '+room.code;
+    b.onclick = ()=>{ const jc=$('#joincode'); if(jc) jc.value = room.code; NET.joinGame(); };
+  } else b.style.display='none';
+}
 function openHome(){
   const h=$('#home'); if(h&&h.classList) h.classList.add('show');
+  refreshRejoin();
   const p=$('#homeprimary'); if(p) p.textContent = GAME_STARTED ? 'Resume' : 'Play Solo';
   const n=$('#homenew'); if(n&&n.style) n.style.display = GAME_STARTED ? '' : 'none';
 }
@@ -3113,6 +3161,7 @@ function aiStep(p){
 newGame();
 try{ if(typeof ID!=='undefined'){ ID.renderProfile(); if(SUPABASE_URL) setTimeout(()=>ID.init(), 400); } }catch(e){}
 renderAll();
+try{ refreshRejoin(); }catch(e){}
 /* deep links from the lobby: ?join=CODE joins a room, ?invite=FRIEND hosts + invites */
 try{
   const qp = new URLSearchParams(location.search);
