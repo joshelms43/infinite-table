@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.4.3 — 2026-07-09
+The home screen learns hierarchy. (Schema v2 is live — thanks for running it.)
+
+**What was messy** — v0.4.0 stacked everything: profile card AND a separate name input, PLAY and FRIENDS fully expanded, eleven elements in one column.
+
+**Now**
+- One identity: the profile card is the only place your name lives — tap it (✎) to edit inline, Enter or blur to save. The floating name input is gone; Host/Join read the profile name.
+- One hero: a big PLAY SOLO, with Host Online and Join Game as a compact secondary row.
+- Progressive disclosure: Join reveals its code field only when tapped; FRIENDS is a collapsed section header with a live count and chevron — list and add-by-code appear on demand.
+- Friend count badge, offline profile card shows your local name (still editable) with a quiet "connects online" note.
+
+**Tests** — 44/44 PASS.
+
 ## v0.4.9 — 2026-07-10
 Determinized Monte Carlo built (roadmap item 4) + an unattended CI ladder for decisive verdicts. No gameplay changes on main — the MCTS brain awaits its pre-committed test on branch `mcts-experiment`.
 

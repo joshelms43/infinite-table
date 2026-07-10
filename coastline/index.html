@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.4.9
+  Version: 0.4.1
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coastline — v0.4.9</title>
+<title>Coastline — v0.4.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -430,6 +430,24 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 #lobbyseats{display:flex;flex-direction:column;gap:8px;margin:8px 0}
 .lobbyseat{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;background:rgba(255,255,255,.05);border-radius:12px;padding:9px 12px}
 .sectlabel{font-size:10px;font-weight:800;letter-spacing:2.2px;text-transform:uppercase;opacity:.38;text-align:left;margin-bottom:-4px}
+.homebtn.hero{font-size:18px;padding:16px}
+.homerow{display:flex;gap:10px}
+.homerow .homebtn{flex:1}
+.reveal{display:none}
+.reveal.open{display:block;animation:promptin .2s ease}
+.disclosure{
+  display:flex;align-items:center;gap:8px;width:100%;
+  font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
+  color:var(--text-ivory);opacity:.55;background:none;border:none;padding:8px 4px 2px;
+}
+.disclosure .chev{margin-left:auto;transition:transform .2s}
+.disclosure.open{opacity:.85}
+.disclosure.open .chev{transform:rotate(180deg)}
+.disccount{opacity:.6;letter-spacing:0}
+.profname .nameedit{
+  background:rgba(255,255,255,.08);border:1px solid var(--line-soft);border-radius:8px;
+  color:var(--text-ivory);font:inherit;padding:2px 8px;width:140px;outline:none;text-align:left;
+}
 #profcard{min-height:10px;margin-bottom:2px}
 .profrow{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.05);border:1px solid var(--line-soft);border-radius:14px;padding:11px 13px;text-align:left}
 .profav{width:38px;height:38px;font-size:17px;flex:0 0 auto}
@@ -620,7 +638,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo">COAST<span class="wave">LINE</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.4.9</span>
+    <span class="ver">v0.4.1</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -681,19 +699,24 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="hometag">Sunshine Coast property scramble</div>
     <div id="profcard"></div>
     <div id="homemain">
-      <div class="sectlabel">Play</div>
-      <input id="homename" maxlength="12" placeholder="Your name" autocomplete="off" onchange="ID.saveName(this.value)">
-      <button class="homebtn primary" onclick="closeHome()">Play solo — vs Bazza &amp; Shaz</button>
-      <button class="homebtn" onclick="NET.hostGame()">Host online game</button>
-      <div class="joinrow">
-        <input id="joincode" maxlength="4" placeholder="CODE" autocomplete="off">
-        <button class="homebtn" style="flex:1" onclick="NET.joinGame()">Join</button>
+      <button class="homebtn primary hero" onclick="closeHome()">Play Solo</button>
+      <div class="homerow">
+        <button class="homebtn" onclick="NET.hostGame()">Host Online</button>
+        <button class="homebtn" onclick="toggleReveal('joinreveal')">Join Game</button>
       </div>
-      <div class="sectlabel" style="margin-top:6px">Friends</div>
-      <div id="friendlist"></div>
-      <div class="joinrow">
-        <input id="friendcode" maxlength="6" placeholder="FRIEND CODE" autocomplete="off" style="width:150px;letter-spacing:2px">
-        <button class="homebtn" style="flex:1" onclick="ID.addFriend()">Add</button>
+      <div id="joinreveal" class="reveal">
+        <div class="joinrow">
+          <input id="joincode" maxlength="4" placeholder="CODE" autocomplete="off">
+          <button class="homebtn" style="flex:1" onclick="NET.joinGame()">Join room</button>
+        </div>
+      </div>
+      <button class="disclosure" onclick="toggleReveal('friendspanel')"><span>Friends</span><span id="friendcount" class="disccount"></span><span class="chev">▾</span></button>
+      <div id="friendspanel" class="reveal">
+        <div id="friendlist"></div>
+        <div class="joinrow" style="margin-top:8px">
+          <input id="friendcode" maxlength="6" placeholder="FRIEND CODE" autocomplete="off" style="width:150px;letter-spacing:2px">
+          <button class="homebtn" style="flex:1" onclick="ID.addFriend()">Add</button>
+        </div>
       </div>
     </div>
     <div id="homelobby" style="display:none">
@@ -2616,7 +2639,7 @@ const NET = {
     return true;
   },
   async hostGame(){
-    this.myName = (($('#homename')&&$('#homename').value)||'Host').slice(0,12) || 'Host';
+    this.myName = (this.myName||'Host').slice(0,12) || 'Host';
     if(typeof localStorage!=='undefined' && localStorage.setItem) localStorage.setItem('it_name', this.myName);
     const code = this.makeCode();
     if(!(await this.connect(code, true))) return;
@@ -2627,7 +2650,7 @@ const NET = {
     this.renderLobby();
   },
   async joinGame(){
-    this.myName = (($('#homename')&&$('#homename').value)||'Guest').slice(0,12) || 'Guest';
+    this.myName = (this.myName||'Guest').slice(0,12) || 'Guest';
     if(typeof localStorage!=='undefined' && localStorage.setItem) localStorage.setItem('it_name', this.myName);
     const code = (($('#joincode')&&$('#joincode').value)||'').toUpperCase().trim();
     if(code.length!==4){ alert('Enter the 4-letter room code.'); return; }
@@ -2685,6 +2708,12 @@ const NET = {
   },
 };
 function closeHome(){ const h=$('#home'); if(h&&h.classList) h.classList.remove('show'); }
+function toggleReveal(id){
+  const el = document.getElementById(id); if(!el || !el.classList) return;
+  el.classList.toggle('open');
+  const btn = document.querySelector(`[onclick="toggleReveal('${id}')"]`);
+  if(btn && btn.classList) btn.classList.toggle('open', el.classList.contains('open'));
+}
 function netBusy(){
   return (NET.mode==='host' && Object.keys(NET.pendingAsks).length>0) || (NET.mode==='client' && !!NET.hold);
 }
@@ -2729,7 +2758,7 @@ const ID = {
         prof.friend_code = code || '——————';
       }
       this.profile = prof;
-      if(prof && prof.name){ NET.myName = prof.name; const hn=$('#homename'); if(hn && hn.value!==undefined) hn.value = prof.name; }
+      if(prof && prof.name) NET.myName = prof.name;
       this.ready = true;
       this.renderProfile();
       this.loadFriends();
@@ -2751,8 +2780,9 @@ const ID = {
   renderProfile(){
     const el = $('#profcard'); if(!el || el.innerHTML===undefined) return;
     if(!this.profile){
-      el.innerHTML = `<div class="profrow"><span class="avatar profav" style="background:var(--felt-highlight)">?</span>
-        <div class="profinfo"><div class="profname">Offline profile</div><div class="profsub">Stats &amp; Elo connect automatically online</div></div></div>`;
+      const nm = NET.myName || 'Player';
+      el.innerHTML = `<div class="profrow"><span class="avatar profav" style="background:var(--felt-highlight)">${nm[0]}</span>
+        <div class="profinfo"><div class="profname" onclick="ID.editName()">${nm} <span style="opacity:.35;font-size:12px">✎</span></div><div class="profsub">Playing offline — stats connect online</div></div></div>`;
       return;
     }
     const p = this.profile;
@@ -2760,11 +2790,24 @@ const ID = {
     el.innerHTML = `<div class="profrow">
       <span class="avatar profav" style="background:var(--money-gold);color:var(--table-night)">${(p.name||'?')[0]}</span>
       <div class="profinfo">
-        <div class="profname">${p.name}</div>
-        <div class="profsub">${p.wins}W · ${losses}L &nbsp;·&nbsp; friend code <b class="fcode" onclick="ID.copyCode()">${p.friend_code}</b></div>
+        <div class="profname" onclick="ID.editName()">${p.name} <span style="opacity:.35;font-size:12px">✎</span></div>
+        <div class="profsub">${p.wins}W · ${losses}L &nbsp;·&nbsp; code <b class="fcode" onclick="event.stopPropagation();ID.copyCode()">${p.friend_code}</b></div>
       </div>
       <span class="elochip">${p.elo}<small>ELO</small></span>
     </div>`;
+    const fc = $('#friendcount'); if(fc && fc.textContent!==undefined) fc.textContent = this.friends.length ? '('+this.friends.length+')' : '';
+  },
+  editName(){
+    const nameEl = document.querySelector('#profcard .profname');
+    if(!nameEl || !nameEl.innerHTML===undefined) return;
+    const cur = (this.profile && this.profile.name) || NET.myName || 'Player';
+    nameEl.innerHTML = `<input class="nameedit" maxlength="12" value="${cur}">`;
+    const inp = nameEl.querySelector('input');
+    if(!inp) return;
+    inp.focus(); inp.select && inp.select();
+    const commit = ()=>{ this.saveName(inp.value); this.renderProfile(); };
+    inp.addEventListener('blur', commit);
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter') inp.blur(); });
   },
   copyCode(){
     try{ navigator.clipboard && navigator.clipboard.writeText(this.profile.friend_code); banner('CODE COPIED','var(--gold-money)'); }catch(e){}
@@ -2779,6 +2822,7 @@ const ID = {
     const { data: profs } = await this.sb.from('profiles').select('id,name,elo').in('id', ids);
     this.friends = profs || [];
     this.renderFriends();
+    const fc = $('#friendcount'); if(fc && fc.textContent!==undefined) fc.textContent = this.friends.length ? '('+this.friends.length+')' : '';
   },
   renderFriends(){
     const el = $('#friendlist'); if(!el || el.innerHTML===undefined) return;
@@ -3223,8 +3267,7 @@ function aiStep(p){
 
 /* ================= BOOT ================= */
 newGame();
-if($('#homename') && $('#homename').value!==undefined) $('#homename').value = NET.myName || '';
-try{ if(typeof ID!=='undefined' && SUPABASE_URL) setTimeout(()=>ID.init(), 400); }catch(e){}
+try{ if(typeof ID!=='undefined'){ ID.renderProfile(); if(SUPABASE_URL) setTimeout(()=>ID.init(), 400); } }catch(e){}
 INITDEAL = true;
 me().hand.forEach(c=>NEWIDS.add(c.id));
 renderAll();
