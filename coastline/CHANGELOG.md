@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.5.1 — 2026-07-09
+Hotfix: identity crashed on both pages ("this.myName_ is not a function").
+
+- Root cause: the v0.5.0 extraction script rewrote every myName call site to a new method but the method definition itself targeted a property that never existed on ID (it lives on NET) — an unasserted .replace() that silently did nothing. The rule that every patch anchor must assert existed for exactly this reason; the extraction script skipped it and paid.
+- myName_() is now properly defined (NET name → localStorage → empty), the one remaining raw NET reference in a legacy branch cleaned, all other v0.5.0 guards verified present, and shared/identity.js passes node --check as part of the fix.
+
+**Tests** — 44/44, flows 12/12.
+
 ## v0.5.0 — 2026-07-09
 Identity becomes platform infrastructure. First deliberate multi-file split.
 

@@ -4,6 +4,11 @@
    NET is optional (game pages only); without it, invites deep-link into Coastline. */
 const ID = {
   sb: null, user: null, profile: null, friends: [], ready: false,
+  myName_(){
+    return (typeof NET!=='undefined' && NET.myName)
+      || (typeof localStorage!=='undefined' && localStorage.getItem && localStorage.getItem('it_name'))
+      || '';
+  },
 
   async ensureSB(){
     if(this.sb) return this.sb;
@@ -69,7 +74,7 @@ const ID = {
     if(this.sheetOpen) this.renderProfileSheet();
     const el = $('#profcard'); if(!el || el.innerHTML===undefined) return;
     if(!this.profile){
-      const nm = NET.myName || 'Player';
+      const nm = this.myName_() || 'Player';
       el.innerHTML = `<div class="profrow"><span class="avatar profav" style="background:var(--felt-highlight)">${nm[0]}</span>
         <div class="profinfo"><div class="profname" onclick="ID.editName()">${nm} <span style="opacity:.35;font-size:12px">✎</span></div><div class="profsub">Playing offline — stats connect online</div></div></div>`;
       return;
