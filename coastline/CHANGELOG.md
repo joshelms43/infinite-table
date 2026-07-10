@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.6.9 — 2026-07-10
+Presence on the table, codes that share themselves.
+
+- Opponent panels show who's actually there: a dropped connection dims the panel with an "· away" tag on every screen, a reconnect clears it with a banner. Bots are never away (asserted all three ways).
+- The big room code is now tappable — native share sheet on mobile, join-link to clipboard elsewhere.
+- Process note: this entry ships one commit late; v0.6.9 was pushed without it. Changelog-before-push restored to the drill.
+
+**Tests** — npm run check green: 56/56, 12/12, 38/38.
+
 ## v0.6.8 — 2026-07-10
 Test infrastructure hardening.
 
