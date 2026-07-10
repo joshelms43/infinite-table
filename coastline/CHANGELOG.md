@@ -1,6 +1,19 @@
 # Coastline — Changelog
 
 ## v0.8.4 — 2026-07-11
+Wilds grow up: drag them, and they follow the real rules.
+
+**Faces** — the wildcard footnotes ("★ Yellow / Teal wild") are gone from both wild types. Once a wild joins a set it renders as a property of that set: band, breathing room, rent ladder — the split band (dual) or flowing rainbow (wildall) is the only tell, which is all the tell needed. The header says what's obvious; the card stops repeating it.
+
+**Drag to move** — wilds on your own board drag directly: past ten pixels the card visibly pops out of its set and floats under your finger, valid destinations outline in gold, drop commits, drop anywhere else cancels. Moves append, so dragging back into the same set lands it at the bottom, as specified. Data only mutates on the drop — a cancelled drag was never anywhere. The sheet-based Move wild remains for taps.
+
+**Rules** — two new laws, engine-enforced and UI-respected: a set with a building locks its wilds (the drag won't even start; the sheet explains), and Rainbow Wilds can never sit alone — not played onto an empty colour (executor refuses, options grey out, the AI stopped considering it) and not moved into one.
+
+**Online correctness** — the old reassignWild mutated local state with no intent: a client moving a wild silently forked reality. Wild movement is now a first-class intent (rewild): host-validated, turn-checked, ask-gated, covered in the wire test — a client drags, the host moves it, the wild lands at the bottom, state converges. Found and removed a stale duplicate wire block that double-added a card to the board.
+
+**Tests** — npm run check green: engine 62/62 (four new rule assertions), wire 16/16, soak, flows 12/12, drop matrix 38/38.
+
+## v0.8.4 — 2026-07-11
 Wilds grow up: draggable, lawful, and dressed like the properties they're pretending to be.
 
 **Faces** — the wildnote footers are gone from both wild types. An assigned wild now renders exactly like a property of its colour — band, breathing room, rent ladder — with the band itself carrying the tell: the 50/50 split on duals, the flowing rainbow on Rainbow Wilds. The header tells you what's obvious; nothing else repeats it.
