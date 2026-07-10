@@ -225,13 +225,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .rrow{display:flex;justify-content:space-between;align-items:baseline;font-size:9px;font-weight:700;color:var(--ink-soft);padding:2.5px 0}
 .rrow + .rrow{border-top:1px solid rgba(36,36,29,.08)}
 .propfield{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
-.propdot{width:36px;height:36px;border-radius:50%;opacity:.16;box-shadow:inset 0 0 0 3px rgba(36,36,29,.2)}
-.amedal{
-  width:26px;height:26px;border-radius:50%;margin:0 auto 5px;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--ink);color:var(--card-ivory);
-  font-family:'Lilita One',cursive;font-size:13px;
-}
+
 .rrow b{color:var(--ink)}
 .rrow .star{color:var(--gold-deep)}
 .card.moneycard .mband{
@@ -1380,7 +1374,7 @@ function faceHTML(c, assignedColor){
     const col=COLORS[c.color];
     const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
     return `${coin}<div class="band" style="background:${col.hex};${col.ink?`color:${col.ink};text-shadow:none;`:''}">${col.label}</div>
-      <div class="propfield"><span class="propdot" style="background:${col.hex}"></span></div>
+      <div class="propfield"></div>
       <div class="ladder">${ladder}</div>`;
   }
   if(c.t==='wild'){
@@ -1413,7 +1407,7 @@ function faceHTML(c, assignedColor){
   if(c.t==='action'){
     const a=ACTIONS[c.kind];
     return `${coin}<div class="band">Action</div>
-      <div class="body"><div class="amedal">${a.n[0]}</div><div class="cname">${a.n}</div>
+      <div class="body"><div class="cname">${a.n}</div>
       <div class="cdesc">${a.d}</div></div>`;
   }
   if(c.t==='rent'){
@@ -2574,8 +2568,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=081"></script>
-<script src="../shared/identity.js?v=081"></script>
+<script src="../shared/config.js?v=082"></script>
+<script src="../shared/identity.js?v=082"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

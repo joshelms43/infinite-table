@@ -1,5 +1,10 @@
 # Coastline — Changelog
 
+## v0.8.2 — 2026-07-10
+The circles are gone (they sucked — direct quote). Property faces are band, breathing room, ladder; action cards are name and description on clean ivory. Whitespace is the medallion.
+
+**Tests** — npm run check green.
+
 ## v0.8.1 — 2026-07-10
 The classic palette, nameless properties, and a card production pass.
 
