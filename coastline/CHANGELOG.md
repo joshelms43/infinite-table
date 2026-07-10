@@ -1,5 +1,19 @@
 # Coastline — Changelog
 
+## v0.4.4 — 2026-07-09
+Identity becomes a whisper. There is no sign-up — and now it doesn't look like there is one either.
+
+**The clarification** — auth was already invisible (anonymous, automatic, nothing to create), but the profile card front-and-centre made the home read like an account product. Wrong message for a game.
+
+**Home is now five elements**
+- Wordmark, tagline, PLAY SOLO (hero), PLAY ONLINE (expands to Host / Join-with-code on tap), and a slim identity whisper at the bottom: `⟨avatar⟩ Josh · 1240 ›`.
+- Solo requires nothing, waits on nothing, works fully offline — guaranteed by construction (it's just closing the overlay).
+
+**Everything identity lives in one sheet**
+- Tapping the whisper opens a Profile sheet: name field (edits sync), Elo/Wins/Losses stat tiles, tap-to-copy friend code, friends list with Invite/remove, and add-by-code. Offline it shows your local name (still editable) with one quiet line about connecting.
+
+**Tests** — 44/44 PASS.
+
 ## v0.4.3 — 2026-07-09
 The home screen learns hierarchy. (Schema v2 is live — thanks for running it.)
 

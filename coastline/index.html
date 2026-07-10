@@ -444,6 +444,26 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .disclosure.open{opacity:.85}
 .disclosure.open .chev{transform:rotate(180deg)}
 .disccount{opacity:.6;letter-spacing:0}
+#profmini{
+  display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;
+  background:none;border:none;border-top:1px solid var(--line-faint-t);
+  padding:14px 4px 2px;width:100%;
+  font-size:12.5px;font-weight:800;color:var(--text-ivory);opacity:.6;
+}
+#profmini:active{opacity:.9}
+#profmini .avatar{width:22px;height:22px;font-size:10px}
+#profmini .minelo{color:var(--money-gold)}
+.onlinebox{background:rgba(255,255,255,.04);border:1px solid var(--line-faint-t);border-radius:14px;padding:12px}
+.sheetstat{display:flex;gap:10px;margin:10px 0 4px}
+.sheetstat .stat{flex:1;background:rgba(255,255,255,.05);border-radius:12px;padding:10px 4px;text-align:center}
+.sheetstat .stat b{font-family:'Lilita One',cursive;font-size:20px;display:block;color:var(--money-gold)}
+.sheetstat .stat span{font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;opacity:.45}
+.namefield{
+  width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line-soft);border-radius:12px;
+  color:var(--text-ivory);font-family:'Nunito Sans',sans-serif;font-weight:800;font-size:15px;
+  padding:11px 13px;outline:none;margin-top:4px;
+}
+.coderow{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.04);border-radius:12px;padding:10px 13px;margin-top:8px;font-size:12px;font-weight:700;opacity:.85}
 .profname .nameedit{
   background:rgba(255,255,255,.08);border:1px solid var(--line-soft);border-radius:8px;
   color:var(--text-ivory);font:inherit;padding:2px 8px;width:140px;outline:none;text-align:left;
@@ -697,27 +717,19 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
   <div class="homecard">
     <div class="homelogo"><span style="color:var(--money-gold)">COAST</span>LINE</div>
     <div class="hometag">Sunshine Coast property scramble</div>
-    <div id="profcard"></div>
     <div id="homemain">
       <button class="homebtn primary hero" onclick="closeHome()">Play Solo</button>
-      <div class="homerow">
-        <button class="homebtn" onclick="NET.hostGame()">Host Online</button>
-        <button class="homebtn" onclick="toggleReveal('joinreveal')">Join Game</button>
-      </div>
-      <div id="joinreveal" class="reveal">
-        <div class="joinrow">
-          <input id="joincode" maxlength="4" placeholder="CODE" autocomplete="off">
-          <button class="homebtn" style="flex:1" onclick="NET.joinGame()">Join room</button>
+      <button class="homebtn" onclick="toggleReveal('onlinepanel')">Play Online</button>
+      <div id="onlinepanel" class="reveal">
+        <div class="onlinebox">
+          <button class="homebtn" style="width:100%" onclick="NET.hostGame()">Host a room</button>
+          <div class="joinrow" style="margin-top:8px">
+            <input id="joincode" maxlength="4" placeholder="CODE" autocomplete="off">
+            <button class="homebtn" style="flex:1" onclick="NET.joinGame()">Join a room</button>
+          </div>
         </div>
       </div>
-      <button class="disclosure" onclick="toggleReveal('friendspanel')"><span>Friends</span><span id="friendcount" class="disccount"></span><span class="chev">▾</span></button>
-      <div id="friendspanel" class="reveal">
-        <div id="friendlist"></div>
-        <div class="joinrow" style="margin-top:8px">
-          <input id="friendcode" maxlength="6" placeholder="FRIEND CODE" autocomplete="off" style="width:150px;letter-spacing:2px">
-          <button class="homebtn" style="flex:1" onclick="ID.addFriend()">Add</button>
-        </div>
-      </div>
+      <button id="profmini" onclick="ID.openProfile()"></button>
     </div>
     <div id="homelobby" style="display:none">
       <div class="sub" style="letter-spacing:1px">ROOM CODE</div>
@@ -2778,6 +2790,13 @@ const ID = {
   },
 
   renderProfile(){
+    const mini = $('#profmini');
+    if(mini && mini.innerHTML!==undefined){
+      const nm = (this.profile && this.profile.name) || NET.myName || 'Player';
+      mini.innerHTML = `<span class="avatar" style="background:${this.profile?'var(--money-gold)':'var(--felt-highlight)'};color:${this.profile?'var(--table-night)':'var(--text-ivory)'}">${nm[0]}</span>
+        <span>${nm}</span>${this.profile?`<span class="minelo">· ${this.profile.elo}</span>`:''}<span style="opacity:.5">›</span>`;
+    }
+    if(this.sheetOpen) this.renderProfileSheet();
     const el = $('#profcard'); if(!el || el.innerHTML===undefined) return;
     if(!this.profile){
       const nm = NET.myName || 'Player';
@@ -2796,6 +2815,41 @@ const ID = {
       <span class="elochip">${p.elo}<small>ELO</small></span>
     </div>`;
     const fc = $('#friendcount'); if(fc && fc.textContent!==undefined) fc.textContent = this.friends.length ? '('+this.friends.length+')' : '';
+  },
+  openProfile(){
+    this.sheetOpen = true;
+    this.renderProfileSheet();
+  },
+  renderProfileSheet(){
+    const p = this.profile;
+    const nm = (p && p.name) || NET.myName || 'Player';
+    const stats = p ? `<div class="sheetstat">
+        <div class="stat"><b>${p.elo}</b><span>Elo</span></div>
+        <div class="stat"><b>${p.wins}</b><span>Wins</span></div>
+        <div class="stat"><b>${Math.max(0,p.games-p.wins)}</b><span>Losses</span></div>
+      </div>
+      <div class="coderow"><span>Friend code</span><b class="fcode" onclick="ID.copyCode()">${p.friend_code}</b></div>` : `<div class="sub" style="margin:8px 0">Playing offline — stats and friends connect automatically when online.</div>`;
+    const friendsBlock = p ? `<div class="zone-label" style="margin-top:14px">Friends</div>
+      <div id="friendlist">${this._friendRows()}</div>
+      <div class="joinrow" style="margin-top:8px">
+        <input id="friendcode" maxlength="6" placeholder="FRIEND CODE" autocomplete="off" style="width:150px;letter-spacing:2px">
+        <button class="homebtn" style="flex:1" onclick="ID.addFriend()">Add</button>
+      </div>` : '';
+    openSheet(`<h3>Profile</h3>
+      <input class="namefield" maxlength="12" value="${nm}" onchange="ID.saveName(this.value)" placeholder="Your name">
+      ${stats}
+      ${friendsBlock}
+      <button class="optbtn" style="margin-top:14px" onclick="ID.sheetOpen=false;closeSheet()">Done</button>`);
+  },
+  _friendRows(){
+    return (this.friends||[]).map(f=>`
+      <div class="friendrow">
+        <span class="avatar" style="background:var(--felt-highlight)">${(f.name||'?')[0]}</span>
+        <span class="frname">${f.name}</span>
+        <span class="frelo">${f.elo}</span>
+        <button class="frinvite" onclick="ID.sheetOpen=false;closeSheet();ID.invite('${f.id}')">Invite</button>
+        <button class="frremove" onclick="ID.removeFriend('${f.id}')">✕</button>
+      </div>`).join('') || '<div class="profsub" style="text-align:center;opacity:.5;padding:4px 0">Add mates with their friend code</div>';
   },
   editName(){
     const nameEl = document.querySelector('#profcard .profname');
@@ -2825,16 +2879,9 @@ const ID = {
     const fc = $('#friendcount'); if(fc && fc.textContent!==undefined) fc.textContent = this.friends.length ? '('+this.friends.length+')' : '';
   },
   renderFriends(){
-    const el = $('#friendlist'); if(!el || el.innerHTML===undefined) return;
-    if(!this.ready){ el.innerHTML=''; return; }
-    el.innerHTML = (this.friends||[]).map(f=>`
-      <div class="friendrow">
-        <span class="avatar" style="background:var(--felt-highlight)">${(f.name||'?')[0]}</span>
-        <span class="frname">${f.name}</span>
-        <span class="frelo">${f.elo}</span>
-        <button class="frinvite" onclick="ID.invite('${f.id}')">Invite</button>
-        <button class="frremove" onclick="ID.removeFriend('${f.id}')">✕</button>
-      </div>`).join('') || '<div class="profsub" style="text-align:center;opacity:.5;padding:4px 0">Add mates with their friend code</div>';
+    const el = $('#friendlist');
+    if(el && el.innerHTML!==undefined) el.innerHTML = this._friendRows();
+    if(this.sheetOpen) this.renderProfileSheet();
   },
   async removeFriend(id){
     if(!this.sb) return;
