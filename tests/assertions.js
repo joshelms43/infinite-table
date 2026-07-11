@@ -375,6 +375,49 @@ G.turnCount = 1;
 T('the default allows first-round attacks', attacksAllowed()===true);
 newGame();
 
+
+// ===== the clock: ticks whoever the game waits on; timeouts resolve fairly =====
+newGame();
+RULES.clock = { mode:'on', totalMs: 60000, turnMs: 0, incrementMs: 2000, timeout: 'pass' };
+G.turn=0; G.playsLeft=3; G.turnCount=2; G.over=false; MYSEAT=0; GAME_STARTED=false; NET.mode='off';
+clockInit();
+T('clock banks initialise from the rules', CLK.bank.every(b=>b===60000));
+clockTick(1000);
+T('the turn owner ticks down', CLK.bank[0]===59000 && CLK.bank[1]===60000);
+NET.mode='host'; GAME_STARTED=true;
+NET.pendingAsks = { 1: ()=>{} }; NET.pendingAskInfo = { 1: {type:'hike'} };
+G.players[1].isAI = false;
+clockTick(1000);
+T('a pending ask ticks the asked player, not the turn owner', CLK.bank[1]===59000 && CLK.bank[0]===59000);
+NET.pendingAsks = {}; NET.pendingAskInfo = {};
+const bank0 = CLK.bank[0];
+finishEnd();
+T('Fischer increment lands on the turn owner at end of turn', CLK.bank[0]===bank0+2000 && G.turn===1);
+G.players[1].isAI = true;
+clockTick(5000);
+T('AI seats never tick', CLK.bank[1]===59000);
+RULES.clock = JSON.parse(JSON.stringify(RULES_DEFAULTS.clock));
+NET.mode='off'; GAME_STARTED=false; clearInterval(CLK._iv);
+newGame();
+
+// ===== elimination: the primitive under clocks and leave-as-loss =====
+newGame();
+G.turn=1; G.turnCount=3; G.over=false; MYSEAT=0; NET.mode='off';
+const outHand = G.players[1].hand.length;
+eliminatePlayer(1, 'testing');
+T('an eliminated player is out, hand discarded, turn advanced', G.players[1].out===true && G.players[1].hand.length===0 && G.turn!==1);
+T('out seats leave the target pool', !othersOf(0).includes(1));
+const rentO = buildDeck().find(c=>c.t==='rent'&&c.colors);
+addProp(me(), buildDeck().find(c=>c.t==='prop'&&c.color===rentO.colors[0]), rentO.colors[0]);
+me().hand=[rentO]; G.turn=0; G.playsLeft=3;
+doRent(rentO, rentO.colors[0], 1, 0);
+T('out seats cannot be attacked', me().hand.length===1);
+G.players.forEach((p,i)=>{ if(i!==2) p.out = (i!==2); });
+G.players.forEach((p,i)=>{ p.out = i!==2; });
+G.over=false;
+eliminatePlayer(3, 'redundant');
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

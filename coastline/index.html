@@ -354,6 +354,12 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .rswitch .rknob{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:var(--card-ivory);transition:left .18s cubic-bezier(.2,.9,.3,1);box-shadow:0 1px 3px rgba(8,12,10,.4)}
 .rswitch.on{background:var(--money-gold)}
 .rswitch.on .rknob{left:22px}
+.rulesect{font-size:10.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;opacity:.45;margin:16px 4px 6px;text-align:left}
+.clkpresets{display:flex;gap:7px;flex-wrap:wrap;margin:4px 0 8px}
+.clkpre{flex:1 1 auto;min-width:56px;padding:9px 8px;border-radius:11px;border:1px solid rgba(244,239,229,.16);background:rgba(244,239,229,.06);color:var(--card-ivory);font-weight:800;font-size:12px;font-family:inherit}
+.clkpre.sel{background:var(--money-gold);color:var(--table-deep);border-color:var(--money-gold)}
+.clknum{width:74px;padding:8px 10px;border-radius:10px;border:1px solid rgba(244,239,229,.18);background:rgba(9,20,16,.5);color:var(--card-ivory);font-weight:800;font-size:14px;text-align:center;font-family:inherit;font-variant-numeric:tabular-nums}
+.clktoval{font-weight:800;font-size:12.5px;color:var(--money-gold)}
 .setghost{
   flex:0 0 102px;width:102px;height:150px;border:2px dashed rgba(217,160,63,.5);
   border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
@@ -454,6 +460,19 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 @keyframes appin{from{opacity:0}}
 
 .opp.away{opacity:.5;filter:saturate(.4)}
+.opp.isout{opacity:.32;filter:grayscale(.8)}
+.oppclk{font-size:10.5px;font-weight:800;letter-spacing:.4px;opacity:.55;font-variant-numeric:tabular-nums}
+.oppclk.clkactive{opacity:1;color:var(--money-gold)}
+.oppclk.clklow{color:var(--danger-red);opacity:1}
+#myclock{
+  position:fixed;right:14px;bottom:calc(env(safe-area-inset-bottom, 0px) + 168px);z-index:40;
+  font-family:'Lilita One',cursive;font-size:15px;letter-spacing:.5px;
+  background:rgba(9,20,16,.72);border:1px solid rgba(244,239,229,.14);
+  padding:5px 11px;border-radius:11px;pointer-events:none;
+  font-variant-numeric:tabular-nums;display:none;color:var(--card-ivory);
+}
+#myclock.clkactive{border-color:var(--money-gold);color:var(--money-gold);box-shadow:0 0 12px rgba(217,160,63,.25)}
+#myclock.clklow{border-color:var(--danger-red);color:var(--danger-red)}
 /* ---------- home / lobby ---------- */
 #home{
   position:fixed;inset:0;z-index:48;background:var(--table);
@@ -709,6 +728,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 </style>
 </head>
 <body>
+<div id="myclock"></div>
 
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
@@ -1130,6 +1150,110 @@ let RULES = (function(){
   }catch(e){}
   return JSON.parse(JSON.stringify(RULES_DEFAULTS));
 })();
+const CLK = { bank: [], turnLeft: 0, active: null, _iv: null };
+function clockActiveSeat(){
+  if(RULES.clock.mode!=='on' || G.over || !GAME_STARTED_OR_SOLO()) return null;
+  if(NET.mode==='host' || NET.mode==='off'){
+    if(MODE.type==='pay' || MODE.type==='discard') return MYSEAT;   // the authority itself is being waited on
+    const w = Object.keys(NET.pendingAsks||{});
+    if(w.length) return +w[0];
+    return G.turn;
+  }
+  return CLK.active;   // clients trust the host's word
+}
+function GAME_STARTED_OR_SOLO(){ return (typeof GAME_STARTED!=='undefined' && GAME_STARTED) || NET.mode==='off'; }
+function clockInit(){
+  CLK.bank = G.players.map(()=> RULES.clock.totalMs>0 ? RULES.clock.totalMs : Infinity);
+  CLK.turnLeft = RULES.clock.turnMs || 0;
+  CLK.active = null;
+}
+function clockRemaining(i){
+  const bank = CLK.bank[i]!=null ? CLK.bank[i] : Infinity;
+  const act = clockActiveSeat();
+  if(RULES.clock.turnMs>0 && i===act) return Math.min(bank, CLK.turnLeft);
+  return bank;
+}
+function clockFmt(ms){
+  if(ms===Infinity || ms==null) return '';
+  ms = Math.max(0, ms);
+  const t = Math.ceil(ms/1000), m = Math.floor(t/60), sec = t%60;
+  return m + ':' + String(sec).padStart(2,'0');
+}
+function clockTick(dt){
+  if(RULES.clock.mode!=='on' || G.over) return;
+  const authority = NET.mode==='host' || NET.mode==='off';
+  const act = clockActiveSeat();
+  if(act==null) return;
+  if(authority) CLK.active = act;
+  const p = G.players[act];
+  if(!p || p.isAI || p.out) return;
+  if(RULES.clock.totalMs>0 && CLK.bank[act]!=null && CLK.bank[act]!==Infinity) CLK.bank[act] = Math.max(0, CLK.bank[act]-dt);
+  if(RULES.clock.turnMs>0 && (!authority ? act===CLK.active : true)) CLK.turnLeft = Math.max(0, CLK.turnLeft-dt);
+  renderClocks();
+  if(!authority) return;
+  const bankOut = RULES.clock.totalMs>0 && CLK.bank[act]===0;
+  const turnOut = RULES.clock.turnMs>0 && CLK.turnLeft===0;
+  if(bankOut || turnOut) clockTimeout(act, bankOut);
+}
+function clockTimeout(seat, bankExhausted){
+  if(seat===MYSEAT && MODE.type==='pay'){
+    log('Your time ran out — paying automatically.');
+    payAutoM(); payConfirm();
+  } else if(seat===MYSEAT && MODE.type==='discard'){
+    const need = MODE.need||0;
+    me().hand.slice(0, need).forEach(c=>MODE.sel.add(c.id));
+    discardConfirm();
+  } else if(NET.pendingAsks && NET.pendingAsks[seat]!=null){
+    forceResolveAsk(seat);
+  } else if(G.turn===seat){
+    log(nameOf(seat)+' ran out of time.');
+    endTurn();
+  }
+  if(RULES.clock.timeout==='loss' && (bankExhausted || RULES.clock.totalMs===0)){
+    eliminatePlayer(seat, 'out of time');
+  } else {
+    CLK.turnLeft = RULES.clock.turnMs || 0;   // pass: fresh cap for whoever's next
+  }
+}
+function forceResolveAsk(seat){
+  const cb = NET.pendingAsks[seat]; const info = NET.pendingAskInfo[seat];
+  if(!cb) return;
+  delete NET.pendingAsks[seat]; delete NET.pendingAskInfo[seat];
+  log(nameOf(seat)+"'s time ran out — resolved automatically.");
+  const t = info && info.type;
+  if(t==='pay') cb({ ids: [] });                      // host picks a fair cover
+  else if(t==='discard'){ const p=G.players[seat]; cb({ ids: p.hand.slice(0, info.need).map(c=>c.id) }); }
+  else cb({ use:false });
+  this && null;
+}
+function clockStart(){
+  clearInterval(CLK._iv);
+  if(RULES.clock.mode!=='on') { renderClocks(); return; }
+  clockInit();
+  let last = Date.now();
+  CLK._iv = setInterval(()=>{
+    const now = Date.now(); const dt = now-last; last = now;
+    clockTick(dt);
+  }, 250);
+  renderClocks();
+}
+function renderClocks(){
+  if(RULES.clock.mode!=='on'){ const mc=$('#myclock'); if(mc&&mc.style) mc.style.display='none'; return; }
+  const act = clockActiveSeat();
+  G.players.forEach((p,i)=>{
+    const el = document.querySelector('.opp[data-idx="'+i+'"] .oppclk');
+    if(el && el.textContent!==undefined){
+      el.textContent = clockFmt(clockRemaining(i));
+      if(el.classList){ el.classList.toggle('clkactive', i===act); el.classList.toggle('clklow', clockRemaining(i)<15000); }
+    }
+  });
+  const mc = $('#myclock');
+  if(mc && mc.style){
+    mc.style.display = '';
+    mc.textContent = clockFmt(clockRemaining(MYSEAT));
+    if(mc.classList){ mc.classList.toggle('clkactive', MYSEAT===act); mc.classList.toggle('clklow', clockRemaining(MYSEAT)<15000); }
+  }
+}
 function saveRules(){ try{ localStorage.setItem('it_rules', JSON.stringify(RULES)); }catch(e){} }
 function attacksAllowed(){
   return RULES.firstTurnAttack || G.turnCount > G.players.length;
@@ -1141,8 +1265,52 @@ function openRulesSheet(){
       <span class="rulename">Attacks on the first go-round</span>
       <span class="rswitch ${RULES.firstTurnAttack?'on':''}" id="rsw-firstTurnAttack"><span class="rknob"></span></span>
     </div>
+    <div class="rulesect">Clock</div>
+    <div class="clkpresets">
+      ${[['Off','off'],['10+5','p105'],['20+0','p200'],['1m turns','pturn'],['Custom','custom']].map(([lab,id])=>
+        `<button class="clkpre ${clockPresetId()===id?'sel':''}" ${editable?`onclick="setClockPreset('${id}')"`:''}>${lab}</button>`).join('')}
+    </div>
+    <div id="clkcustom" style="display:${clockPresetId()==='custom'?'':'none'}">
+      <div class="rulerow"><span class="rulename">Total minutes</span><input class="clknum" type="number" min="0" max="120" value="${Math.round(RULES.clock.totalMs/60000)}" ${editable?'':'disabled'} onchange="setClockField('totalMs', this.value*60000)"></div>
+      <div class="rulerow"><span class="rulename">Seconds per turn</span><input class="clknum" type="number" min="0" max="600" value="${Math.round(RULES.clock.turnMs/1000)}" ${editable?'':'disabled'} onchange="setClockField('turnMs', this.value*1000)"></div>
+      <div class="rulerow"><span class="rulename">Increment seconds</span><input class="clknum" type="number" min="0" max="60" value="${Math.round(RULES.clock.incrementMs/1000)}" ${editable?'':'disabled'} onchange="setClockField('incrementMs', this.value*1000)"></div>
+    </div>
+    <div class="rulerow" style="display:${RULES.clock.mode==='on'?'':'none'}" ${editable?`onclick="toggleTimeout()"`:''}>
+      <span class="rulename">Out of time</span>
+      <span class="clktoval">${RULES.clock.timeout==='loss'?'You lose':'Turn passes'}</span>
+    </div>
     <div class="rulehint">${editable ? 'Rules apply to the next game at this table.' : 'Set by the host.'}</div>
     <button class="homebtn" onclick="closeSheet()">Done</button>`);
+}
+function clockPresetId(){
+  const c = RULES.clock;
+  if(c.mode!=='on') return 'off';
+  if(c.totalMs===10*60000 && c.incrementMs===5000 && !c.turnMs) return 'p105';
+  if(c.totalMs===20*60000 && !c.incrementMs && !c.turnMs) return 'p200';
+  if(!c.totalMs && c.turnMs===60000) return 'pturn';
+  return 'custom';
+}
+function setClockPreset(id){
+  const c = RULES.clock;
+  if(id==='off') c.mode='off';
+  else {
+    c.mode='on';
+    if(id==='p105'){ c.totalMs=10*60000; c.incrementMs=5000; c.turnMs=0; }
+    if(id==='p200'){ c.totalMs=20*60000; c.incrementMs=0; c.turnMs=0; }
+    if(id==='pturn'){ c.totalMs=0; c.incrementMs=0; c.turnMs=60000; }
+  }
+  saveRules(); sfx('tick'); haptic(6);
+  openRulesSheet();
+}
+function setClockField(k, v){
+  RULES.clock[k] = Math.max(0, +v||0);
+  RULES.clock.mode = 'on';
+  saveRules(); sfx('tick');
+}
+function toggleTimeout(){
+  RULES.clock.timeout = RULES.clock.timeout==='loss' ? 'pass' : 'loss';
+  saveRules(); sfx('tick'); haptic(6);
+  const el = document.querySelector('.clktoval'); if(el && el.textContent!==undefined) el.textContent = RULES.clock.timeout==='loss'?'You lose':'Turn passes';
 }
 function toggleRule(k){
   RULES[k] = !RULES[k];
@@ -1260,6 +1428,7 @@ function renderAll(){
   const payMode = MODE.type==='pay';
   $('#mybank').innerHTML = p.bank.map((c,i)=>`<span class="note ${c.t!=='money'?'notealt':''} ${payMode&&MODE.sel.has(c.id)?'paysel':''}" title="${cardName(c)}" style="z-index:${i+1};${i>0?'margin-left:-14px;':''}" ${payMode?`onclick="payToggle(${c.id})"`:''}><b>$${c.v}M</b></span>`).join('')
     + `<span class="banktotal" style="margin-left:10px">$${bankTotal(p)}M</span>`;
+  renderClocks();
   const hw = $('#handwrap');
   if(hw && hw.classList){
     const armed = MODE.type==='pay' && !!MODE.jsn;
@@ -1299,10 +1468,10 @@ let HAND_MINE = null;
 function oppPanelHTML(idx, clickable){
   const p = G.players[idx];
   const away = (typeof NET!=='undefined') && NET.isGone && NET.isGone(idx);
-  const label = (idx===MYSEAT ? 'You' : p.name) + (away ? ' · away' : '');
+  const label = (idx===MYSEAT ? 'You' : p.name) + (p.out ? ' · out' : (away ? ' · away' : ''));
   const avs = ['var(--action-info)','var(--c-orange)','var(--c-purple)','var(--c-teal)'];
   const av = idx===MYSEAT ? 'var(--action-info)' : avs[idx%avs.length];
-  const awayCls = away ? ' away' : '';
+  const awayCls = (p.out ? ' isout' : '') + (away ? ' away' : '');
   const sets = Object.entries(p.props).map(([color,cards])=>{
     const done = isComplete(p,color);
     return `<span class="chipset" title="${COLORS[color].label} ${cards.length}/${COLORS[color].size}">${cards.map(()=>`<span class="chip ${done?'done-mark':''}" style="background:${COLORS[color].hex}"></span>`).join('')}${p.bldg[color]?`<span class="opp-bldg">${p.bldg[color].granny?'⌂':''}${p.bldg[color].resort?'✦':''}</span>`:''}</span>`;
@@ -1313,6 +1482,7 @@ function oppPanelHTML(idx, clickable){
       <span class="opp-id">
         <span class="opp-name">${label}</span>
         <span class="opp-meta">${p.hand.length} cards · $${bankTotal(p)}M</span>
+        <span class="oppclk"></span>
       </span>
     </div>
     <div class="tidebar">${sets||'<span class="emptynote">no properties yet</span>'}</div>
@@ -2190,8 +2360,16 @@ function endTurn(){
   } else finishEnd();
 }
 function finishEnd(){
-  G.turn = (G.turn+1)%G.players.length;
-  if(G.turn===0) G.turnCount++;
+  if(RULES.clock.mode==='on' && RULES.clock.incrementMs>0 && CLK.bank[G.turn]!=null && !G.players[G.turn].out){
+    CLK.bank[G.turn] += RULES.clock.incrementMs;   // Fischer increment on the turn owner
+  }
+  let guard = 0;
+  do{
+    G.turn = (G.turn+1)%G.players.length;
+    if(G.turn===0) G.turnCount++;
+  } while(G.players[G.turn] && G.players[G.turn].out && ++guard < 8);
+  CLK.turnLeft = RULES.clock.turnMs || 0;
+  CLK.active = null;
   renderAll();
   setTimeout(startTurn, 600);
 }
@@ -2668,6 +2846,7 @@ function processQueue(idxs, perFn, done){
   (function next(){ if(G.over) return; const i=q.shift(); if(i===undefined) return done(); perFn(i,next); })();
 }
 /* ----- human action executions ----- */
+function targetOut(t){ return !!(G.players[t] && G.players[t].out); }
 function attackGate(b){
   if(attacksAllowed()) return false;
   if(b===MYSEAT) banner('NO ATTACKS ON THE FIRST GO-ROUND','var(--warning-amber)');
@@ -2676,6 +2855,7 @@ function attackGate(b){
 function doFavour(c,targetIdx,by){
   if(NET.intercept('favour',{id:c.id,t:targetIdx})) return;
   if(attackGate(by==null?MYSEAT:by)) return;
+  if(targetOut(targetIdx)) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
   spendAction(c,b);
   log(nameOf(b)+' played Call In a Favour on '+nameOf(targetIdx)+'.');
@@ -2702,6 +2882,7 @@ function doShout(c,by){
 function doRent(c,color,targetIdx,by){
   if(NET.intercept('rent',{id:c.id,color,t:targetIdx})) return;
   if(attackGate(by==null?MYSEAT:by)) return;
+  if(targetOut(targetIdx)) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
   const actor = G.players[b];
   const base = rentFor(actor,color);
@@ -2743,6 +2924,7 @@ function stealTargetsOf(pIdx){ // props not in complete sets
   return propList(p).filter(x=>!isComplete(p,x.color));
 }
 function execSwipe(c, tIdx, cardId, by){
+  if(targetOut(tIdx)) return;
   if(NET.intercept('swipe',{id:c.id,t:tIdx,cid:cardId})) return;
   if(attackGate(by==null?MYSEAT:by)) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
@@ -2771,6 +2953,7 @@ function execTakeoverD(c, tIdx, color, by){
   });
 }
 function execSwapFinal(c, tIdx, theirCardId, mineCardId, by){
+  if(targetOut(tIdx)) return;
   if(attackGate(by==null?MYSEAT:by)) return;
   if(NET.intercept('swap',{id:c.id,t:tIdx,cid:theirCardId,mid:mineCardId})) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
@@ -2791,6 +2974,7 @@ function execSwapFinal(c, tIdx, theirCardId, mineCardId, by){
   });
 }
 function doTakeover(fromIdx,toIdx,color){
+  if(targetOut(fromIdx)) return;
   if(attackGate(toIdx)) return;
   const from=G.players[fromIdx], to=G.players[toIdx];
   const cards=(from.props[color]||[]).splice(0);
@@ -2806,8 +2990,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=092"></script>
-<script src="../shared/identity.js?v=092"></script>
+<script src="../shared/config.js?v=093"></script>
+<script src="../shared/identity.js?v=093"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2911,7 +3095,8 @@ const NET = {
     return {
       turn:G.turn, playsLeft:G.playsLeft, turnCount:G.turnCount, over:G.over,
       deckN:G.deck.length, pile:{ label:top, n:G.discard.length },
-      players:G.players.map(q=>({ name:q.name, isAI:!!q.isAI, handN:q.hand.length, bank:q.bank, props:q.props, bldg:q.bldg })),
+      players:G.players.map(q=>({ name:q.name, isAI:!!q.isAI, out:!!q.out, handN:q.hand.length, bank:q.bank, props:q.props, bldg:q.bldg })),
+      clk: RULES.clock.mode==='on' ? { bank: CLK.bank, turnLeft: CLK.turnLeft, active: clockActiveSeat() } : null,
       logs: logs.slice(0,16),
       waitFor: Object.keys(this.pendingAsks).length ? +Object.keys(this.pendingAsks)[0] : null,
     };
@@ -2929,6 +3114,7 @@ const NET = {
       pendingAskSeat: Object.keys(this.pendingAsks).length ? +Object.keys(this.pendingAsks)[0] : null,
       rules: RULES,
       pile: (typeof TABLEPILE!=='undefined') ? TABLEPILE.slice(-3) : [],
+      clk: RULES.clock.mode==='on' ? { bank: CLK.bank, turnLeft: CLK.turnLeft } : null,
       logs: logs.slice(0, 16),
       G: { deck:G.deck, discard:G.discard, turn:G.turn, playsLeft:G.playsLeft, turnCount:G.turnCount, over:G.over,
            players: G.players.map(q=>({ name:q.name, isAI:!!q.isAI, hand:q.hand, bank:q.bank, props:q.props, bldg:q.bldg })) },
@@ -2953,6 +3139,7 @@ const NET = {
     if(typeof TABLEPILE!=='undefined'){ TABLEPILE.length = 0; (blob.pile||[]).forEach(c=>TABLEPILE.push(c)); }
     logs.length = 0; (blob.logs||[]).forEach(l=>logs.push(l));
     this.pendingAsks = {}; this.pendingAskInfo = {};
+    if(blob.clk){ clockStart(); CLK.bank = blob.clk.bank || CLK.bank; CLK.turnLeft = blob.clk.turnLeft || 0; }
     if(blob.pendingAskSeat!=null){
       log('Interrupted action cancelled on resume.');
     }
@@ -2979,8 +3166,9 @@ const NET = {
     G.discard = new Array(st.pile.n);
     this.pile = st.pile;
     const cards = a => (a||[]).filter(c=>c && c.t);   // the wire turns undefined into null; never render a hole
+    if(st.clk){ CLK.bank = st.clk.bank || CLK.bank; CLK.turnLeft = st.clk.turnLeft||0; CLK.active = st.clk.active; renderClocks(); }
     G.players = st.players.map((q,i)=>({
-      name:q.name, isAI:q.isAI, bank:cards(q.bank),
+      name:q.name, isAI:q.isAI, out:!!q.out, bank:cards(q.bank),
       props:Object.fromEntries(Object.entries(q.props||{}).map(([k,v])=>[k, cards(v)])),
       bldg:q.bldg,
       hand: i===MYSEAT ? myHand : new Array(q.handN).fill(0).map((_,j)=>({ id:'h'+i+'_'+j, t:'money', v:0 })),
@@ -3317,6 +3505,7 @@ const NET = {
     GAME_STARTED = true;
     newGame();
     G.players = roster.map(r=>({ name:r.name, isAI:!!r.isAI, hand:[], bank:[], props:{}, bldg:{} }));
+    clockStart();
     G.deck = shuffle(buildDeck());
     for(let i=0;i<5;i++) G.players.forEach(p=>p.hand.push(draw()));
     G.turn = 0; G.playsLeft = 0; G.turnCount = 1; G.over = false;
@@ -3433,7 +3622,35 @@ function aiPlayVis(card){
     if(pileR) flyCard(staticCardHTML(card), { left:r.left+r.width/2-51, top:r.top+r.height-16, width:102, height:150 }, pileR, { fromScale:0.45, scale:0.16, dur:320, rot:-5 });
   }
 }
-function othersOf(idx){ return G.players.map((_,i)=>i).filter(i=>i!==idx); }
+function othersOf(idx){ return G.players.map((_,i)=>i).filter(i=>i!==idx && !G.players[i].out); }
+function alivePlayers(){ return G.players.map((_,i)=>i).filter(i=>!G.players[i].out); }
+function eliminatePlayer(seat, reason){
+  const p = G.players[seat]; if(!p || p.out) return;
+  p.out = true;
+  while(p.hand.length) G.discard.push(p.hand.pop());
+  log(nameOf(seat)+' is out — '+reason+'.');
+  banner((seat===MYSEAT?'YOU ARE':p.name.toUpperCase()+' IS')+' OUT','var(--danger-red)');
+  sfx('alert');
+  if(typeof NET!=='undefined' && NET.pendingAsks && NET.pendingAsks[seat]){
+    delete NET.pendingAsks[seat]; delete NET.pendingAskInfo[seat];
+  }
+  const alive = alivePlayers();
+  if(alive.length===1){
+    G.over = true; renderAll();
+    if(NET.mode!=='off'){ try{ localStorage.removeItem('it_room'); localStorage.removeItem('it_host'); }catch(e){} }
+    if(NET.mode==='host' && typeof ID!=='undefined') ID.recordMatch(alive[0]);
+    const w = G.players[alive[0]];
+    $('#wintitle').textContent = alive[0]===MYSEAT ? 'You win' : w.name+' wins';
+    $('#winsub').textContent = 'Last one standing';
+    $('#winstats').textContent = 'Round '+G.turnCount+' · '+G.players.map(x=>x.name+' $'+bankTotal(x)+'M').join(' · ');
+    const ws=$('#winscreen'); if(ws&&ws.classList) ws.classList.add('show');
+    if(NET.mode==='host') NET.pushState();
+    return;
+  }
+  if(G.turn===seat && !G.over) finishEnd();
+  renderAll();
+  if(NET.mode==='host') NET.pushState();
+}
 function aiWildColor(p,c){
   const choices = c.t==='wild' ? c.colors : Object.keys(COLORS).filter(col=>(p.props[col]||[]).length);
   let best=null,score=-1;
@@ -3779,6 +3996,7 @@ try{
   }
 }catch(e){}
 function startSolo(){
+  clockStart();
   newGame();
   INITDEAL = true;
   me().hand.forEach(c=>NEWIDS.add(c.id));

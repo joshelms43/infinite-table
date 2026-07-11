@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.9.3 — 2026-07-11
+Block two: the clock. Chess.com rules on a card table.
+
+**The clock ticks whoever the game waits on** — the turn owner normally, but a payment ask moves the tick to the payer, exactly as specified: stalling on a rent bill costs you your own time. The host (or solo engine) is the sole time authority at 250ms resolution; clients run local prediction off the last state and get corrected by every broadcast — no clock spam on the wire, no drift that survives a state. AI seats never tick.
+
+**Fully customisable** — presets in the rules sheet (Off · 10+5 · 20+0 · 1m turns · Custom) with custom fields for total minutes, seconds per turn, and Fischer increment (added to the turn owner's bank at end of turn — asserted), plus the consequence toggle: Turn passes / You lose. All of it rides the existing RULES rails: persisted, broadcast with start, carried through rejoins and host resurrection.
+
+**Timeouts resolve fairly, then judge** — an expired ask auto-resolves with the least-damaging default (fair-cover payment, decline, first-n discard); an expired turn auto-ends; a host mid-payment auto-pays (the authority itself counts as waited-on — a case with no ask entry to watch). Then the consequence: pass refreshes the cap; loss eliminates.
+
+**Elimination, built once, used twice** — the primitive block three needs for leave-as-loss ships now: an out player's hand discards, their turn is skipped forever, they leave every target pool (executor-guarded — out seats cannot be attacked), their panel dims to "· out", any pending ask on them clears, and last-one-standing wins with its own screen. All state-carried so clients render it identically.
+
+**UI** — per-opponent clock chips under their stats, a fixed personal clock above your hand; the active clock glows gold, under fifteen seconds goes red. Tabular numerals throughout, obviously.
+
+**Tests** — engine 96/96, wire 23/23, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.9.2 — 2026-07-11
 Driving hour, block one: the Table Rules foundation — and the accounts mystery solved.
 
