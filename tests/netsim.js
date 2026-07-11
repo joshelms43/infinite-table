@@ -141,8 +141,12 @@ T('post-rewild state converges', pub(client) === pub(host));
 
 host.__B.G.turn = 0; host.__B.NET.pushState();
 const bankBefore = host.__B.G.players[1].bank.length;
+let nacks = 0;
+const omN = client.__B.NET.onMessage;
+client.__B.NET.onMessage = (t, m) => { if (t === 'nack' && m.seat === 1) nacks++; omN(t, m); };
 client.__B.NET.tx.send('intent', { seat: 1, k: 'bank', a: { id: (client.__B.G.players[1].hand[0] || {}).id } });
 T('out-of-turn intents are dropped by the host', host.__B.G.players[1].bank.length === bankBefore);
+T('the dropped intent bounces back as a nack', nacks === 1);
 
 console.log(fails === 0 ? 'NETSIM: ALL PASS' : 'NETSIM FAILURES: ' + fails);
 process.exit(fails === 0 ? 0 : 1);

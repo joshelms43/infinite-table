@@ -1,5 +1,26 @@
 # Coastline — Changelog
 
+## v0.9.0 — 2026-07-11
+The stability release. One root, four symptoms, six systems.
+
+The field report: cards vanishing when played (three of them "to the abyss"), both players marked away while sitting next to each other, a turn that couldn't end, a turn that ended too early, and rejoins dumping into the lobby. The epicentre was presence flapping — the away layer trusted raw leave/join events, which transports emit spuriously — and everything downstream of that lie broke in a different direction.
+
+**Presence truth** — away-status is now reconciled from authoritative presence snapshots, never from individual events. Absence must persist through a 3.5-second debounce before it means anything; reappearing cancels it silently. Phantom aways and RECONNECTED banner spam die together. (The debounce is asserted in two acts: absence arms the timer without a verdict, persistence delivers one.)
+
+**The abyss closes** — the host silently dropped out-of-turn and mid-interrupt intents; on the sender's screen the dragged card just never came back. Dropped intents now bounce back as a nack: NOT RIGHT NOW, and the hand re-renders from truth. Clients also re-render immediately after sending any intent, so nothing dangles even if the nack itself is lost. Wire-asserted.
+
+**Asks self-heal** — the host remembers each outstanding ask and re-sends it when its owner rejoins (mid-payment rejoins land back in the payment). Clients that receive two consecutive states saying "we're waiting on you" with nothing on screen ping the host and get the ask again. Her frozen turn was a lost ask; there are now two independent paths for it to come back.
+
+**Auto-rejoin, straight in** — a fresh room memory on page load rejoins automatically (deep links outrank it); the host's hello response hands back the seat, the state, the hand and any pending ask, so a mid-game return lands in the game, not the lobby.
+
+**Wild grab-tabs** — wilds now poke 13px out of the side of their stack: visible and grabbable at any depth, which is why a wild buried under three properties in a "complete" set felt immovable — the only exposed sliver was 28px of card top.
+
+**Also in this release** — stay-in-play showcases (properties, wilds, money, buildings) fly home to their player's panel instead of shrinking into the discard pile; the "no change" whisper is gone from the pay HUD.
+
+**Still owed from the previous session, explicitly:** the reaction-window redesign for No Deals against steals/swaps/takeovers (the info-leak and the menu). It was recon'd, then this crisis outranked it. Next.
+
+**Tests** — engine 79/79, wire 19/19, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.8.11 — 2026-07-11
 The AI's quiet hands, caught.
 

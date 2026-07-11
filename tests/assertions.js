@@ -221,16 +221,25 @@ T('rematch redeals a fresh game with the same table', G.over===false && G.player
 NET.mode='off'; NET.tx=null; NET.roster=null; MYSEAT=0;
 
 
-// ===== away tracking =====
-NET.mode='client'; NET.gone={};
+// ===== away tracking: reconciled from presence snapshots, debounced =====
+NET.mode='client'; NET.gone={}; NET._goneTimers={};
 NET.roster=[{key:'h',name:'Host'},{key:'m',name:'Mick'},{key:'bot-bazza',name:'Bazza',isAI:true}];
-NET.onLeave([{key:'m'}]);
-T('a dropped player is marked away', NET.isGone(1)===true && NET.isGone(0)===false);
+let SNAP = { a:[{key:'h'}], b:[{key:'m'}] };
+NET.tx = { presence:()=>SNAP, send(){}, track(){} };
+NET.reconcilePresence();
+T('everyone present: nobody is away', NET.isGone(0)===false && NET.isGone(1)===false);
+SNAP = { a:[{key:'h'}] };            // Mick vanishes from the snapshot
+NET.reconcilePresence();
+T('absence arms the debounce, not the verdict', !!NET._goneTimers['m'] && NET.isGone(1)===false);
+clearTimeout(NET._goneTimers['m']);
+NET._confirmGone('m');               // the debounce window elapses, absence persists
+T('persistent absence marks away', NET.isGone(1)===true && NET.isGone(0)===false);
 T('bots are never away', (NET.gone['bot-bazza']=true, NET.isGone(2)===false));
 delete NET.gone['bot-bazza'];
-NET.onJoin([{key:'m'}]);
-T('rejoining clears away', NET.isGone(1)===false);
-NET.mode='off'; NET.roster=null; NET.gone={};
+SNAP = { a:[{key:'h'}], b:[{key:'m'}] };
+NET.reconcilePresence();
+T('reappearing in the snapshot clears away', NET.isGone(1)===false);
+NET.mode='off'; NET.roster=null; NET.gone={}; NET._goneTimers={}; NET.tx=null;
 
 
 // ===== online log sync =====

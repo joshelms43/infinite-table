@@ -337,7 +337,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 .snapped{animation:snapin .28s cubic-bezier(.2,1.4,.4,1)}
 @keyframes snapin{35%{transform:scale(1.06)}}
-.tcard.twild{touch-action:none}
+.tcard.twild{touch-action:none;transform:translateX(13px)}
+.tcard.twild::before{content:'';position:absolute;left:-13px;top:0;bottom:0;width:13px}
 .wildfly{
   position:fixed;z-index:90;width:68px;pointer-events:none;
   transform:rotate(-4deg) scale(1.06);
@@ -1090,7 +1091,10 @@ function aiShowcase(card, oppIdx){
   }); });
   setTimeout(()=>{
     if(!f.style){ if(f.remove) f.remove(); return; }
-    const pileR = rectOf(document.querySelector('#playpile'));
+    const stays = card.t==='prop' || card.t==='wild' || card.t==='wildall' || card.t==='money'
+      || (card.t==='action' && (card.kind==='granny' || card.kind==='resort'));
+    const homeEl = stays ? oppEl : document.querySelector('#playpile');
+    const pileR = rectOf(homeEl) || rectOf(document.querySelector('#playpile'));
     if(pileR){
       f.style.transition = `transform ${FLY}ms cubic-bezier(.25,.8,.25,1), left ${FLY}ms, top ${FLY}ms, opacity ${FLY}ms`;
       f.style.left = (pileR.left + (pileR.width||0)/2 - 51)+'px';
@@ -1516,7 +1520,7 @@ function updatePayHUD(){
   const enough = tot>=amount;
   if(enough && !MODE.wasEnough){ sfx('good'); haptic(8); }
   MODE.wasEnough = enough;
-  hudShow(`Pay ${r.name} — $${tot}M of $${amount}M${tot>amount?' · no change':''}`,
+  hudShow(`Pay ${r.name} — $${tot}M of $${amount}M`,
     { meter:{val:tot,max:amount}, auto:true, go:{label:'Pay', disabled:!enough} });
 }
 function payAutoM(){
@@ -2749,8 +2753,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0811"></script>
-<script src="../shared/identity.js?v=0811"></script>
+<script src="../shared/config.js?v=090"></script>
+<script src="../shared/identity.js?v=090"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2776,14 +2780,17 @@ const NET = {
     clearSelection(); hidePrompt(); closeSheet();
     this.sentWait = true;
     showPrompt('Sent…', false);
+    setTimeout(()=>renderAll(), 60);   // the hand re-renders from truth — nothing dangles mid-air
     return true;
   },
   reply(type, payload){ this.tx.send('intent', { seat: this.seat, k:'reply', a:Object.assign({rt:type}, payload) }); },
   evt(seat, card){ if(this.mode==='host' && this.tx && card) this.tx.send('evt', { kind:'play', seat, card }); },
 
   /* --- host: ask a remote seat for a decision --- */
+  pendingAskInfo: {},
   ask(seat, ask, cb){
     this.pendingAsks[seat] = cb;
+    this.pendingAskInfo[seat] = ask;
     this.pushState();
     this.tx.send('ask', { seat, ask });
   },
@@ -2811,11 +2818,11 @@ const NET = {
     const seat = m.seat, k = m.k, a = m.a || {};
     if(k==='reply'){
       const cb = this.pendingAsks[seat];
-      if(cb){ delete this.pendingAsks[seat]; cb(a); }
+      if(cb){ delete this.pendingAsks[seat]; delete this.pendingAskInfo[seat]; cb(a); }
       return;
     }
-    if(G.over || G.turn!==seat) return;   // stale / out-of-turn intents dropped
-    if(Object.keys(this.pendingAsks).length) return; // a payment/interrupt is resolving — hold your horses
+    if(G.over || G.turn!==seat){ this.tx.send('nack', { seat }); return; }   // stale / out-of-turn: bounce it back
+    if(Object.keys(this.pendingAsks).length){ this.tx.send('nack', { seat }); return; } // interrupt resolving: bounce
     const p = G.players[seat];
     const findHand = id => p.hand.find(c=>c.id===id);
     this.applying = true;
@@ -2876,6 +2883,12 @@ const NET = {
       const ll = $('#loglist');
       if(ll && ll.innerHTML!==undefined) ll.innerHTML = logs.slice(0,120).map(l=>`<div>${l}</div>`).join('');
     }
+    if(st.waitFor===this.seat && !MODE.type && !document.querySelector('#overlay.show')){
+      if(this._healArmed && (Date.now()-(this._healAt||0)) > 900){
+        this._healArmed = false;
+        this.tx.send('hello', { key: this.pkey });   // the host answers with the pending ask
+      } else if(!this._healArmed){ this._healArmed = true; this._healAt = Date.now(); }
+    } else this._healArmed = false;
     const wasOver = G.over; G.over = st.over;
     if(st.over){ try{ localStorage.removeItem('it_room'); }catch(e){} }
     if(this.lastTurn!==st.turn && !st.over){
@@ -2907,6 +2920,10 @@ const NET = {
           this.tx.send('start', { roster: this.roster });   // returning player: hand their seat back
         }
         this.pushState();
+        if(m && m.key && this.roster){
+          const si = this.roster.findIndex(r=>r.key===m.key);
+          if(si>=0 && this.pendingAskInfo[si]) this.tx.send('ask', { seat: si, ask: this.pendingAskInfo[si] });   // mid-payment rejoin: the ask comes back
+        }
       }
       return;
     }
@@ -2917,6 +2934,7 @@ const NET = {
         renderAll();
       }
       if(type==='evt' && m.kind==='play' && m.seat!==this.seat && m.card) aiShowcase(m.card, m.seat);
+      if(type==='nack' && m.seat===this.seat){ banner('NOT RIGHT NOW','var(--warning-amber)'); hidePrompt(); this.sentWait=false; renderAll(); }
       if(type==='ask' && m.seat===this.seat){
         try{ if(typeof closePOVForce==='function' && POVIDX!=null) closePOVForce(); }catch(e){}
         const a = m.ask;
@@ -2969,10 +2987,10 @@ const NET = {
       track(meta){ ch.track(meta); },
       presence(){ return ch.presenceState(); },
     };
-    ['state','hand','evt','ask','intent','start','hello'].forEach(ev=>{
+    ['state','hand','evt','ask','intent','start','hello','nack'].forEach(ev=>{
       ch.on('broadcast', { event:ev }, (msg)=>self.onMessage(ev, msg.payload));
     });
-    ch.on('presence', { event:'sync' }, ()=>self.renderLobby());
+    ch.on('presence', { event:'sync' }, ()=>{ self.renderLobby(); self.reconcilePresence(); });
     ch.on('presence', { event:'leave' }, (ev)=>self.onLeave((ev && ev.leftPresences)||[]));
     ch.on('presence', { event:'join' }, (ev)=>self.onJoin((ev && ev.newPresences)||[]));
     await new Promise(res=>ch.subscribe(st=>{ if(st==='SUBSCRIBED') res(); }));
@@ -3019,18 +3037,44 @@ const NET = {
     this.renderLobby();
   },
   gone: {},
+  _goneTimers: {},
   isGone(idx){
     if(this.mode!=='host' && this.mode!=='client') return false;
     const r = this.roster && this.roster[idx];
     return !!(r && !r.isAI && this.gone[r.key]);
   },
-  onJoin(joined){
-    let changed = false;
-    joined.forEach(p=>{ if(p && p.key && this.gone[p.key]){ delete this.gone[p.key]; changed = true; } });
-    if(changed && this.roster && !G.over){ banner('RECONNECTED','var(--success-green)'); renderAll(); }
+  reconcilePresence(){
+    if(!this.tx || !this.roster) return;
+    const present = new Set();
+    try{
+      Object.values(this.tx.presence()||{}).forEach(arr=>arr.forEach(mm=>{ if(mm && mm.key) present.add(mm.key); }));
+    }catch(e){ return; }
+    this.roster.forEach(r=>{
+      if(!r || r.isAI || !r.key) return;
+      if(present.has(r.key)){
+        clearTimeout(this._goneTimers[r.key]); delete this._goneTimers[r.key];
+        if(this.gone[r.key]){
+          delete this.gone[r.key];
+          if(!G.over) banner('RECONNECTED','var(--success-green)');
+          renderAll();
+        }
+      } else if(!this.gone[r.key] && !this._goneTimers[r.key]){
+        // absence must persist before it means anything — transports flap
+        this._goneTimers[r.key] = setTimeout(()=>this._confirmGone(r.key), 3500);
+      }
+    });
   },
+  _confirmGone(key){
+    delete this._goneTimers[key];
+    let stillGone = true;
+    try{
+      Object.values(this.tx.presence()||{}).forEach(arr=>arr.forEach(mm=>{ if(mm && mm.key===key) stillGone = false; }));
+    }catch(e){}
+    if(stillGone){ this.gone[key] = true; renderAll(); }
+  },
+  onJoin(joined){ this.reconcilePresence(); },
   onLeave(left){
-    left.forEach(p=>{ if(p && p.key) this.gone[p.key] = true; });
+    this.reconcilePresence();
     if(!this.roster || G.over) return;
     renderAll();
     if(this.mode==='client'){
@@ -3153,6 +3197,20 @@ function shareCode(){
   try{ navigator.clipboard.writeText(url); banner('LINK COPIED','var(--gold-money)'); }catch(e){}
 }
 let GAME_STARTED = false;
+(function autoRejoin(){
+  try{
+    const q = new URLSearchParams(location.search||'');
+    if(q.get('join') || q.get('invite')) return;   // deep links outrank the memory
+    const room = JSON.parse(localStorage.getItem('it_room')||'null');
+    if(!(room && room.code && (Date.now()-room.ts) < 30*60*1000)) return;
+    setTimeout(()=>{
+      if(NET.mode!=='off') return;
+      const jc = $('#joincode'); if(jc && jc.value!==undefined) jc.value = room.code;
+      banner('REJOINING '+room.code+'…','var(--money-gold)');
+      NET.joinGame();
+    }, 400);
+  }catch(e){}
+})();
 function refreshRejoin(){
   const b = $('#rejoinbtn'); if(!b || !b.style) return;
   let room = null;
