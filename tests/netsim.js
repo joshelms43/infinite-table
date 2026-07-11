@@ -148,5 +148,24 @@ client.__B.NET.tx.send('intent', { seat: 1, k: 'bank', a: { id: (client.__B.G.pl
 T('out-of-turn intents are dropped by the host', host.__B.G.players[1].bank.length === bankBefore);
 T('the dropped intent bounces back as a nack', nacks === 1);
 
+/* ===== the crown: host dies mid-game, resurrects from its blob, the client reconverges ===== */
+host.__B.G.turn = 1; host.__B.NET.pushState();
+const blob = host.__B.NET.persistBlob();
+const host2 = makeContext('host2.js');
+ctxs[0] = host2;   // the old host is gone; a new process takes its seat
+wire(host2, 0);
+host2.__B.NET.pkey = 'hk';
+host2.__B.NET.code = blob.code;
+host2.__B.NET.mode = 'host';
+host2.__B.NET.restoreFromBlob(JSON.parse(JSON.stringify(blob)));
+host2.__B.NET.tx.send('start', { roster: host2.__B.NET.roster });
+host2.__B.NET.pushState();
+T('the resurrected host rebuilds the table', pub(host2) === pub(client));
+T('the client keeps its seat and real hand through the resurrection',
+  client.__B.MYSEAT === 1 && client.__B.G.players[1].hand.length === host2.__B.G.players[1].hand.length);
+const resHand = host2.__B.G.players[1].hand.length;
+client.bankCard(client.__B.G.players[1].hand[0]);
+T('play continues against the resurrected host', host2.__B.G.players[1].bank.length >= 1 && host2.__B.G.players[1].hand.length === resHand - 1 && pub(host2) === pub(client));
+
 console.log(fails === 0 ? 'NETSIM: ALL PASS' : 'NETSIM FAILURES: ' + fails);
 process.exit(fails === 0 ? 0 : 1);

@@ -174,7 +174,7 @@ NET.onMessage('hello', { key:'stranger' });
 T('rejoin: unknown keys get state only, no roster', !outbox.some(m=>m.t==='start') && outbox.some(m=>m.t==='state'));
 NET.mode='client'; G.over=false;
 NET.onLeave([{ key:'hk' }]);
-T('host leaving ends the table for clients', G.over===true);
+T('host leaving no longer instantly ends the table (debounce owns the verdict)', G.over===false);
 G.over=false; NET.onLeave([{ key:'ck' }]);
 T('a non-host leaving does not end the table', G.over===false);
 NET.mode='off'; NET.tx=null; NET.roster=null;
@@ -320,6 +320,39 @@ let aiDone=false;
 requestPayment(1, 9, 0, ()=>{ aiDone=true; });
 T('a short AI payer auto-strips with no screen', aiDone===true && G.players[1].bank.length===0);
 newGame();
+
+
+// ===== host persistence: the table survives its host =====
+newGame();
+G.turn=1; G.playsLeft=2; G.turnCount=7;
+NET.mode='host'; NET.code='WXYZ'; MYSEAT=0;
+NET.roster=[{key:'hk',name:'Josh'},{key:'ck',name:'Mick'}];
+NET.pendingAsks={}; NET.pendingAskInfo={};
+const blob = NET.persistBlob();
+T('the blob captures the full table', blob.code==='WXYZ' && blob.G.turn===1 && blob.G.players.length===G.players.length && blob.G.players[0].hand.length===G.players[0].hand.length && blob.G.players[0].hand.length>0);
+const pubBefore = JSON.stringify({t:G.turn,p:G.playsLeft,h:G.players.map(q=>q.hand.map(c=>c.id))});
+newGame();   // the host dies: everything wiped
+NET.restoreFromBlob(JSON.parse(JSON.stringify(blob)));
+const pubAfter = JSON.stringify({t:G.turn,p:G.playsLeft,h:G.players.map(q=>q.hand.map(c=>c.id))});
+T('restore rebuilds the identical table', pubAfter===pubBefore && NET.mode==='host' && MYSEAT===0 && GAME_STARTED===true);
+NET.pendingAsks={1:()=>{}}; NET.pendingAskInfo={1:{type:'pay',amount:3}};
+const blob2 = NET.persistBlob();
+T('a mid-ask save remembers the interruption', blob2.pendingAskSeat===1);
+NET.restoreFromBlob(JSON.parse(JSON.stringify(blob2)));
+T('restore cancels the interrupted ask cleanly', Object.keys(NET.pendingAsks).length===0 && logs[0]==='Interrupted action cancelled on resume.');
+NET.mode='off'; NET.roster=null; GAME_STARTED=false; newGame();
+
+// ===== host absence escalates only after the long timer =====
+NET.mode='client'; NET.gone={}; NET._goneTimers={}; NET._hostDeadT=null;
+NET.roster=[{key:'hk',name:'Josh'},{key:'ck',name:'Mick'}];
+let SNAP2 = { a:[{key:'ck'}] };
+NET.tx = { presence:()=>SNAP2, send(){}, track(){} };
+NET._confirmGone('hk');
+T('host absence arms the death timer, table stays open', !!NET._hostDeadT && G.over===false && NET.isGone(0)===true);
+SNAP2 = { a:[{key:'ck'}], b:[{key:'hk'}] };
+NET.reconcilePresence();
+T('host return cancels the death timer', NET._hostDeadT===null && NET.isGone(0)===false && G.over===false);
+NET.mode='off'; NET.roster=null; NET.gone={}; NET.tx=null;
 
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();

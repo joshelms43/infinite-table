@@ -2084,7 +2084,7 @@ function checkAllWin(){
   for(const p of G.players){
     if(checkWin(p)){
       G.over = true; renderAll();
-      if(NET.mode!=='off'){ try{ localStorage.removeItem('it_room'); }catch(e){} }
+      if(NET.mode!=='off'){ try{ localStorage.removeItem('it_room'); localStorage.removeItem('it_host'); }catch(e){} }
       if(NET.mode==='host' && typeof ID!=='undefined') ID.recordMatch(G.players.indexOf(p));
       $('#wintitle').textContent = p===me() ? 'You win' : p.name+' wins';
       $('#winsub').textContent = 'Three complete sets: ' + completeColors(p).map(c=>COLORS[c].label).join(', ');
@@ -2753,8 +2753,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=090"></script>
-<script src="../shared/identity.js?v=090"></script>
+<script src="../shared/config.js?v=091"></script>
+<script src="../shared/identity.js?v=091"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2776,6 +2776,10 @@ const NET = {
       return true;   // blocks every entry: drag, tap, and the Options menu
     }
     if(this.mode!=='client') return false;
+    if(this.roster && this.roster[0] && this.gone[this.roster[0].key]){
+      banner('HOST RECONNECTING…','var(--warning-amber)');
+      return true;
+    }
     this.tx.send('intent', { seat: this.seat, k, a });
     clearSelection(); hidePrompt(); closeSheet();
     this.sentWait = true;
@@ -2863,6 +2867,55 @@ const NET = {
     if(this.mode!=='host' || !this.tx) return;
     this.tx.send('state', this.serialize());
     G.players.forEach((q,i)=>{ if(!q.isAI && i!==MYSEAT) this.tx.send('hand', { seat:i, cards:q.hand }); });
+    this.persistHost();
+  },
+  persistBlob(){
+    return {
+      v: 1, code: this.code, ts: Date.now(),
+      roster: this.roster,
+      pendingAskSeat: Object.keys(this.pendingAsks).length ? +Object.keys(this.pendingAsks)[0] : null,
+      pile: (typeof TABLEPILE!=='undefined') ? TABLEPILE.slice(-3) : [],
+      logs: logs.slice(0, 16),
+      G: { deck:G.deck, discard:G.discard, turn:G.turn, playsLeft:G.playsLeft, turnCount:G.turnCount, over:G.over,
+           players: G.players.map(q=>({ name:q.name, isAI:!!q.isAI, hand:q.hand, bank:q.bank, props:q.props, bldg:q.bldg })) },
+    };
+  },
+  persistHost(){
+    if(this.mode!=='host' || G.over) return;
+    const now = Date.now();
+    if(this._lastPersist && now - this._lastPersist < 500) return;
+    this._lastPersist = now;
+    try{ localStorage.setItem('it_host', JSON.stringify(this.persistBlob())); }catch(e){}
+  },
+  restoreFromBlob(blob){
+    this.roster = blob.roster;
+    GAME_STARTED = true;
+    newGame();
+    const g = blob.G;
+    G.deck = g.deck; G.discard = g.discard;
+    G.turn = g.turn; G.playsLeft = g.playsLeft; G.turnCount = g.turnCount; G.over = false;
+    G.players = g.players.map(q=>({ name:q.name, isAI:!!q.isAI, hand:q.hand, bank:q.bank, props:q.props, bldg:q.bldg }));
+    if(typeof TABLEPILE!=='undefined'){ TABLEPILE.length = 0; (blob.pile||[]).forEach(c=>TABLEPILE.push(c)); }
+    logs.length = 0; (blob.logs||[]).forEach(l=>logs.push(l));
+    this.pendingAsks = {}; this.pendingAskInfo = {};
+    if(blob.pendingAskSeat!=null){
+      log('Interrupted action cancelled on resume.');
+    }
+    this.seat = 0; MYSEAT = 0; this.mode = 'host';
+  },
+  async resurrectHost(blob){
+    this.myName = (blob.roster && blob.roster[0] && blob.roster[0].name) || this.myName || 'Host';
+    if(!(await this.connect(blob.code, true))) return false;
+    this.mode = 'host';
+    this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:true, joined:Date.now(), rev:0 };
+    this.tx.track(this._meta);
+    this.restoreFromBlob(blob);
+    const hm=$('#home'); if(hm&&hm.classList) hm.classList.remove('show');
+    banner(blob.pendingAskSeat!=null ? 'RESUMED — LAST ACTION CANCELLED' : 'TABLE RESUMED','var(--money-gold)');
+    this.tx.send('start', { roster: this.roster });
+    renderAll();
+    this.pushState();
+    return true;
   },
   applyState(st){
     const myHand = (G.players[MYSEAT] && G.players[MYSEAT].hand) || [];
@@ -2883,14 +2936,11 @@ const NET = {
       const ll = $('#loglist');
       if(ll && ll.innerHTML!==undefined) ll.innerHTML = logs.slice(0,120).map(l=>`<div>${l}</div>`).join('');
     }
-    if(st.waitFor===this.seat && !MODE.type && !document.querySelector('#overlay.show')){
-      if(this._healArmed && (Date.now()-(this._healAt||0)) > 900){
-        this._healArmed = false;
-        this.tx.send('hello', { key: this.pkey });   // the host answers with the pending ask
-      } else if(!this._healArmed){ this._healArmed = true; this._healAt = Date.now(); }
-    } else this._healArmed = false;
+    this._lastWaitFor = st.waitFor;
+    if(st.waitFor===this.seat && !MODE.type) this.armHeal(); else this.clearHeal();
     const wasOver = G.over; G.over = st.over;
     if(st.over){ try{ localStorage.removeItem('it_room'); }catch(e){} }
+    if(st.over){ try{ localStorage.removeItem('it_host'); }catch(e){} }
     if(this.lastTurn!==st.turn && !st.over){
       this.lastTurn = st.turn;
       banner(st.turn===this.seat ? 'YOUR TURN' : st.players[st.turn].name.toUpperCase()+"'S TURN", st.turn===this.seat ? 'var(--gold-money)' : null);
@@ -2936,6 +2986,7 @@ const NET = {
       if(type==='evt' && m.kind==='play' && m.seat!==this.seat && m.card) aiShowcase(m.card, m.seat);
       if(type==='nack' && m.seat===this.seat){ banner('NOT RIGHT NOW','var(--warning-amber)'); hidePrompt(); this.sentWait=false; renderAll(); }
       if(type==='ask' && m.seat===this.seat){
+        this.clearHeal();
         try{ if(typeof closePOVForce==='function' && POVIDX!=null) closePOVForce(); }catch(e){}
         const a = m.ask;
         if(a.type==='pay') visDefer(()=>enterPayMode(a.amount, a.recv, ()=>{}, a.canBlock ? { by:null, desc:'' } : null));
@@ -3043,6 +3094,19 @@ const NET = {
     const r = this.roster && this.roster[idx];
     return !!(r && !r.isAI && this.gone[r.key]);
   },
+  armHeal(){
+    if(this._healT) return;
+    this._healTries = 0;
+    const tick = ()=>{
+      this._healT = null;
+      const stuck = this._lastWaitFor===this.seat && !MODE.type && !document.querySelector('#overlay.show');
+      if(!stuck || this.mode!=='client') return;
+      this.tx.send('hello', { key: this.pkey });   // the host answers with the pending ask
+      if(++this._healTries < 3) this._healT = setTimeout(tick, 4000);
+    };
+    this._healT = setTimeout(tick, 1600);
+  },
+  clearHeal(){ if(this._healT){ clearTimeout(this._healT); this._healT = null; } },
   reconcilePresence(){
     if(!this.tx || !this.roster) return;
     const present = new Set();
@@ -3055,7 +3119,9 @@ const NET = {
         clearTimeout(this._goneTimers[r.key]); delete this._goneTimers[r.key];
         if(this.gone[r.key]){
           delete this.gone[r.key];
-          if(!G.over) banner('RECONNECTED','var(--success-green)');
+          const hostKey = this.roster && this.roster[0] && this.roster[0].key;
+          if(r.key===hostKey && this._hostDeadT){ clearTimeout(this._hostDeadT); this._hostDeadT = null; hidePrompt(); }
+          if(!G.over) banner(r.key===hostKey ? 'HOST IS BACK' : 'RECONNECTED','var(--success-green)');
           renderAll();
         }
       } else if(!this.gone[r.key] && !this._goneTimers[r.key]){
@@ -3070,24 +3136,29 @@ const NET = {
     try{
       Object.values(this.tx.presence()||{}).forEach(arr=>arr.forEach(mm=>{ if(mm && mm.key===key) stillGone = false; }));
     }catch(e){}
-    if(stillGone){ this.gone[key] = true; renderAll(); }
+    if(stillGone){
+      this.gone[key] = true; renderAll();
+      const hostKey = this.roster && this.roster[0] && this.roster[0].key;
+      if(this.mode==='client' && key===hostKey && !this._hostDeadT){
+        showPrompt('Host reconnecting…', false);
+        this._hostDeadT = setTimeout(()=>{
+          this._hostDeadT = null;
+          if(!this.gone[hostKey] || G.over) return;
+          G.over = true;
+          try{ localStorage.removeItem('it_room'); }catch(e){}
+          banner('HOST LEFT — TABLE CLOSED','var(--danger-red)');
+          showPrompt('The host left. Tap M DEAL to head home.', false);
+          renderAll();
+        }, 45000);
+      }
+    }
   },
   onJoin(joined){ this.reconcilePresence(); },
   onLeave(left){
     this.reconcilePresence();
     if(!this.roster || G.over) return;
     renderAll();
-    if(this.mode==='client'){
-      const hostKey = this.roster[0] && this.roster[0].key;
-      if(left.some(p=>p && p.key===hostKey)){
-        G.over = true;
-        try{ localStorage.removeItem('it_room'); }catch(e){}
-        banner('HOST LEFT — TABLE CLOSED','var(--danger-red)');
-        showPrompt('The host left. Tap M DEAL to head home.', false);
-        renderAll();
-      }
-      return;
-    }
+    return;   // the verdict on anyone — including the host — belongs to reconcilePresence
     if(this.mode==='host'){
       left.forEach(p=>{
         const r = p && this.roster.find(x=>x.key===p.key);
@@ -3165,6 +3236,13 @@ const NET = {
   },
   onStart(m, hosting){
     const roster = m.roster || (m.names||[]).map(n=>({key:n,name:n}));
+    if(!hosting && this.mode==='client' && GAME_STARTED && this.roster
+       && this.roster.length===roster.length
+       && this.roster.every((r,i)=>r.key===roster[i].key)
+       && roster[this.seat] && roster[this.seat].key===this.pkey){
+      this.roster = roster;   // a re-broadcast to someone else; state and hand follow — no re-init
+      return;
+    }
     this.roster = roster;
     this.lastTurn = null;
     try{ localStorage.setItem('it_room', JSON.stringify({ code:this.code, ts:Date.now() })); }catch(e){}
@@ -3201,13 +3279,34 @@ let GAME_STARTED = false;
   try{
     const q = new URLSearchParams(location.search||'');
     if(q.get('join') || q.get('invite')) return;   // deep links outrank the memory
+    const FRESH = 30*60*1000;
+    const hostBlob = JSON.parse(localStorage.getItem('it_host')||'null');
+    if(hostBlob && hostBlob.v===1 && hostBlob.code && (Date.now()-hostBlob.ts) < FRESH && !hostBlob.G.over){
+      setTimeout(()=>{
+        if(NET.mode!=='off') return;
+        banner('RESUMING YOUR TABLE…','var(--money-gold)');
+        NET.resurrectHost(hostBlob);
+      }, 400);
+      return;
+    }
     const room = JSON.parse(localStorage.getItem('it_room')||'null');
-    if(!(room && room.code && (Date.now()-room.ts) < 30*60*1000)) return;
+    if(!(room && room.code && (Date.now()-room.ts) < FRESH)) return;
     setTimeout(()=>{
       if(NET.mode!=='off') return;
       const jc = $('#joincode'); if(jc && jc.value!==undefined) jc.value = room.code;
       banner('REJOINING '+room.code+'…','var(--money-gold)');
       NET.joinGame();
+      setTimeout(()=>{   // nobody home: leave cleanly instead of haunting the lobby
+        if(NET.mode==='joining' && !GAME_STARTED){
+          let hostThere = false;
+          try{ Object.values(NET.tx.presence()||{}).forEach(a=>a.forEach(mm=>{ if(mm&&mm.host) hostThere=true; })); }catch(e){}
+          if(!hostThere){
+            try{ localStorage.removeItem('it_room'); }catch(e){}
+            banner("TABLE'S GONE",'var(--warning-amber)');
+            location.reload();
+          }
+        }
+      }, 8000);
     }, 400);
   }catch(e){}
 })();

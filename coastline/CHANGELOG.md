@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.9.1 — 2026-07-11
+Session two: the adversarial pass v0.9.0 deserved. Three flaws found in my own day-old work, and the architectural fix that outranks them all.
+
+**The table survives its host** — the host now persists the complete game (deck, hands, boards, pile, log) to local storage on every state push, throttled. Reloading the host's page resurrects the table automatically: reconnects the room, restores everything, re-seats returning clients through the existing hello path, and play continues. A save taken mid-payment cancels the interrupted action honestly on resume ("Interrupted action cancelled on resume" — the continuation is unrecoverable across a process boundary, so it isn't pretended otherwise). Won games clear the blob. Wire-proven: the netsim kills the host context, restores a brand-new one from the blob, and the client keeps its seat, its real hand, and keeps playing.
+
+**Flaw 1: the self-heal was dead in its own scenario** — it needed a second state to arrive, but a host blocked waiting on the stuck client sends no further states. Deadlock preserved by design. The heal is now a real timer: 1.6s after a qualifying state, verify, ping, retry up to three times.
+
+**Flaw 2: host-left was still one raw event from killing everything** — the same transport lie v0.9.0 was built to stop could still instantly close a client's table and wipe its rejoin memory. Host absence now goes through the same debounced reconciliation as everyone else, shows "Host reconnecting…", holds outgoing intents at the door (they'd vanish without even a nack), and only closes the table after 45 seconds of confirmed absence. The host returning cancels everything with "HOST IS BACK". With resurrection above, a host reload is now a ten-second hiccup instead of a funeral.
+
+**Flaw 3: auto-rejoin made host refreshes worse** — the host's own room memory sent them into their dead room as a client. The boot path now checks for a host blob first (resurrect), then the client memory (rejoin), and a client rejoining a genuinely dead room detects the empty chair within 8 seconds and leaves cleanly instead of haunting the lobby.
+
+**Also** — onStart is idempotent for playing clients (heal-pings and resurrections re-broadcast it; nobody's mid-game view re-initialises), and the old "host leaving instantly ends the table" assertion is rewritten to enforce the new contract rather than the old bug.
+
+**Tests** — engine 85/85, wire 22/22 (including host death-and-resurrection), soak, flows 12/12, drop matrix 38/38.
+
 ## v0.9.0 — 2026-07-11
 The stability release. One root, four symptoms, six systems.
 
