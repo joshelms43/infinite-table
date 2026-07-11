@@ -1,5 +1,7 @@
 # Coastline — Changelog
 
+> **Engine research has moved to [infinite-ai](https://github.com/joshelms43/infinite-ai)** *(2026-07-10)* — the ladder, trainer (+ browser twin), parity suites, CI ladder workflow and all verdict history now live there. Headline: the determinized Monte Carlo brain was **certified stronger than the greedy champion** (51.31% head-to-head over 9,000 pre-committed paired games, z = 2.99). This game still runs the greedy brain; to upgrade, copy the AI section of infinite-ai's `engine/index.html` (between the `AI` and `BOOT` markers) into this repo's `coastline/index.html` and re-run the suites. Research branches `seqplan-experiment` and `mcts-experiment` remain here for archaeology; `.github/workflows/engine-ladder.yml` here is superseded by the one in infinite-ai.
+
 ## v0.9.7 — 2026-07-11
 Live field report: a payment that never appeared, a turn that couldn't end, a dead table. The autopsy found a ghost.
 
