@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.8.8 — 2026-07-11
+The No Deal lights up for real this time — and the dim is pretty again.
+
+- Root cause of the dark card: v0.8.7 added the blockable class in renderHand's headless-test fallback branch, which never runs in a browser. The real renderer diffs card nodes incrementally, so the class is now toggled on every pass alongside the existing selection toggle. Lesson pinned: patch the renderer that renders, and know that a function can contain two.
+- The per-card opacity is reverted (translucent overlapping cards show through each other — fair call that it was ugly). The armed state is now a single uniform scrim laid over the whole fan, with the No Deal rising above it — full brightness, lifted 14px, draggable. One composite dim, one lit card.
+
+**Tests** — npm run check green.
+
 ## v0.8.7 — 2026-07-11
 The No Deal actually lights up now.
 

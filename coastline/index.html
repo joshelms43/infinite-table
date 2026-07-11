@@ -438,8 +438,9 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 @keyframes notein{from{transform:translateY(10px) scale(.6);opacity:0}}
 .cardw.paysel .card{outline:3px solid var(--warning-amber)}
 #handwrap.dimmed{opacity:.35;pointer-events:none}
-#handwrap.dimsoft .cardw{opacity:.35;pointer-events:none}
-#handwrap.dimsoft .cardw.blockable{opacity:1;pointer-events:auto}
+#handwrap.dimsoft{pointer-events:none;position:relative}
+#handwrap.dimsoft::after{content:'';position:absolute;inset:-4px;background:rgba(9,20,16,.66);z-index:30;pointer-events:none;border-radius:12px}
+#handwrap.dimsoft .cardw.blockable{position:relative;z-index:31!important;pointer-events:auto;transform:translateY(-14px)}
 
 @keyframes appin{from{opacity:0}}
 
@@ -1303,7 +1304,10 @@ function renderHand(p){
     }
     w.style.zIndex = i+1;
     w.style.marginLeft = i>0 ? (-ov+'px') : '0px';
-    if(w.classList) w.classList.toggle('paysel', MODE.type==='discard' && MODE.sel && MODE.sel.has(c.id));
+    if(w.classList){
+      w.classList.toggle('paysel', MODE.type==='discard' && MODE.sel && MODE.sel.has(c.id));
+      w.classList.toggle('blockable', MODE.type==='pay' && !!MODE.jsn && c.t==='action' && c.kind==='nodeal');
+    }
     if(w.style && w.style.setProperty){
       const fm=(hand.length-1)/2, foff=i-fm;
       const fdeg=Math.max(-4,Math.min(4, foff*(8/Math.max(hand.length-1,1))));
@@ -2738,8 +2742,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=087"></script>
-<script src="../shared/identity.js?v=087"></script>
+<script src="../shared/config.js?v=088"></script>
+<script src="../shared/identity.js?v=088"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
