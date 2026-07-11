@@ -67,6 +67,32 @@ main{width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px}
 }
 .game.soon:active{transform:none}
 footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity:.3}
+.game.hero{position:relative;overflow:hidden;padding-top:96px}
+.herofan{position:absolute;top:-34px;left:50%;transform:translateX(-50%);width:0;height:0}
+.fcard{
+  position:absolute;left:var(--fx);top:0;width:58px;height:86px;border-radius:8px;
+  background:linear-gradient(180deg, var(--fc) 0 26px, #F4EFE5 26px);
+  transform:rotate(var(--fr)) translateY(0);transform-origin:50% 130%;
+  box-shadow:0 6px 14px rgba(8,12,10,.35), inset 0 0 0 1px rgba(36,36,29,.1);
+  transition:transform .35s cubic-bezier(.2,.9,.3,1);
+}
+.game.hero:active .fcard{transform:rotate(calc(var(--fr)*1.35)) translateY(-6px)}
+.quickrow{display:flex;gap:8px;margin:12px 0 4px}
+.quick{
+  flex:1;text-align:center;padding:10px 0;border-radius:12px;font-weight:800;font-size:12.5px;
+  letter-spacing:.4px;color:var(--card-ivory);text-decoration:none;
+  border:1px solid rgba(244,239,229,.16);background:rgba(244,239,229,.06);
+  transition:transform .12s ease, background .12s ease;
+}
+.quick:active{transform:scale(.96);background:rgba(244,239,229,.12)}
+#lobbystats{margin:2px 0;padding:13px 16px;border-radius:14px;
+  border:1px solid rgba(244,239,229,.12);background:rgba(244,239,229,.045);
+  font-weight:800;font-size:12.5px;display:none;justify-content:space-between;align-items:center}
+#lobbystats.show{display:flex}
+#lobbystats .elo{font-family:'Lilita One',cursive;font-size:19px;color:var(--money-gold);letter-spacing:.5px}
+.game.soon{display:flex;align-items:center;justify-content:space-between;padding:16px 18px}
+.soonname{font-weight:800;font-size:14px;opacity:.55}
+.soondesc{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;opacity:.3}
 body{font-variant-numeric:tabular-nums}
 body::after{
   content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
@@ -160,25 +186,34 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
 </header>
 
 <main>
-  <a class="game" href="./coastline/">
-    <div class="gband">
-      <span style="background:var(--p-amber)"></span>
-      <span style="background:var(--p-teal)"></span>
-      <span style="background:var(--p-coral)"></span>
-      <span style="background:var(--p-purple)"></span>
-      <span style="background:var(--p-sky)"></span>
+  <a class="game hero" href="./coastline/">
+    <div class="herofan" aria-hidden="true">
+      <span class="fcard" style="--fr:-14deg;--fx:-34px;--fc:#2E5EAA"></span>
+      <span class="fcard" style="--fr:-5deg;--fx:-12px;--fc:#C8433A"></span>
+      <span class="fcard" style="--fr:4deg;--fx:12px;--fc:#E8C63B"></span>
+      <span class="fcard" style="--fr:13deg;--fx:34px;--fc:#1FA8A0"></span>
     </div>
     <div class="gbody">
       <div class="ginfo">
         <div class="gname">M Deal</div>
-        <div class="gdesc">Build sets, charge rent, raid your mates' tables. Deal-style property card game on the Sunshine Coast.</div>
+        <div class="gdesc">Build sets, charge rent, raid your mates.</div>
       </div>
       <span class="gplay">PLAY</span>
     </div>
-    <div class="gmeta">Solo &amp; online · 2–4 players</div>
+    <div class="quickrow">
+      <a class="quick" href="./coastline/?solo=1">Solo</a>
+      <a class="quick" href="./coastline/?host=1">Host</a>
+      <a class="quick" href="./coastline/?joinui=1">Join</a>
+    </div>
+    <div class="gmeta">Solo &amp; online · 2–4 players · clocks &amp; house rules</div>
   </a>
 
-  <div class="game soon">More games joining the table…</div>
+  <div id="lobbystats"></div>
+
+  <div class="game soon">
+    <div class="soonname">Game two</div>
+    <div class="soondesc">In the workshop</div>
+  </div>
 </main>
 
 <footer>Infinite Table</footer>
@@ -206,6 +241,16 @@ function toggleReveal(id){
 document.getElementById('profmini').onclick = ()=> ID.openProfile();
 ID.renderProfile();
 if(window.SUPABASE_URL) setTimeout(()=>ID.init(), 300);
+setTimeout(()=>{
+  try{
+    const p = (typeof ID!=='undefined') && ID.profile;
+    const el = document.getElementById('lobbystats');
+    if(p && el){
+      el.innerHTML = `<span>${p.display_name||p.username||''}</span><span><span style="opacity:.5;margin-right:8px">${p.wins||0}W · ${p.losses||0}L</span><span class="elo">${p.elo||1000}</span></span>`;
+      el.classList.add('show');
+    }
+  }catch(e){}
+}, 1400);
 </script>
 
 </body>

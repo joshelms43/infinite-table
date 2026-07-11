@@ -350,6 +350,14 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .rulerow.rulelocked{opacity:.6}
 .rulename{font-weight:800;font-size:13.5px;letter-spacing:.2px}
 .rulehint{font-size:11px;opacity:.5;font-weight:700;margin:10px 4px 14px;text-align:left}
+#rulechips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;min-height:0}
+.rulechip{font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:4px 10px;border-radius:20px;
+  border:1px solid rgba(217,160,63,.45);color:var(--money-gold);background:rgba(217,160,63,.08)}
+.seatdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--success-green);margin-right:8px;vertical-align:1px;box-shadow:0 0 6px rgba(74,157,90,.55)}
+.seatdot.bot{background:rgba(244,239,229,.35);box-shadow:none}
+#lobbystart.waiting{opacity:.55;animation:waitpulse 2.2s ease infinite}
+@media (prefers-reduced-motion: reduce){ #lobbystart.waiting{animation:none} }
+@keyframes waitpulse{50%{opacity:.35}}
 .rswitch{width:46px;height:27px;border-radius:14px;background:rgba(244,239,229,.16);position:relative;transition:background .18s ease;flex:0 0 auto;box-shadow:inset 0 1px 3px rgba(8,12,10,.35)}
 .rswitch .rknob{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:var(--card-ivory);transition:left .18s cubic-bezier(.2,.9,.3,1);box-shadow:0 1px 3px rgba(8,12,10,.4)}
 .rswitch.on{background:var(--money-gold)}
@@ -848,6 +856,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
         <button class="homebtn" style="flex:0 0 auto" onclick="NET.commitRename(($('#lobbyname')||{}).value)">Change Name</button>
       </div>
       <button class="homebtn" id="lobbyrules" onclick="openRulesSheet()">Table Rules</button>
+      <div id="rulechips"></div>
       <button id="addbot" class="homebtn" style="display:none" onclick="NET.addBot()">Add a Bot</button>
       <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start Game</button>
       <div id="lobbywait" class="sub"></div>
@@ -1259,6 +1268,23 @@ function saveRules(){ try{ localStorage.setItem('it_rules', JSON.stringify(RULES
 function attacksAllowed(){
   return RULES.firstTurnAttack || G.turnCount > G.players.length;
 }
+function rulesSummary(){
+  const bits = [];
+  if(!RULES.firstTurnAttack) bits.push('No first-round attacks');
+  const c = RULES.clock;
+  if(c.mode==='on'){
+    let t = '';
+    if(c.totalMs>0) t = Math.round(c.totalMs/60000)+'m' + (c.incrementMs>0 ? '+'+Math.round(c.incrementMs/1000) : '');
+    if(c.turnMs>0) t += (t?' · ':'') + Math.round(c.turnMs/1000)+'s turns';
+    bits.push('⏱ '+t+(c.timeout==='loss'?' · flag = loss':''));
+  }
+  return bits;
+}
+function renderRuleChips(){
+  const el = $('#rulechips'); if(!el || el.innerHTML===undefined) return;
+  const bits = rulesSummary();
+  el.innerHTML = bits.length ? bits.map(b=>`<span class="rulechip">${b}</span>`).join('') : '';
+}
 function openRulesSheet(){
   const editable = NET.mode==='off' || NET.mode==='lobby-host' || NET.mode==='host';
   openSheet(`<h3>Table Rules</h3>
@@ -1300,13 +1326,13 @@ function setClockPreset(id){
     if(id==='p200'){ c.totalMs=20*60000; c.incrementMs=0; c.turnMs=0; }
     if(id==='pturn'){ c.totalMs=0; c.incrementMs=0; c.turnMs=60000; }
   }
-  saveRules(); sfx('tick'); haptic(6);
+  saveRules(); sfx('tick'); haptic(6); renderRuleChips();
   openRulesSheet();
 }
 function setClockField(k, v){
   RULES.clock[k] = Math.max(0, +v||0);
   RULES.clock.mode = 'on';
-  saveRules(); sfx('tick');
+  saveRules(); sfx('tick'); renderRuleChips();
 }
 function toggleTimeout(){
   RULES.clock.timeout = RULES.clock.timeout==='loss' ? 'pass' : 'loss';
@@ -1315,7 +1341,7 @@ function toggleTimeout(){
 }
 function toggleRule(k){
   RULES[k] = !RULES[k];
-  saveRules();
+  saveRules(); renderRuleChips();
   const sw = $('#rsw-'+k); if(sw && sw.classList) sw.classList.toggle('on', RULES[k]);
   sfx('tick'); haptic(6);
 }
@@ -2991,8 +3017,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=094"></script>
-<script src="../shared/identity.js?v=094"></script>
+<script src="../shared/config.js?v=095"></script>
+<script src="../shared/identity.js?v=095"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3549,9 +3575,19 @@ const NET = {
   renderLobby(){
     const el = $('#lobbyseats'); if(!el || !this.tx) return;
     const seats = this.tableSeats();
+    renderRuleChips();
+    const sb = $('#lobbystart');
+    if(sb && sb.textContent!==undefined && this.mode==='lobby-host'){
+      const ready = seats.length>=2;
+      sb.textContent = ready ? 'Start Game' : 'Waiting for players…';
+      sb.disabled = !ready;
+      if(sb.classList) sb.classList.toggle('waiting', !ready);
+    }
+    if(this._seatN!=null && seats.length>this._seatN && !GAME_STARTED){ sfx('tick'); haptic(4); }
+    this._seatN = seats.length;
     el.innerHTML = seats.map((mm,i)=>{
       const mine = !mm.isAI && mm.key===this.pkey;
-      const nameCell = `<span style="flex:1;text-align:left">${mm.name}${mine?' · you':''}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
+      const nameCell = `<span style="flex:1;text-align:left"><span class="seatdot ${mm.isAI?'bot':''}"></span>${mm.name}${mine?' · you':''}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
       return `<div class="lobbyseat"><span class="avatar" style="background:${mm.isAI?'var(--felt-highlight)':(i===0?'var(--money-gold)':'var(--felt-highlight)')}">${mm.isAI?'☺':(mm.name||'?')[0]}</span>${nameCell}${mm.isAI&&this.mode==='lobby-host'?`<button class="frremove" onclick="NET.removeBot('${mm.key}')">✕</button>`:''}</div>`;
     }).join('')
       + (seats.length<2 ? '<div class="sub" style="opacity:.5">Share the code</div>' : '');
@@ -3621,6 +3657,9 @@ let GAME_STARTED = false;
 (function autoRejoin(){
   try{
     const q = new URLSearchParams(location.search||'');
+    if(q.get('solo')){ setTimeout(()=>{ const hp=$('#homeprimary'); if(hp && hp.click) hp.click(); }, 350); return; }
+    if(q.get('host')){ setTimeout(()=>{ if(NET.mode==='off') NET.hostGame(); }, 350); return; }
+    if(q.get('joinui')){ setTimeout(()=>{ const jc=$('#joincode'); if(jc && jc.focus){ jc.scrollIntoView && jc.scrollIntoView(); jc.focus(); } }, 400); return; }
     if(q.get('join') || q.get('invite')) return;   // deep links outrank the memory
     const FRESH = 30*60*1000;
     const hostBlob = JSON.parse(localStorage.getItem('it_host')||'null');

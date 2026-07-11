@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.9.5 — 2026-07-11
+Block four: the AAA pass. The platform gets a front page; the room gets glanceability.
+
+**The Infinite Table lobby** — M Deal's tile becomes a hero: a fanned hand of four cards in the set palette rendered in pure CSS (they splay wider on press), the title over one line of copy, and a quick-action row — Solo, Host, Join — that deep-links straight into the right flow inside the game (solo starts, host opens a room, join lands focused on the code field). Below it: a stats strip that appears when signed in (name, W/L, Elo in the gold display face) and a properly designed workshop slot for game two. Chess.com energy on the design tokens.
+
+**The room lobby** — presence dots on every seat (green for humans, neutral for bots); a live rules-summary chip row under Table Rules ("No first-round attacks · ⏱ 10m+5 · flag = loss") that updates as the host flips switches, so guests can read the table's terms at a glance; and the start button carries its own state — "Waiting for players…" with a slow pulse (reduced-motion safe) until two seats fill, then Start Game. A soft tick when someone takes a seat.
+
+**Tests** — full five-stage gate green.
+
 ## v0.9.4 — 2026-07-11
 Block three: the table outlives everyone. Host migration, leave-as-loss, reconstruction.
 
