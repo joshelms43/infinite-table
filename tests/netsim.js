@@ -49,7 +49,7 @@ function wire(ctx, idx) {
 }
 wire(host, 0); wire(client, 1);
 
-const roster = [{ key: 'hk', name: 'Josh', uid: null }, { key: 'ck', name: 'Mick', uid: null }];
+const roster = [{ key: 'hk', name: 'Josh', uid: null }, { key: 'ck', name: 'Mick', uid: null }, { key: 'bot-b', name: 'Bazza', isAI: true }];
 client.__B.NET.pkey = 'ck';
 client.__B.NET.mode = 'joining';
 host.__B.NET.pkey = 'hk';
@@ -130,9 +130,9 @@ T('client sees its own play reflected back', pub(client) === pub(host));
 /* wild movement travels as an intent: client drags, host validates and moves */
 const wcard = dk.find(c => c.t === 'wild' && c.colors && c.colors.length === 2);
 const wcolA = wcard.colors[0], wcolB = wcard.colors[1];
-host.addProp(host.__B.G.players[1], dk.find(c => c.t === 'prop' && c.color === wcolA), wcolA);
+host.addProp(host.__B.G.players[1], dk.filter(c => c.t === 'prop' && c.color === wcolA && c.id !== propC.id)[0], wcolA);
 host.addProp(host.__B.G.players[1], wcard, wcolA);
-host.addProp(host.__B.G.players[1], dk.find(c => c.t === 'prop' && c.color === wcolB), wcolB);
+host.addProp(host.__B.G.players[1], dk.filter(c => c.t === 'prop' && c.color === wcolB && c.id !== propC.id)[0], wcolB);
 host.__B.NET.pushState();
 client.moveWildTo(wcard.id, wcolB);
 const wdest = host.__B.G.players[1].props[wcolB] || [];
@@ -167,6 +167,24 @@ T('the client keeps its seat and real hand through the resurrection',
 const resHand = host2.__B.G.players[1].hand.length;
 client.bankCard(client.__B.G.players[1].hand[0]);
 T('play continues against the resurrected host', host2.__B.G.players[1].bank.length >= 1 && host2.__B.G.players[1].hand.length === resHand - 1 && pub(host2) === pub(client));
+
+/* ===== migration: the host vanishes for good; the client inherits the table ===== */
+client.__B.NET.gone = { hk: true };
+const preMigHand = client.__B.G.players[1].hand.map(c => c.id).sort().join(',');
+client.__B.NET.migrateFrom('hk');
+client.__B.NET.finishPromotion();
+T('the survivor promotes itself to host', client.__B.NET.mode === 'host' && client.__B.NET.hostKey === 'ck');
+T('the departed host is eliminated as a loss', client.__B.G.players[0].out === true);
+T('the heir keeps its own hand through the rebuild', client.__B.G.players[1].hand.map(c => c.id).sort().join(',') === preMigHand);
+T('the bot survives migration (its unknown hand rebuilds; it will redraw)', client.__B.G.players[2].out !== true);
+const idsAll = [];
+const takeAll = a => (a || []).forEach(c => { if (c && c.id != null) idsAll.push(c.id); });
+takeAll(client.__B.G.deck); takeAll(client.__B.G.discard);
+client.__B.G.players.forEach(p => { takeAll(p.hand); takeAll(p.bank); Object.values(p.props).forEach(takeAll);
+  Object.values(p.bldg || {}).forEach(sl => Object.values(sl || {}).forEach(c => { if (c && c.id != null) idsAll.push(c.id); })); });
+if(process.env.NETSIM_DEBUG) console.log('  DBG conserve: total', idsAll.length, 'unique', new Set(idsAll).size, 'deck', client.__B.G.deck.length, 'hands', client.__B.G.players.map(p=>p.hand.length).join('/'));
+T('the rebuilt table conserves all 106 cards exactly once', idsAll.length === 106 && new Set(idsAll).size === 106);
+T('the game continues — two players still stand', client.__B.G.over === false && client.__B.G.turn === 1);
 
 console.log(fails === 0 ? 'NETSIM: ALL PASS' : 'NETSIM FAILURES: ' + fails);
 process.exit(fails === 0 ? 0 : 1);

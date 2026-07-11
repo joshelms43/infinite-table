@@ -919,6 +919,7 @@ const RENT_DUALS = [['gold','teal'],['coral','sky'],['orange','purple'],['green'
 let CID = 0;
 function mk(c){ c.id = ++CID; return c; }
 function buildDeck(){
+  CID = 0;   // the catalog is canonical: card N is card N in every build, forever
   const d = [];
   PROPS.forEach(([color,name,v]) => d.push(mk({t:'prop', color, name, v})));
   DUAL_WILDS.forEach(([colors,v,count]) => { for(let i=0;i<count;i++) d.push(mk({t:'wild', colors:[...colors], v})); });
@@ -2990,8 +2991,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=093"></script>
-<script src="../shared/identity.js?v=093"></script>
+<script src="../shared/config.js?v=094"></script>
+<script src="../shared/identity.js?v=094"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3013,7 +3014,7 @@ const NET = {
       return true;   // blocks every entry: drag, tap, and the Options menu
     }
     if(this.mode!=='client') return false;
-    if(this.roster && this.roster[0] && this.gone[this.roster[0].key]){
+    if(this.roster && this.hostKey && this.gone[this.hostKey]){
       banner('HOST RECONNECTING…','var(--warning-amber)');
       return true;
     }
@@ -3028,6 +3029,8 @@ const NET = {
   evt(seat, card){ if(this.mode==='host' && this.tx && card) this.tx.send('evt', { kind:'play', seat, card }); },
 
   /* --- host: ask a remote seat for a decision --- */
+  hostKey: null,
+  hostSeat(){ const i = this.roster ? this.roster.findIndex(r=>r.key===this.hostKey) : -1; return i; },
   pendingAskInfo: {},
   ask(seat, ask, cb){
     this.pendingAsks[seat] = cb;
@@ -3091,12 +3094,14 @@ const NET = {
 
   /* --- state sync (public state broadcast; own hand per-seat) --- */
   serialize(){
-    const top = G.discard.length ? cardName(G.discard[G.discard.length-1]) : 'Pile';
+    const tc = G.discard[G.discard.length-1];
+    const top = (tc && tc.t) ? cardName(tc) : 'Pile';
     return {
       turn:G.turn, playsLeft:G.playsLeft, turnCount:G.turnCount, over:G.over,
       deckN:G.deck.length, pile:{ label:top, n:G.discard.length },
       players:G.players.map(q=>({ name:q.name, isAI:!!q.isAI, out:!!q.out, handN:q.hand.length, bank:q.bank, props:q.props, bldg:q.bldg })),
       clk: RULES.clock.mode==='on' ? { bank: CLK.bank, turnLeft: CLK.turnLeft, active: clockActiveSeat() } : null,
+      hostKey: this.hostKey,
       logs: logs.slice(0,16),
       waitFor: Object.keys(this.pendingAsks).length ? +Object.keys(this.pendingAsks)[0] : null,
     };
@@ -3151,6 +3156,17 @@ const NET = {
     this.mode = 'host';
     this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:true, joined:Date.now(), rev:0 };
     this.tx.track(this._meta);
+    await new Promise(r=>setTimeout(r, 1200));
+    let rival = false;
+    try{ Object.values(this.tx.presence()||{}).forEach(a=>a.forEach(mm=>{ if(mm && mm.host && mm.key!==this.pkey) rival = true; })); }catch(e){}
+    if(rival){
+      try{ localStorage.removeItem('it_host'); }catch(e){}
+      banner('THE TABLE MOVED ON — REJOINING','var(--warning-amber)');
+      this.mode = 'joining';
+      if(this._meta){ this._meta.host = false; this.tx.track(this._meta); }
+      this.tx.send('hello', { key: this.pkey });
+      return true;
+    }
     this.restoreFromBlob(blob);
     const hm=$('#home'); if(hm&&hm.classList) hm.classList.remove('show');
     banner(blob.pendingAskSeat!=null ? 'RESUMED — LAST ACTION CANCELLED' : 'TABLE RESUMED','var(--money-gold)');
@@ -3166,6 +3182,10 @@ const NET = {
     G.discard = new Array(st.pile.n);
     this.pile = st.pile;
     const cards = a => (a||[]).filter(c=>c && c.t);   // the wire turns undefined into null; never render a hole
+    if(st.hostKey) this.hostKey = st.hostKey;
+    if((MODE.type==='pay' || MODE.type==='discard') && st.waitFor!==this.seat && st.waitFor!==undefined){
+      MODE.type=null; MODE.sel=null; MODE.jsn=null; hidePrompt();
+    }
     if(st.clk){ CLK.bank = st.clk.bank || CLK.bank; CLK.turnLeft = st.clk.turnLeft||0; CLK.active = st.clk.active; renderClocks(); }
     G.players = st.players.map((q,i)=>({
       name:q.name, isAI:q.isAI, out:!!q.out, bank:cards(q.bank),
@@ -3208,6 +3228,11 @@ const NET = {
   onMessage(type, m){
     if(this.mode==='host'){
       if(type==='intent') this.applyIntent(m);
+      if(type==='myhand' && this._collectedHands && !this._promoDone && m && m.seat!=null && m.seat!==MYSEAT){
+        this._collectedHands[m.seat] = m.cards || [];
+        const need = G.players.filter((p,i)=>!p.isAI && !p.out).length;
+        if(Object.keys(this._collectedHands).length >= need) this.finishPromotion();
+      }
       if(type==='hello'){
         if(m && m.key && this.roster && this.roster.some(r=>r.key===m.key)){
           this.tx.send('start', { roster: this.roster, rules: RULES });   // returning player: hand their seat back
@@ -3227,6 +3252,9 @@ const NET = {
         renderAll();
       }
       if(type==='evt' && m.kind==='play' && m.seat!==this.seat && m.card) aiShowcase(m.card, m.seat);
+      if(type==='needhands'){
+        this.tx.send('myhand', { seat: this.seat, cards: G.players[this.seat].hand });
+      }
       if(type==='nack' && m.seat===this.seat){ banner('NOT RIGHT NOW','var(--warning-amber)'); hidePrompt(); this.sentWait=false; renderAll(); }
       if(type==='ask' && m.seat===this.seat){
         this.clearHeal();
@@ -3281,7 +3309,7 @@ const NET = {
       track(meta){ ch.track(meta); },
       presence(){ return ch.presenceState(); },
     };
-    ['state','hand','evt','ask','intent','start','hello','nack'].forEach(ev=>{
+    ['state','hand','evt','ask','intent','start','hello','nack','needhands','myhand'].forEach(ev=>{
       ch.on('broadcast', { event:ev }, (msg)=>self.onMessage(ev, msg.payload));
     });
     ch.on('presence', { event:'sync' }, ()=>{ self.renderLobby(); self.reconcilePresence(); });
@@ -3350,6 +3378,63 @@ const NET = {
     this._healT = setTimeout(tick, 1600);
   },
   clearHeal(){ if(this._healT){ clearTimeout(this._healT); this._healT = null; } },
+  electNewHost(deadKey){
+    const present = new Set();
+    try{ Object.values(this.tx.presence()||{}).forEach(a=>a.forEach(mm=>{ if(mm&&mm.key) present.add(mm.key); })); }catch(e){}
+    for(let i=0;i<this.roster.length;i++){
+      const r = this.roster[i];
+      if(!r || r.isAI || r.key===deadKey) continue;
+      if(G.players[i] && G.players[i].out) continue;
+      if(present.has(r.key) || r.key===this.pkey) return r.key;
+    }
+    return null;
+  },
+  migrateFrom(deadKey){
+    const deadSeat = this.roster.findIndex(r=>r.key===deadKey);
+    const heir = this.electNewHost(deadKey);
+    if(!heir){
+      G.over = true;
+      banner('TABLE CLOSED','var(--danger-red)');
+      renderAll(); return;
+    }
+    this.hostKey = heir;
+    if(heir!==this.pkey){
+      const hn = this.roster.find(r=>r.key===heir);
+      banner('NEW HOST: '+((hn&&hn.name)||'').toUpperCase(),'var(--money-gold)');
+      hidePrompt();
+      return;   // the heir's first state confirms everything
+    }
+    this.promoteToHost(deadSeat, deadKey);
+  },
+  promoteToHost(deadSeat, deadKey){
+    this.mode = 'host';
+    this.hostKey = this.pkey;
+    hidePrompt();
+    banner('YOU ARE THE HOST NOW','var(--money-gold)');
+    if(this._meta){ this._meta.host = true; this._meta.rev = (this._meta.rev||0)+1; try{ this.tx.track(this._meta); }catch(e){} }
+    this._collectedHands = {};
+    this._promoDone = false;
+    this._collectedHands[MYSEAT] = G.players[MYSEAT].hand.slice();
+    if(deadSeat>=0 && G.players[deadSeat] && !G.players[deadSeat].out){
+      G.players[deadSeat].hand = [];   // its contents were never ours to know; the rebuild reclaims them
+      eliminatePlayer(deadSeat, 'left the table');
+    }
+    if(G.over) return;
+    this.tx.send('needhands', { to: this.pkey });
+    this._promoT = setTimeout(()=>this.finishPromotion(), 1800);
+  },
+  finishPromotion(){
+    if(this._promoDone) return; this._promoDone = true;
+    clearTimeout(this._promoT);
+    G.players.forEach((p,i)=>{
+      if(this._collectedHands[i]) p.hand = this._collectedHands[i];
+      else p.hand = p.hand.filter(c=>typeof c.id==='number');   // placeholders were never cards
+    });
+    rebuildDeckFromKnown();
+    log('Table rebuilt — the discard was shuffled back into the deck.');
+    renderAll();
+    this.pushState();
+  },
   reconcilePresence(){
     if(!this.tx || !this.roster) return;
     const present = new Set();
@@ -3362,8 +3447,9 @@ const NET = {
         clearTimeout(this._goneTimers[r.key]); delete this._goneTimers[r.key];
         if(this.gone[r.key]){
           delete this.gone[r.key];
-          const hostKey = this.roster && this.roster[0] && this.roster[0].key;
+          const hostKey = this.hostKey;
           if(r.key===hostKey && this._hostDeadT){ clearTimeout(this._hostDeadT); this._hostDeadT = null; hidePrompt(); }
+          if(this._elimT && this._elimT[r.key]){ clearTimeout(this._elimT[r.key]); delete this._elimT[r.key]; }
           if(!G.over) banner(r.key===hostKey ? 'HOST IS BACK' : 'RECONNECTED','var(--success-green)');
           renderAll();
         }
@@ -3381,18 +3467,26 @@ const NET = {
     }catch(e){}
     if(stillGone){
       this.gone[key] = true; renderAll();
-      const hostKey = this.roster && this.roster[0] && this.roster[0].key;
+      const hostKey = this.hostKey;
       if(this.mode==='client' && key===hostKey && !this._hostDeadT){
         showPrompt('Host reconnecting…', false);
         this._hostDeadT = setTimeout(()=>{
           this._hostDeadT = null;
           if(!this.gone[hostKey] || G.over) return;
-          G.over = true;
-          try{ localStorage.removeItem('it_room'); }catch(e){}
-          banner('HOST LEFT — TABLE CLOSED','var(--danger-red)');
-          showPrompt('The host left. Tap M DEAL to head home.', false);
-          renderAll();
+          this.migrateFrom(hostKey);   // the table outlives its host
         }, 45000);
+      }
+      if(this.mode==='host' && key!==this.hostKey){
+        if(!this._elimT) this._elimT = {};
+        const seat = this.roster ? this.roster.findIndex(r=>r.key===key) : -1;
+        if(seat>=0 && G.players[seat] && !G.players[seat].out && !this._elimT[key]){
+          this._elimT[key] = setTimeout(()=>{
+            delete this._elimT[key];
+            if(this.gone[key] && !G.over && G.players[seat] && !G.players[seat].out){
+              eliminatePlayer(seat, 'left the table');
+            }
+          }, 45000);
+        }
       }
     }
   },
@@ -3478,6 +3572,8 @@ const NET = {
     this.onStart({ roster: this.roster }, true);
   },
   onStart(m, hosting){
+    this.hostKey = (m && m.hostKey) || (m.roster && m.roster[0] && m.roster[0].key) || this.hostKey;
+    if(hosting) this.hostKey = this.pkey;
     if(!hosting && m.rules && m.rules.v===1){
       RULES = { ...RULES_DEFAULTS, ...m.rules, clock: { ...RULES_DEFAULTS.clock, ...(m.rules.clock||{}) } };
     }
@@ -3624,6 +3720,17 @@ function aiPlayVis(card){
 }
 function othersOf(idx){ return G.players.map((_,i)=>i).filter(i=>i!==idx && !G.players[i].out); }
 function alivePlayers(){ return G.players.map((_,i)=>i).filter(i=>!G.players[i].out); }
+function rebuildDeckFromKnown(){
+  const known = new Set();
+  const take = a => (a||[]).forEach(c=>{ if(c && typeof c.id==='number') known.add(c.id); });
+  G.players.forEach(p=>{
+    take(p.hand); take(p.bank);
+    Object.values(p.props).forEach(take);
+    Object.values(p.bldg||{}).forEach(sl=>Object.values(sl||{}).forEach(c=>{ if(c&&c.id!=null) known.add(c.id); }));
+  });
+  G.deck = shuffle(buildDeck().filter(c=>!known.has(c.id)));
+  G.discard = [];
+}
 function eliminatePlayer(seat, reason){
   const p = G.players[seat]; if(!p || p.out) return;
   p.out = true;

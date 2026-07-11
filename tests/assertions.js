@@ -345,6 +345,7 @@ NET.mode='off'; NET.roster=null; GAME_STARTED=false; newGame();
 // ===== host absence escalates only after the long timer =====
 NET.mode='client'; NET.gone={}; NET._goneTimers={}; NET._hostDeadT=null;
 NET.roster=[{key:'hk',name:'Josh'},{key:'ck',name:'Mick'}];
+NET.hostKey='hk';
 let SNAP2 = { a:[{key:'ck'}] };
 NET.tx = { presence:()=>SNAP2, send(){}, track(){} };
 NET._confirmGone('hk');
@@ -416,6 +417,22 @@ G.players.forEach((p,i)=>{ if(i!==2) p.out = (i!==2); });
 G.players.forEach((p,i)=>{ p.out = i!==2; });
 G.over=false;
 eliminatePlayer(3, 'redundant');
+newGame();
+
+
+// ===== deck reconstruction: everything unknown returns to the deck =====
+newGame();
+G.players.forEach(p=>{ p.hand=[]; p.bank=[]; p.props={}; p.bldg={}; });
+const dkm = buildDeck();
+G.players[0].hand = dkm.slice(0,5);
+G.players[1].bank = dkm.slice(5,8);
+addProp(G.players[2], dkm[10], dkm[10].color || 'teal');
+G.deck = []; G.discard = dkm.slice(20,30);
+rebuildDeckFromKnown();
+const knownSet = new Set([...G.players[0].hand, ...G.players[1].bank, dkm[10]].map(c=>c.id));
+T('rebuild returns every unknown card to the deck', G.deck.length===106-knownSet.size && G.discard.length===0);
+const rIds = new Set(G.deck.map(c=>c.id));
+T('rebuild never duplicates a visible card', !G.players[0].hand.some(c=>rIds.has(c.id)) && !G.players[1].bank.some(c=>rIds.has(c.id)));
 newGame();
 
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====

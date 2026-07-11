@@ -1,5 +1,22 @@
 # Coastline — Changelog
 
+## v0.9.4 — 2026-07-11
+Block three: the table outlives everyone. Host migration, leave-as-loss, reconstruction.
+
+**Games end two ways** — a winner, or one player standing. Never by departure.
+
+**Leaving is losing** — absence past the 45-second grace eliminates through the block-two primitive; rejoining inside it cancels, as always. In a two-player game the departure hands the survivor the win immediately — one-standing is one-standing.
+
+**The host is a key, not a seat** — hostKey travels in every state; every host check reads it. When a host's grace expires, clients hold a deterministic election (lowest alive, present, human seat); exactly one heir promotes, the rest see NEW HOST and wait for its first broadcast.
+
+**The reconstruction protocol** — the part naive migrations fudge: the heir never knew the deck, discard, other hands or the dead host's cards, by privacy design. Promotion collects each survivor's own hand over the wire, unions the public table, and reshuffles everything unaccounted for into a fresh deck; bot hands rebuild too (bots redraw). Logged at the table. Wire-proven with a hard invariant: the inherited table conserves all 106 cards exactly once.
+
+**Three real bugs the invariant caught while being built** — buildDeck minted globally-incrementing ids, so any second build was a different universe (canonical 1–106 now, per build, forever); clients carried phantom placeholder hands for other seats into the known-scan (placeholders stripped honestly at promotion); and the wire test's own fixtures had planted one physical card on two boards, which every earlier assertion had happily overlooked. Conservation checks earn their keep.
+
+**A ghost can't split the table** — an ex-host returning after migration detects the rival, stands down, clears its blob and rejoins as the eliminated player it now is. Stale interrupt UIs exit on the first state that isn't waiting on them.
+
+**Tests** — engine 100/100, wire 30/30 (migration end-to-end with conservation), soak, flows 12/12, drop matrix 38/38.
+
 ## v0.9.3 — 2026-07-11
 Block two: the clock. Chess.com rules on a card table.
 
