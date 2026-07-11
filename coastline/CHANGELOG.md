@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.9.2 — 2026-07-11
+Driving hour, block one: the Table Rules foundation — and the accounts mystery solved.
+
+**Accounts** — the "SQL error on line 1" was almost certainly TypeScript in the SQL editor: the register piece is an Edge Function, not SQL (the schema itself ran successfully long ago). DEPLOY.md now lives at the repo root with the exact click-path; the whole thing is a ninety-second paste under Edge Functions → Deploy a new function → name it `register`.
+
+**Table Rules** — a proper settings system, built as a foundation rather than a toggle bolted on: RULES has versioned defaults, persists locally, travels inside every start broadcast (games, rejoins, rematches, resurrections — the host blob carries it too), and clients adopt it on start. Wire-asserted. The rules sheet opens from the home screen and the room lobby — host-editable, read-only with "Set by the host" for guests — using a new switch control built on the design tokens.
+
+**First tenant: attacks on the first go-round** — off means no rent, favours, shouts, swipes, swaps or takeovers until every seat has had a turn. Enforced in the executors (host-authoritative, so no client can cheat it) and gated at the AI's candidate registration — the deeper cut, because the AI calls resolveBlock directly and skips the executors entirely; gating only the executors would have let bots break the rule and, worse, stall their own turns on the refusal. Engine-asserted both ways.
+
+**Scaffolded, deliberately dark** — the clock settings model (mode, total time, per-turn, increment, timeout consequence) ships in RULES now so every persistence and wire path already carries it; the clock engine and its UI are the next block. No dead controls shown.
+
+**Ruling recorded** — engine/AI work moves to its own repository when Josh sets it up; noted here and in the README to stop the version collisions at the source.
+
+**Tests** — engine 88/88, wire 23/23, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.9.1 — 2026-07-11
 Session two: the adversarial pass v0.9.0 deserved. Three flaws found in my own day-old work, and the architectural fix that outranks them all.
 

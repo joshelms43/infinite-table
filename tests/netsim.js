@@ -7,7 +7,7 @@ const path = require('path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'coastline', 'index.html'), 'utf8');
 const gameCode = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n')
-  + '\n;globalThis.__B = { get NET(){ return NET; }, get G(){ return G; }, get MYSEAT(){ return MYSEAT; } };';
+  + '\n;globalThis.__B = { get NET(){ return NET; }, get G(){ return G; }, get MYSEAT(){ return MYSEAT; }, get RULES(){ return RULES; } };';
 
 let fails = 0;
 const T = (n, c) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + n); if (!c) fails++; };
@@ -55,7 +55,7 @@ client.__B.NET.mode = 'joining';
 host.__B.NET.pkey = 'hk';
 host.__B.NET.mode = 'lobby-host';
 
-host.__B.NET.tx.send('start', { roster });
+host.__B.NET.tx.send('start', { roster, rules: { v:1, firstTurnAttack:false, clock:{ mode:'off' } } });
 host.__B.NET.onStart({ roster }, true);
 
 const pub = g => JSON.stringify({
@@ -63,6 +63,7 @@ const pub = g => JSON.stringify({
   players: g.__B.G.players.map(p => ({ n: p.name, h: p.hand.length, b: p.bank.map(c => c.id).sort(), pr: Object.keys(p.props).sort() })),
 });
 
+T('rules travel with the start broadcast', client.__B.RULES && client.__B.RULES.firstTurnAttack===false);
 T('start seats both sides correctly', host.__B.MYSEAT === 0 && client.__B.MYSEAT === 1 && client.__B.NET.mode === 'client' && host.__B.NET.mode === 'host');
 T('client converges to host public state after start', pub(client) === pub(host));
 if (DBG) {

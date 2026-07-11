@@ -346,6 +346,14 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 .wildfly .card{width:68px;height:104px}
 .setgroup.dropready{outline:2px solid var(--money-gold);outline-offset:3px;border-radius:14px}
+.rulerow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 4px;border-bottom:1px solid rgba(244,239,229,.08)}
+.rulerow.rulelocked{opacity:.6}
+.rulename{font-weight:800;font-size:13.5px;letter-spacing:.2px}
+.rulehint{font-size:11px;opacity:.5;font-weight:700;margin:10px 4px 14px;text-align:left}
+.rswitch{width:46px;height:27px;border-radius:14px;background:rgba(244,239,229,.16);position:relative;transition:background .18s ease;flex:0 0 auto;box-shadow:inset 0 1px 3px rgba(8,12,10,.35)}
+.rswitch .rknob{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:var(--card-ivory);transition:left .18s cubic-bezier(.2,.9,.3,1);box-shadow:0 1px 3px rgba(8,12,10,.4)}
+.rswitch.on{background:var(--money-gold)}
+.rswitch.on .rknob{left:22px}
 .setghost{
   flex:0 0 102px;width:102px;height:150px;border:2px dashed rgba(217,160,63,.5);
   border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
@@ -801,6 +809,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
       <button id="rejoinbtn" class="homebtn" style="display:none"></button>
       <div id="onlinepanel" class="reveal">
         <div class="onlinebox">
+          <button class="homebtn" style="width:100%" onclick="openRulesSheet()">Table Rules</button>
           <button class="homebtn" style="width:100%" onclick="NET.hostGame(this)">Host a Room</button>
           <div class="joinrow" style="margin-top:8px">
             <input id="joincode" maxlength="4" placeholder="CODE" autocomplete="off">
@@ -818,6 +827,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
         <input id="lobbyname" class="namefield" maxlength="12" placeholder="Your name" autocomplete="off" style="flex:1;margin-top:0">
         <button class="homebtn" style="flex:0 0 auto" onclick="NET.commitRename(($('#lobbyname')||{}).value)">Change Name</button>
       </div>
+      <button class="homebtn" id="lobbyrules" onclick="openRulesSheet()">Table Rules</button>
       <button id="addbot" class="homebtn" style="display:none" onclick="NET.addBot()">Add a Bot</button>
       <button id="lobbystart" class="homebtn primary" onclick="NET.startOnline()" disabled>Start Game</button>
       <div id="lobbywait" class="sub"></div>
@@ -1108,6 +1118,38 @@ function aiShowcase(card, oppIdx){
 let prevComplete = new Set();
 let PREVBANK = -1;
 let PREVBANKN = -1;
+const RULES_DEFAULTS = {
+  v: 1,
+  firstTurnAttack: true,
+  clock: { mode:'off', totalMs: 20*60*1000, turnMs: 60*1000, incrementMs: 0, timeout: 'pass' },
+};
+let RULES = (function(){
+  try{
+    const saved = JSON.parse(localStorage.getItem('it_rules')||'null');
+    if(saved && saved.v===1) return { ...RULES_DEFAULTS, ...saved, clock: { ...RULES_DEFAULTS.clock, ...(saved.clock||{}) } };
+  }catch(e){}
+  return JSON.parse(JSON.stringify(RULES_DEFAULTS));
+})();
+function saveRules(){ try{ localStorage.setItem('it_rules', JSON.stringify(RULES)); }catch(e){} }
+function attacksAllowed(){
+  return RULES.firstTurnAttack || G.turnCount > G.players.length;
+}
+function openRulesSheet(){
+  const editable = NET.mode==='off' || NET.mode==='lobby-host' || NET.mode==='host';
+  openSheet(`<h3>Table Rules</h3>
+    <div class="rulerow ${editable?'':'rulelocked'}" ${editable?`onclick="toggleRule('firstTurnAttack')"`:''}>
+      <span class="rulename">Attacks on the first go-round</span>
+      <span class="rswitch ${RULES.firstTurnAttack?'on':''}" id="rsw-firstTurnAttack"><span class="rknob"></span></span>
+    </div>
+    <div class="rulehint">${editable ? 'Rules apply to the next game at this table.' : 'Set by the host.'}</div>
+    <button class="homebtn" onclick="closeSheet()">Done</button>`);
+}
+function toggleRule(k){
+  RULES[k] = !RULES[k];
+  saveRules();
+  const sw = $('#rsw-'+k); if(sw && sw.classList) sw.classList.toggle('on', RULES[k]);
+  sfx('tick'); haptic(6);
+}
 const logs = [];
 function log(msg){
   logs.unshift(msg);
@@ -2626,8 +2668,14 @@ function processQueue(idxs, perFn, done){
   (function next(){ if(G.over) return; const i=q.shift(); if(i===undefined) return done(); perFn(i,next); })();
 }
 /* ----- human action executions ----- */
+function attackGate(b){
+  if(attacksAllowed()) return false;
+  if(b===MYSEAT) banner('NO ATTACKS ON THE FIRST GO-ROUND','var(--warning-amber)');
+  return true;
+}
 function doFavour(c,targetIdx,by){
   if(NET.intercept('favour',{id:c.id,t:targetIdx})) return;
+  if(attackGate(by==null?MYSEAT:by)) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
   spendAction(c,b);
   log(nameOf(b)+' played Call In a Favour on '+nameOf(targetIdx)+'.');
@@ -2639,6 +2687,7 @@ function doFavour(c,targetIdx,by){
 }
 function doShout(c,by){
   if(NET.intercept('shout',{id:c.id})) return;
+  if(attackGate(by==null?MYSEAT:by)) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
   spendAction(c,b);
   log(nameOf(b)+' shouted a round — everyone owes them $2M.');
@@ -2652,6 +2701,7 @@ function doShout(c,by){
 }
 function doRent(c,color,targetIdx,by){
   if(NET.intercept('rent',{id:c.id,color,t:targetIdx})) return;
+  if(attackGate(by==null?MYSEAT:by)) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
   const actor = G.players[b];
   const base = rentFor(actor,color);
@@ -2694,6 +2744,7 @@ function stealTargetsOf(pIdx){ // props not in complete sets
 }
 function execSwipe(c, tIdx, cardId, by){
   if(NET.intercept('swipe',{id:c.id,t:tIdx,cid:cardId})) return;
+  if(attackGate(by==null?MYSEAT:by)) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
   const target = G.players[tIdx];
   const entry = propList(target).find(x=>x.card.id===cardId);
@@ -2720,6 +2771,7 @@ function execTakeoverD(c, tIdx, color, by){
   });
 }
 function execSwapFinal(c, tIdx, theirCardId, mineCardId, by){
+  if(attackGate(by==null?MYSEAT:by)) return;
   if(NET.intercept('swap',{id:c.id,t:tIdx,cid:theirCardId,mid:mineCardId})) return;
   const b=(by==null?MYSEAT:by); announcePlay(b,c);
   const target=G.players[tIdx];
@@ -2739,6 +2791,7 @@ function execSwapFinal(c, tIdx, theirCardId, mineCardId, by){
   });
 }
 function doTakeover(fromIdx,toIdx,color){
+  if(attackGate(toIdx)) return;
   const from=G.players[fromIdx], to=G.players[toIdx];
   const cards=(from.props[color]||[]).splice(0);
   delete from.props[color];
@@ -2753,8 +2806,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=091"></script>
-<script src="../shared/identity.js?v=091"></script>
+<script src="../shared/config.js?v=092"></script>
+<script src="../shared/identity.js?v=092"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -2874,6 +2927,7 @@ const NET = {
       v: 1, code: this.code, ts: Date.now(),
       roster: this.roster,
       pendingAskSeat: Object.keys(this.pendingAsks).length ? +Object.keys(this.pendingAsks)[0] : null,
+      rules: RULES,
       pile: (typeof TABLEPILE!=='undefined') ? TABLEPILE.slice(-3) : [],
       logs: logs.slice(0, 16),
       G: { deck:G.deck, discard:G.discard, turn:G.turn, playsLeft:G.playsLeft, turnCount:G.turnCount, over:G.over,
@@ -2888,6 +2942,7 @@ const NET = {
     try{ localStorage.setItem('it_host', JSON.stringify(this.persistBlob())); }catch(e){}
   },
   restoreFromBlob(blob){
+    if(blob.rules && blob.rules.v===1) RULES = { ...RULES_DEFAULTS, ...blob.rules, clock: { ...RULES_DEFAULTS.clock, ...(blob.rules.clock||{}) } };
     this.roster = blob.roster;
     GAME_STARTED = true;
     newGame();
@@ -2912,7 +2967,7 @@ const NET = {
     this.restoreFromBlob(blob);
     const hm=$('#home'); if(hm&&hm.classList) hm.classList.remove('show');
     banner(blob.pendingAskSeat!=null ? 'RESUMED — LAST ACTION CANCELLED' : 'TABLE RESUMED','var(--money-gold)');
-    this.tx.send('start', { roster: this.roster });
+    this.tx.send('start', { roster: this.roster, rules: RULES });
     renderAll();
     this.pushState();
     return true;
@@ -2967,7 +3022,7 @@ const NET = {
       if(type==='intent') this.applyIntent(m);
       if(type==='hello'){
         if(m && m.key && this.roster && this.roster.some(r=>r.key===m.key)){
-          this.tx.send('start', { roster: this.roster });   // returning player: hand their seat back
+          this.tx.send('start', { roster: this.roster, rules: RULES });   // returning player: hand their seat back
         }
         this.pushState();
         if(m && m.key && this.roster){
@@ -3226,7 +3281,7 @@ const NET = {
     const seats = this.tableSeats();
     if(seats.length<2) return;
     const roster = seats.map(mm=>({ key:mm.key, name:mm.name, uid:mm.uid||null, isAI:!!mm.isAI }));
-    this.tx.send('start', { roster });
+    this.tx.send('start', { roster, rules: RULES });
     this.onStart({ roster }, true);
   },
   rematch(){
@@ -3235,6 +3290,9 @@ const NET = {
     this.onStart({ roster: this.roster }, true);
   },
   onStart(m, hosting){
+    if(!hosting && m.rules && m.rules.v===1){
+      RULES = { ...RULES_DEFAULTS, ...m.rules, clock: { ...RULES_DEFAULTS.clock, ...(m.rules.clock||{}) } };
+    }
     const roster = m.roster || (m.names||[]).map(n=>({key:n,name:n}));
     if(!hosting && this.mode==='client' && GAME_STARTED && this.roster
        && this.roster.length===roster.length
@@ -3536,7 +3594,7 @@ function brainCandidates(p, idx, next){
       const urgent = completeColors(G.players[best.t]).length>=2;
       let ev = winNow ? 1000 : jsnAdjusted(wOf(p).tk_base + best.val*wOf(p).tk_val, best.t, idx);
       if(!winNow && !urgent && G.turnCount<4) ev *= wOf(p).tk_hold; // hold it early
-      add(ev, ()=>{
+      attacksAllowed() && add(ev, ()=>{
         spendAI(tk,p); renderAll();
         log(p.name+' launched a Hostile Takeover on '+(best.t===0?'your':G.players[best.t].name+"'s")+' '+COLORS[best.col].label+' set!');
         banner('HOSTILE TAKEOVER!','var(--coral)');
@@ -3561,7 +3619,7 @@ function brainCandidates(p, idx, next){
     const collect = amt => targets.reduce((s,t)=>s+jsnAdjusted(Math.min(amt, liquidOf(G.players[t]))*wOf(p).rent_eff, t, idx), 0);
     const hike = p.hand.find(x=>x.t==='action'&&x.kind==='hike');
     add(collect(bo.r), ()=>runRent(c,bo,targets,null), {cardId:c.id, mode:'play', label:'Charge '+COLORS[bo.col].label+' rent ($'+bo.r+'M)'});
-    if(hike && G.playsLeft>=2) add(collect(bo.r*2)-wOf(p).hike_cost, ()=>runRent(c,bo,targets,hike), {cardId:c.id, mode:'play', label:'Charge '+COLORS[bo.col].label+' rent + Hike ($'+(bo.r*2)+'M)'});
+    if(hike && G.playsLeft>=2) attacksAllowed() && add(collect(bo.r*2)-wOf(p).hike_cost, ()=>runRent(c,bo,targets,hike), {cardId:c.id, mode:'play', label:'Charge '+COLORS[bo.col].label+' rent + Hike ($'+(bo.r*2)+'M)'});
   });
   function runRent(c,bo,targets,hike){
     let amount = bo.r;
@@ -3640,7 +3698,7 @@ function brainCandidates(p, idx, next){
   const fv = p.hand.find(c=>c.t==='action'&&c.kind==='favour');
   if(fv){
     const t = enemies.slice().sort((a,b)=>liquidOf(G.players[b])-liquidOf(G.players[a]))[0];
-    add(jsnAdjusted(Math.min(5, liquidOf(G.players[t]))*0.85, t, idx), ()=>{
+    attacksAllowed() && add(jsnAdjusted(Math.min(5, liquidOf(G.players[t]))*0.85, t, idx), ()=>{
       spendAI(fv,p); renderAll();
       log(p.name+' called in a favour from '+(t===0?'you':G.players[t].name)+' — $5M.');
       resolveBlock(t,idx,'Call In a Favour',(blocked,x)=>{
@@ -3655,7 +3713,7 @@ function brainCandidates(p, idx, next){
   const sh = p.hand.find(c=>c.t==='action'&&c.kind==='shout');
   if(sh){
     const ev = enemies.reduce((s,t)=>s+jsnAdjusted(Math.min(2, liquidOf(G.players[t]))*0.85, t, idx), 0);
-    add(ev, ()=>{
+    attacksAllowed() && add(ev, ()=>{
       spendAI(sh,p); renderAll();
       log(p.name+' shouted a round — everyone owes them $2M.');
       processQueue(enemies,(t,go)=>{

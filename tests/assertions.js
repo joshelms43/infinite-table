@@ -354,6 +354,27 @@ NET.reconcilePresence();
 T('host return cancels the death timer', NET._hostDeadT===null && NET.isGone(0)===false && G.over===false);
 NET.mode='off'; NET.roster=null; NET.gone={}; NET.tx=null;
 
+
+// ===== table rules: no attacks on the first go-round =====
+newGame();
+const dkr = buildDeck();
+RULES.firstTurnAttack = false;
+G.turn = 0; G.playsLeft = 3; G.turnCount = 1; G.over = false; MYSEAT = 0;
+const rentR = dkr.find(c=>c.t==='rent' && c.colors);
+const rcolR = rentR.colors[0];
+addProp(me(), dkr.find(c=>c.t==='prop'&&c.color===rcolR), rcolR);
+me().hand = [rentR];
+G.players[1].bank = [dkr.find(c=>c.t==='money'&&c.v===5)];
+doRent(rentR, rcolR, 1, 0);
+T('first-round rent is refused when the rule is off', me().hand.length===1 && G.players[1].bank.length===1);
+G.turnCount = G.players.length + 1;
+doRent(rentR, rcolR, 1, 0);
+T('the same rent works once the first round has passed', me().hand.length===0);
+RULES.firstTurnAttack = true;
+G.turnCount = 1;
+T('the default allows first-round attacks', attacksAllowed()===true);
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

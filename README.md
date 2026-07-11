@@ -42,6 +42,9 @@ npm run check     # the pre-ship gate: engine suite, interaction flows, drop mat
 
 Suites: `tests/test.js` (engine + protocol assertions, headless), `tests/repro3.js` (jsdom interaction flows), `tests/repro2.js` (jsdom drag-drop matrix — every card kind on every zone). All three must pass before any push; the drop matrix exits nonzero on errors.
 
+## Repository ruling
+Engine/AI training work (trainer, ladder) moves to its own repository — ruled 2026-07-11, pending setup. Until then, tests/trainer* and tests/ladder.js are guests here.
+
 ## Conventions
 
 - Single-file vanilla HTML/JS per game, no build step. Complete files only. Vercel auto-deploys from `main`.
