@@ -792,7 +792,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.9.6</span>
+    <span class="ver">v0.9.7</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1253,7 +1253,7 @@ function clockTimeout(seat, bankExhausted){
 function forceResolveAsk(seat){
   const cb = NET.pendingAsks[seat]; const info = NET.pendingAskInfo[seat];
   if(!cb) return;
-  delete NET.pendingAsks[seat]; delete NET.pendingAskInfo[seat];
+  delete NET.pendingAsks[seat]; delete NET.pendingAskInfo[seat]; delete NET.pendingAskAt[seat];
   log(nameOf(seat)+"'s time ran out — resolved automatically.");
   const t = info && info.type;
   if(t==='pay') cb({ ids: [] });                      // host picks a fair cover
@@ -2843,13 +2843,14 @@ function enterReactMode(info, onUse, onPass){
     <div class="reactbar"><span style="animation-duration:${info.ms}ms"></span></div>`;
   w.onclick = ()=>{ if(MODE.reactPass) MODE.reactPass(); };
   document.body.appendChild(w);
-  MODE.reactT = setTimeout(()=>{ if(MODE.reactPass) MODE.reactPass(); }, info.ms);
+  MODE.reactT = setTimeout(()=>{ if(MODE.type==='react' && MODE.reactPass) MODE.reactPass(); }, info.ms);
   renderAll();
 }
 function exitReactMode(silent){
-  clearTimeout(MODE.reactT);
+  clearTimeout(MODE.reactT); MODE.reactT = null;
   const w = document.getElementById('reactwrap'); if(w && w.remove) w.remove();
-  if(MODE.type==='react'){ MODE.type=null; MODE.reactUse=null; MODE.reactPass=null; }
+  if(MODE.type==='react') MODE.type = null;
+  MODE.reactUse = null; MODE.reactPass = null;   // ghosts cleared unconditionally
   if(!silent) renderAll();
 }
 function reactWithNoDeal(c){
@@ -3106,8 +3107,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=096"></script>
-<script src="../shared/identity.js?v=096"></script>
+<script src="../shared/config.js?v=097"></script>
+<script src="../shared/identity.js?v=097"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3140,16 +3141,33 @@ const NET = {
     setTimeout(()=>renderAll(), 60);   // the hand re-renders from truth — nothing dangles mid-air
     return true;
   },
-  reply(type, payload){ this.tx.send('intent', { seat: this.seat, k:'reply', a:Object.assign({rt:type}, payload) }); },
+  reply(type, payload){ this.tx.send('intent', { seat: this.seat, k:'reply', a:Object.assign({rt:type, aid:this._curAid}, payload) }); },
   evt(seat, card){ if(this.mode==='host' && this.tx && card) this.tx.send('evt', { kind:'play', seat, card }); },
 
   /* --- host: ask a remote seat for a decision --- */
   hostKey: null,
   hostSeat(){ const i = this.roster ? this.roster.findIndex(r=>r.key===this.hostKey) : -1; return i; },
   pendingAskInfo: {},
+  pendingAskAt: {},
   ask(seat, ask, cb){
+    this._askSeq = (this._askSeq||0) + 1;
+    ask.aid = this._askSeq;
     this.pendingAsks[seat] = cb;
     this.pendingAskInfo[seat] = ask;
+    this.pendingAskAt[seat] = Date.now();
+    if(!this._askWD){
+      this._askWD = setInterval(()=>{
+        if(this.mode!=='host' || !this.tx) return;
+        const now = Date.now();
+        Object.keys(this.pendingAskInfo).forEach(sk=>{
+          if(now - (this.pendingAskAt[sk]||0) > 15000){
+            this.pendingAskAt[sk] = now;
+            this.tx.send('ask', { seat:+sk, ask:this.pendingAskInfo[sk] });   // asks re-send until answered — forever
+          }
+        });
+      }, 8000);
+      if(this._askWD.unref) this._askWD.unref();
+    }
     this.pushState();
     this.tx.send('ask', { seat, ask });
   },
@@ -3177,7 +3195,9 @@ const NET = {
     const seat = m.seat, k = m.k, a = m.a || {};
     if(k==='reply'){
       const cb = this.pendingAsks[seat];
-      if(cb){ delete this.pendingAsks[seat]; delete this.pendingAskInfo[seat]; cb(a); }
+      const want = this.pendingAskInfo[seat] && this.pendingAskInfo[seat].aid;
+      if(cb && want!=null && a && a.aid!==want) return;   // a stale reply from a dead ask: it bounces
+      if(cb){ delete this.pendingAsks[seat]; delete this.pendingAskInfo[seat]; delete this.pendingAskAt[seat]; cb(a); }
       return;
     }
     if(G.over || G.turn!==seat){ this.tx.send('nack', { seat }); return; }   // stale / out-of-turn: bounce it back
@@ -3219,6 +3239,7 @@ const NET = {
       hostKey: this.hostKey,
       logs: logs.slice(0,16),
       waitFor: Object.keys(this.pendingAsks).length ? +Object.keys(this.pendingAsks)[0] : null,
+      waitAll: Object.keys(this.pendingAsks).map(Number),
     };
   },
   pushState(){
@@ -3298,7 +3319,9 @@ const NET = {
     this.pile = st.pile;
     const cards = a => (a||[]).filter(c=>c && c.t);   // the wire turns undefined into null; never render a hole
     if(st.hostKey) this.hostKey = st.hostKey;
-    if((MODE.type==='pay' || MODE.type==='discard') && st.waitFor!==this.seat && st.waitFor!==undefined){
+    const waitAll = st.waitAll || (st.waitFor!=null ? [st.waitFor] : []);
+    if((MODE.type==='pay' || MODE.type==='discard') && st.waitFor!==undefined && !waitAll.includes(this.seat)
+       && Date.now()-(this._lastAskAt||0) > 1500){
       MODE.type=null; MODE.sel=null; MODE.jsn=null; hidePrompt();
     }
     if(st.clk){ CLK.bank = st.clk.bank || CLK.bank; CLK.turnLeft = st.clk.turnLeft||0; CLK.active = st.clk.active; renderClocks(); }
@@ -3315,7 +3338,8 @@ const NET = {
       if(ll && ll.innerHTML!==undefined) ll.innerHTML = logs.slice(0,120).map(l=>`<div>${l}</div>`).join('');
     }
     this._lastWaitFor = st.waitFor;
-    if(st.waitFor===this.seat && !MODE.type) this.armHeal(); else this.clearHeal();
+    this._lastWaitAll = waitAll;
+    if(waitAll.includes(this.seat) && !MODE.type) this.armHeal(); else this.clearHeal();
     const wasOver = G.over; G.over = st.over;
     if(st.over){ try{ localStorage.removeItem('it_room'); }catch(e){} }
     if(st.over){ try{ localStorage.removeItem('it_host'); }catch(e){} }
@@ -3372,6 +3396,11 @@ const NET = {
       }
       if(type==='nack' && m.seat===this.seat){ banner('NOT RIGHT NOW','var(--warning-amber)'); hidePrompt(); this.sentWait=false; renderAll(); }
       if(type==='ask' && m.seat===this.seat){
+        const a0 = m.ask || {};
+        if(a0.aid!=null && this._curAid===a0.aid && MODE.type) return;   // watchdog re-send of the ask we're already in
+        this._curAid = a0.aid!=null ? a0.aid : this._curAid;
+        this._lastAskAt = Date.now();
+        exitReactMode(true);   // no ghost timers survive into a new ask
         this.clearHeal();
         try{ if(typeof closePOVForce==='function' && POVIDX!=null) closePOVForce(); }catch(e){}
         const a = m.ask;
@@ -3482,7 +3511,7 @@ const NET = {
     this._healTries = 0;
     const tick = ()=>{
       this._healT = null;
-      const stuck = this._lastWaitFor===this.seat && !MODE.type && !document.querySelector('#overlay.show');
+      const stuck = (this._lastWaitAll||[]).includes(this.seat) && !MODE.type && !document.querySelector('#overlay.show');
       if(!stuck || this.mode!=='client') return;
       this.tx.send('hello', { key: this.pkey });   // the host answers with the pending ask
       if(++this._healTries < 3) this._healT = setTimeout(tick, 4000);

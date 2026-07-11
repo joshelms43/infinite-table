@@ -207,7 +207,7 @@ addProp(G.players[1],propC,rcol);
 G.players[2].bank=[dk.find(c=>c.t==='money'&&c.v===5)];
 doRent(rentC,rcol,2,1);
 T('remote rent with hike in hand becomes an ask', hbox.some(m=>m.t==='ask' && m.p.ask && m.p.ask.type==='hike') && !!NET.pendingAsks[1]);
-NET.applyIntent({seat:1,k:'reply',a:{rt:'hike',use:false}});
+NET.applyIntent({seat:1,k:'reply',a:{rt:'hike',use:false, aid:NET.pendingAskInfo[1].aid}});   // real clients echo the ask's key
 T('hike reply resolves the chain and rent is paid', !NET.pendingAsks[1] && bankTotal(G.players[1])>0);
 NET.mode='off'; NET.tx=null; NET.roster=null; NET.pendingAsks={};
 

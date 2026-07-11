@@ -171,6 +171,21 @@ stoleR = null;
 host.resolveBlock(1, 0, 'Swap Meet', b => { stoleR = !b; });
 client.__B.NET.reply('react', { use: false });
 T('a remote pass lets it happen', stoleR === true);
+
+/* ===== keyed asks: a stale reply cannot detonate a live ask ===== */
+host.__B.G.turn = 0; host.__B.G.playsLeft = 3;
+const rentS = host.__B.G.deck.splice(host.__B.G.deck.findIndex(c => c.t === 'rent' && c.colors), 1)[0];
+const rcolS = rentS.colors.find(cc => (host.__B.G.players[0].props[cc] || []).length) || rentS.colors[0];
+if (!(host.__B.G.players[0].props[rcolS] || []).length) host.addProp(host.__B.G.players[0], host.__B.G.deck.splice(host.__B.G.deck.findIndex(c => c.t === 'prop' && c.color === rcolS), 1)[0], rcolS);
+host.__B.G.players[0].hand.push(rentS);
+host.doRent(rentS, rcolS, 1, 0);
+T('the rent ask is pending on the host', Object.keys(host.__B.NET.pendingAsks).length === 1);
+const liveAid = host.__B.NET.pendingAskInfo[1].aid;
+host.__B.NET.tx.send('intent', { seat: 1, k: 'reply', a: { rt: 'react', use: false, aid: (liveAid || 0) - 1 } });
+T('a stale reply bounces off a keyed ask', Object.keys(host.__B.NET.pendingAsks).length === 1);
+client.__B.NET.reply('pay', { ids: [] });
+T('the true reply resolves it', Object.keys(host.__B.NET.pendingAsks).length === 0);
+
 client.enterReactMode = realERM;
 client.__B.NET.onMessage = omR;
 

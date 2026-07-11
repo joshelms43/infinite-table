@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.9.7 — 2026-07-11
+Live field report: a payment that never appeared, a turn that couldn't end, a dead table. The autopsy found a ghost.
+
+**The ghost** — reaction windows arm a 2.6-second auto-pass timer, and that timer could outlive its window: a mode change cleared the window's type but left the timer and its callback armed. When it eventually fired, it sent a reply — and replies carried no identity, so the host fed that stale react-pass into whatever ask was currently pending for that seat. A payment ask, in this case: consumed by a ghost before the payer's screen ever drew it. The payer "never had to pay", the host's chain corrupted, the turn locked, the game died.
+
+**Four fixes, layered:**
+- **Keyed asks** — every ask now carries a sequence id; replies echo it; anything with the wrong key bounces off. Stale replies are structurally harmless now, from any source, forever. Wire-asserted: a mismatched reply leaves the ask pending; the true reply resolves it.
+- **React timer hygiene** — exiting the window clears the timer and both callbacks unconditionally, the expiry callback re-checks it still owns the mode, and every incoming ask exits any react remnants first.
+- **waitAll** — the state now names every seat the host is waiting on, not just the first. The self-heal was blind for any second simultaneous payer (it watched a single seat), and the stale-mode cleaner could wipe a legitimate pay screen for the same reason. Both read the full list; the cleaner also gained a grace period after any fresh ask.
+- **The ask watchdog** — the host re-sends any unanswered ask every 15 seconds, forever, until it's answered. Clients ignore re-sends of the ask they're already in. Whatever the transport eats, the ask comes back.
+
+**Tests** — engine 104/104, wire 37/37, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.9.6 — 2026-07-11
 The reaction windows land for real, and the win moment gets its results card. Ready to play.
 
