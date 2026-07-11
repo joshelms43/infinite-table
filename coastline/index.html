@@ -305,7 +305,18 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 @keyframes winpop{from{transform:scale(.85) translateY(14px);opacity:0}}
 #winscreen h1{font-family:'Lilita One',cursive;font-size:34px;color:var(--gold-money);text-shadow:0 4px 14px rgba(0,0,0,.4)}
 #winscreen p{font-weight:700;opacity:.85;max-width:300px;line-height:1.45}
-#winstats{font-size:12px;font-weight:700;opacity:.55}
+#winstats{display:none}
+#winrows{margin:14px 0 16px}
+.wrow{display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid rgba(36,36,29,.1)}
+.wrow:last-child{border-bottom:none}
+.wrow.wout{opacity:.45}
+.wname{font-weight:800;font-size:14px;flex:0 0 auto;min-width:64px;text-align:left}
+.wsets{flex:1;display:flex;gap:4px;align-items:center}
+.wdot{width:11px;height:11px;border-radius:3.5px;box-shadow:inset 0 -2px 2px rgba(0,0,0,.25)}
+.wworth{font-weight:800;font-size:13px;opacity:.7;font-variant-numeric:tabular-nums}
+.wbadge{font-size:9.5px;font-weight:800;letter-spacing:1px;padding:3px 8px;border-radius:20px;flex:0 0 auto}
+.wbadge.gold{background:var(--money-gold);color:var(--table-deep)}
+.wbadge.red{background:rgba(200,67,58,.16);color:var(--danger-red);border:1px solid rgba(200,67,58,.4)}
 #winscreen button{
   font-family:'Lilita One',cursive;font-size:16px;color:#fff;border-radius:12px;padding:13px 30px;margin-top:8px;
   background:linear-gradient(180deg,var(--coral),var(--coral-deep));
@@ -481,6 +492,17 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 #myclock.clkactive{border-color:var(--money-gold);color:var(--money-gold);box-shadow:0 0 12px rgba(217,160,63,.25)}
 #myclock.clklow{border-color:var(--danger-red);color:var(--danger-red)}
+#reactwrap{
+  position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);z-index:66;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+}
+.reactatk{font-size:10.5px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--card-ivory);opacity:.75;text-shadow:0 1px 3px rgba(8,12,10,.6)}
+.reactcard{transform:scale(1.45);filter:drop-shadow(0 14px 26px rgba(8,12,10,.55));margin:26px 0}
+.reactcard .card{width:102px;height:150px}
+.reactbar{width:130px;height:4px;border-radius:2px;background:rgba(244,239,229,.18);overflow:hidden}
+.reactbar span{display:block;height:100%;width:100%;background:var(--money-gold);transform-origin:left;animation:reactdrain linear forwards}
+@keyframes reactdrain{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion: reduce){ .reactbar span{animation:none} }
 /* ---------- home / lobby ---------- */
 #home{
   position:fixed;inset:0;z-index:48;background:var(--table);
@@ -770,7 +792,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.4.1</span>
+    <span class="ver">v0.9.6</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -871,6 +893,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <button id="winclose" onclick="closeWin()">✕</button>
     <h1 id="wintitle"></h1>
     <p id="winsub"></p>
+    <div id="winrows"></div>
     <div id="winstats"></div>
     <button id="winagain" onclick="playAgain()">Play Again</button>
   </div>
@@ -1164,7 +1187,7 @@ const CLK = { bank: [], turnLeft: 0, active: null, _iv: null };
 function clockActiveSeat(){
   if(RULES.clock.mode!=='on' || G.over || !GAME_STARTED_OR_SOLO()) return null;
   if(NET.mode==='host' || NET.mode==='off'){
-    if(MODE.type==='pay' || MODE.type==='discard') return MYSEAT;   // the authority itself is being waited on
+    if(MODE.type==='pay' || MODE.type==='discard' || MODE.type==='react') return MYSEAT;   // the authority itself is being waited on
     const w = Object.keys(NET.pendingAsks||{});
     if(w.length) return +w[0];
     return G.turn;
@@ -1209,6 +1232,8 @@ function clockTimeout(seat, bankExhausted){
   if(seat===MYSEAT && MODE.type==='pay'){
     log('Your time ran out — paying automatically.');
     payAutoM(); payConfirm();
+  } else if(seat===MYSEAT && MODE.type==='react'){
+    if(MODE.reactPass) MODE.reactPass();
   } else if(seat===MYSEAT && MODE.type==='discard'){
     const need = MODE.need||0;
     me().hand.slice(0, need).forEach(c=>MODE.sel.add(c.id));
@@ -1458,7 +1483,7 @@ function renderAll(){
   renderClocks();
   const hw = $('#handwrap');
   if(hw && hw.classList){
-    const armed = MODE.type==='pay' && !!MODE.jsn;
+    const armed = (MODE.type==='pay' && !!MODE.jsn) || MODE.type==='react';
     hw.classList.toggle('dimmed', (MODE.type==='pay' && !armed) || MODE.type==='minepick');
     hw.classList.toggle('dimsoft', armed);
   }
@@ -1523,7 +1548,7 @@ function renderHand(p){
   const stag = INITDEAL ? 95 : 70;
   const browser = hand && typeof hand.children === 'object';
   if(!browser){ // headless test fallback
-    const armedND = MODE.type==='pay' && !!MODE.jsn;
+    const armedND = (MODE.type==='pay' && !!MODE.jsn) || MODE.type==='react';
     $('#hand').innerHTML = p.hand.map(c=>`<div class="cardw${armedND && c.t==='action' && c.kind==='nodeal' ? ' blockable' : ''}" data-cid="${c.id}">${handCardHTML(c)}</div>`).join('');
     NEWIDS.clear();
     return;
@@ -1553,7 +1578,7 @@ function renderHand(p){
     w.style.marginLeft = i>0 ? (-ov+'px') : '0px';
     if(w.classList){
       w.classList.toggle('paysel', MODE.type==='discard' && MODE.sel && MODE.sel.has(c.id));
-      w.classList.toggle('blockable', MODE.type==='pay' && !!MODE.jsn && c.t==='action' && c.kind==='nodeal');
+      w.classList.toggle('blockable', ((MODE.type==='pay' && !!MODE.jsn) || MODE.type==='react') && c.t==='action' && c.kind==='nodeal');
     }
     if(w.style && w.style.setProperty){
       const fm=(hand.length-1)/2, foff=i-fm;
@@ -1987,7 +2012,7 @@ document.addEventListener('click', e=>{
 const DRAG = { pend:null, active:false, card:null, clone:null, srcW:null, px0:0, py0:0, zones:[], over:null };
 let SUPPRESSTAP = false;
 document.getElementById('hand').addEventListener('pointerdown', e=>{
-  const payBlock = MODE.type==='pay' && !!MODE.jsn;   // paying happens off-turn; the block must too
+  const payBlock = (MODE.type==='pay' && !!MODE.jsn) || MODE.type==='react';   // reacting happens off-turn; the block must too
   if((!isMyTurn() && !G.over && !payBlock) || document.querySelector('#overlay.show')) return;
   if(typeof netBusy==='function' && netBusy() && !payBlock) return;
   if(MODE.type && MODE.type!=='discard' && !payBlock) return;
@@ -2023,7 +2048,7 @@ document.addEventListener('pointermove', e=>{
     const dist = Math.hypot(dx,dy);
     if(dist > 8) clearTimeout(HOLDT);
     if(G.over){ if(dist > 8){ unpress(); DRAG.pend = null; } return; } // post-game: hold-inspect only
-    const armedBlock = MODE.type==='pay' && !!MODE.jsn && DRAG.pend.c && DRAG.pend.c.t==='action' && DRAG.pend.c.kind==='nodeal';
+    const armedBlock = ((MODE.type==='pay' && !!MODE.jsn) || MODE.type==='react') && DRAG.pend.c && DRAG.pend.c.t==='action' && DRAG.pend.c.kind==='nodeal';
     if(MODE.type && !armedBlock){ if(dist > 10){ unpress(); DRAG.pend = null; } return; } // modes: taps only — except the armed No Deal
     // raised card: already committed to it — any direction picks it up
     if(DRAG.pend.raised && dist > 6){ startDrag(e); return; }
@@ -2136,16 +2161,17 @@ function nearestZone(cx, cy, maxDist){
 }
 function buildZones(c){
   DRAG.zones = [];
-  if(MODE.type==='pay'){
-    if(MODE.jsn && c.t==='action' && c.kind==='nodeal'){
+  if(MODE.type==='pay' || MODE.type==='react'){
+    const react = MODE.type==='react';
+    if((MODE.jsn || react) && c.t==='action' && c.kind==='nodeal'){
       [$('#myprops'), $('#playpile')].forEach(el=>{
         if(el && el.classList){
           el.classList.add('droppable');
-          DRAG.zones.push({ el, act: ()=>blockWithNoDeal(c), hint:'', rect: inflate(el.getBoundingClientRect(), 26) });
+          DRAG.zones.push({ el, act: react ? ()=>reactWithNoDeal(c) : ()=>blockWithNoDeal(c), hint:'', rect: inflate(el.getBoundingClientRect(), 26) });
         }
       });
-      showPrompt('Drop it on your table — cancel the demand', false);
-    } else {
+      showPrompt(react ? 'Drop it on your table — cancel it' : 'Drop it on your table — cancel the demand', false);
+    } else if(!react){
       showPrompt('Pay up — or drag a No Deal! onto the pile', false);
     }
     return;
@@ -2327,7 +2353,7 @@ function checkAllWin(){
       if(NET.mode==='host' && typeof ID!=='undefined') ID.recordMatch(G.players.indexOf(p));
       $('#wintitle').textContent = p===me() ? 'You win' : p.name+' wins';
       $('#winsub').textContent = 'Three complete sets: ' + completeColors(p).map(c=>COLORS[c].label).join(', ');
-      $('#winstats').textContent = 'Round '+G.turnCount+' · '+G.players.map(x=>x.name+' $'+bankTotal(x)+'M').join(' · ');
+      fillWinRows();
       setTimeout(()=>{
         const wc = document.querySelector('.wincard');
         if(wc && wc.style){ wc.style.animation='none'; void (wc.offsetWidth||0); wc.style.animation=''; }
@@ -2341,6 +2367,25 @@ function checkAllWin(){
     }
   }
   return false;
+}
+function fillWinRows(){
+  const el = $('#winrows'); if(!el || el.innerHTML===undefined) return;
+  const alive = alivePlayers();
+  const rows = G.players.map((p,i)=>{
+    const won = checkWin(p) || (G.over && alive.length===1 && alive[0]===i);
+    const sets = completeColors(p);
+    const badge = won ? '<span class="wbadge gold">WINNER</span>'
+                : p.out ? '<span class="wbadge red">OUT</span>' : '';
+    const dots = sets.map(c=>`<span class="wdot" style="background:${COLORS[c].hex}"></span>`).join('');
+    return { won, html: `<div class="wrow ${p.out?'wout':''}">
+      <span class="wname">${i===MYSEAT?'You':p.name}</span>
+      <span class="wsets">${dots}</span>
+      <span class="wworth">$${bankTotal(p)}M</span>
+      ${badge}
+    </div>` };
+  });
+  rows.sort((a,b)=>(b.won?1:0)-(a.won?1:0));
+  el.innerHTML = rows.map(r=>r.html).join('');
 }
 function playAgain(){
   if(NET.mode==='host'){ NET.rematch(); return; }
@@ -2727,22 +2772,32 @@ function spendAction(c, actor){
 /* No Deal chain. cb(blocked:boolean) */
 function jsnChain(aIdx, bIdx, count, desc, cb, viaPay){
     const p = G.players[aIdx];
-    if(!hasNoDeal(p)) return cb(count%2===1);
+    const steal = count===0 && !viaPay;
     if(p.isAI){
-      if(aiShouldJSN(p, aIdx, bIdx, desc, count)){
-        const nd = takeNoDeal(p); log(p.name+' played No Deal!');
-        if(aIdx>0) aiShowcase(nd, aIdx);
-        renderAll();
-        setTimeout(()=>jsnChain(bIdx,aIdx,count+1,desc,cb), Math.max(700, visWait()+200));
-      } else cb(count%2===1);
+      // the AI thinks for a uniform beat on steals, so its holdings never leak by timing
+      const _decide = ()=>{
+        if(hasNoDeal(p) && aiShouldJSN(p, aIdx, bIdx, desc, count)){
+          const nd = takeNoDeal(p); log(p.name+' played No Deal!');
+          if(aIdx>0) aiShowcase(nd, aIdx);
+          renderAll();
+          setTimeout(()=>jsnChain(bIdx,aIdx,count+1,desc,cb), Math.max(700, visWait()+200));
+        } else cb(count%2===1);
+      };
+      const _aid = steal ? AI_REACT_MS : 0;
+      if(_aid) setTimeout(_decide, _aid); else _decide();
       return;
     }
     if(count===0 && viaPay){
+      if(!hasNoDeal(p)) return cb(count%2===1);
       // no popup: the payment UI itself offers the block (drag No Deal! onto the pile)
       return cb(false, { jsn:{ by:bIdx, desc } });
     }
+    // humans get the reaction window — uniformly, whether or not they hold the card
+    const dispCard = count>=1
+      ? { t:'action', kind:'nodeal', v:(ACTIONS['nodeal']||{}).v||4 }
+      : { t:'action', kind:kindForDesc(desc), v:(ACTIONS[kindForDesc(desc)]||{}).v||0 };
     if(aIdx!==MYSEAT && NET.mode==='host'){
-      NET.ask(aIdx, {type:'jsn', desc, count}, m=>{
+      NET.ask(aIdx, {type:'react', desc, count, card: dispCard, ms: REACT_MS}, m=>{
         if(m && m.use && hasNoDeal(p)){
           const nd = takeNoDeal(p); log(G.players[aIdx].name+' played No Deal!');
           NET.evt(aIdx, nd);
@@ -2750,29 +2805,63 @@ function jsnChain(aIdx, bIdx, count, desc, cb, viaPay){
           setTimeout(()=>jsnChain(bIdx,aIdx,count+1,desc,cb), 400);
         } else cb(count%2===1);
       });
+      const seat = aIdx, askAt = Date.now();
+      setTimeout(()=>{
+        if(Date.now()-askAt < REACT_MS) return;   // the net only catches after the window truly had its time
+        if(NET.pendingAskInfo[seat] && NET.pendingAskInfo[seat].type==='react') forceResolveAsk(seat);
+      }, REACT_MS + 3500);
       return;
     }
-    visDefer(()=>{
-    sfx('alert'); haptic([10,50,10]);
-    const nds = p.hand.filter(x=>x.t==='action'&&x.kind==='nodeal').length;
-    const msg = count===0
-      ? `${G.players[bIdx].name} played <b>${desc}</b> against you.`
-      : `${G.players[bIdx].name} cancelled your <b>${desc}</b> with No Deal!`;
-    openSheet(`<div class="interrupt-flag">Interruption</div>
-      <h3>No Deal!?</h3><div class="sub">${msg}<br>You hold ${nds} No Deal! card${nds>1?'s':''}.</div>
-      <div class="optlist">
-        <button class="optbtn primary" onclick="window._jsn(true)">Play No Deal! ${count===0?'— cancel it':'— counter back'}</button>
-        <button class="optbtn" onclick="window._jsn(false)">Let it happen</button>
-      </div>`, true);
-    });
-    window._jsn = (use)=>{
-      closeSheet();
-      if(use){ takeNoDeal(p); log('You played No Deal!'); renderAll(); jsnChain(bIdx,aIdx,count+1,desc,cb); }
-      else cb(count%2===1);
-    };
+    visDefer(()=>enterReactMode(
+      { desc, card: dispCard, atk: G.players[bIdx].name, ms: REACT_MS },
+      ()=>{
+        if(!hasNoDeal(p)) return cb(count%2===1);
+        takeNoDeal(p); log('You played No Deal!'); sfx('alert'); renderAll();
+        jsnChain(bIdx, aIdx, count+1, desc, cb);
+      },
+      ()=> cb(count%2===1)
+    ));
 }
 function resolveBlock(defIdx, atkIdx, desc, cb, viaPay){
   jsnChain(defIdx, atkIdx, 0, desc, cb, viaPay);
+}
+const REACT_MS = 2600;
+let AI_REACT_MS = 1000;   // the AI's uniform thinking beat on steals; zeroed by tests for sync runs
+function kindForDesc(desc){
+  return { 'Sneaky Swipe':'swipe', 'Hostile Takeover':'takeover', 'Swap Meet':'swap' }[desc] || 'nodeal';
+}
+function enterReactMode(info, onUse, onPass){
+  exitReactMode(true);
+  MODE.type = 'react';
+  MODE.reactUse = (c)=>{ exitReactMode(); onUse(c); };
+  MODE.reactPass = ()=>{ exitReactMode(); onPass(); };
+  sfx('alert'); haptic([10,50,10]);
+  const w = document.createElement('div');
+  w.id = 'reactwrap';
+  w.innerHTML = `<div class="reactatk">${info.atk} · ${info.desc}</div>
+    <div class="reactcard">${staticCardHTML(info.card, null)}</div>
+    <div class="reactbar"><span style="animation-duration:${info.ms}ms"></span></div>`;
+  w.onclick = ()=>{ if(MODE.reactPass) MODE.reactPass(); };
+  document.body.appendChild(w);
+  MODE.reactT = setTimeout(()=>{ if(MODE.reactPass) MODE.reactPass(); }, info.ms);
+  renderAll();
+}
+function exitReactMode(silent){
+  clearTimeout(MODE.reactT);
+  const w = document.getElementById('reactwrap'); if(w && w.remove) w.remove();
+  if(MODE.type==='react'){ MODE.type=null; MODE.reactUse=null; MODE.reactPass=null; }
+  if(!silent) renderAll();
+}
+function reactWithNoDeal(c){
+  if(MODE.type!=='react' || !MODE.reactUse) return;
+  if(!c || c.t!=='action' || c.kind!=='nodeal') return;
+  const use = MODE.reactUse;
+  if(NET.mode==='client'){
+    exitReactMode();
+    NET.reply('react', { use:true, id:c.id });
+    renderAll(); return;
+  }
+  use(c);
 }
 /* ----- payments ----- */
 function payAssetsTotal(p){ return bankTotal(p) + propList(p).reduce((s,x)=>s+x.card.v,0); }
@@ -3017,8 +3106,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=095"></script>
-<script src="../shared/identity.js?v=095"></script>
+<script src="../shared/config.js?v=096"></script>
+<script src="../shared/identity.js?v=096"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3245,7 +3334,7 @@ const NET = {
       if(w){
         $('#wintitle').textContent = w===me() ? 'You win' : w.name+' wins';
         $('#winsub').textContent = 'Three complete sets: ' + completeColors(w).map(c=>COLORS[c].label).join(', ');
-        $('#winstats').textContent = 'Round '+G.turnCount+' · '+G.players.map(x=>x.name+' $'+bankTotal(x)+'M').join(' · ');
+        fillWinRows();
         setTimeout(()=>{ refreshWinBtn(); $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); }, 500);
       }
     }
@@ -3295,15 +3384,12 @@ const NET = {
               <button class="optbtn" onclick="NET.reply('hike',{use:false});closeSheet()">Just $${a.base}M</button>
             </div>`, true);
         }
-        if(a.type==='jsn'){
-          sfx('alert'); haptic([10,50,10]);
-          const nds = me().hand.filter(x=>x.t==='action'&&x.kind==='nodeal').length;
-          openSheet(`<div class="interrupt-flag">Interruption</div>
-            <h3>No Deal!?</h3><div class="sub">${a.desc} was played against you.<br>You hold ${nds} No Deal! card${nds===1?'':'s'}.</div>
-            <div class="optlist">
-              <button class="optbtn primary" onclick="NET.reply('jsn',{use:true});closeSheet()">Play No Deal!</button>
-              <button class="optbtn" onclick="NET.reply('jsn',{use:false});closeSheet()">Let it happen</button>
-            </div>`, true);
+        if(a.type==='react'){
+          enterReactMode(
+            { desc: a.desc, card: a.card || { t:'action', kind:'nodeal', v:4 }, atk: '', ms: a.ms || REACT_MS },
+            ()=>{},   // the drag path replies through reactWithNoDeal
+            ()=>{ NET.reply('react', { use:false }); }
+          );
         }
       }
       return;
@@ -3788,7 +3874,7 @@ function eliminatePlayer(seat, reason){
     const w = G.players[alive[0]];
     $('#wintitle').textContent = alive[0]===MYSEAT ? 'You win' : w.name+' wins';
     $('#winsub').textContent = 'Last one standing';
-    $('#winstats').textContent = 'Round '+G.turnCount+' · '+G.players.map(x=>x.name+' $'+bankTotal(x)+'M').join(' · ');
+    fillWinRows();
     const ws=$('#winscreen'); if(ws&&ws.classList) ws.classList.add('show');
     if(NET.mode==='host') NET.pushState();
     return;

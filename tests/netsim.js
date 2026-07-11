@@ -149,6 +149,32 @@ client.__B.NET.tx.send('intent', { seat: 1, k: 'bank', a: { id: (client.__B.G.pl
 T('out-of-turn intents are dropped by the host', host.__B.G.players[1].bank.length === bankBefore);
 T('the dropped intent bounces back as a nack', nacks === 1);
 
+/* ===== react over the wire: the steal window travels, block and pass both work ===== */
+host.__B.G.turn = 0; host.__B.G.playsLeft = 3; host.__B.G.turnCount = 9;
+const ndRi = host.__B.G.deck.findIndex(c => c.t === 'action' && c.kind === 'nodeal');
+const ndR = host.__B.G.deck.splice(ndRi, 1)[0];   // a physical move, not a clone — the invariant is watching
+host.__B.G.players[1].hand.push(ndR);
+host.__B.NET.pushState();
+const asksR = [];
+const omR = client.__B.NET.onMessage;
+client.__B.NET.onMessage = (t, m) => { if (t === 'ask') asksR.push(m); omR(t, m); };
+let stoleR = null;
+const realERM = client.enterReactMode;
+client.enterReactMode = () => {};   // sandbox timers are immediate: the real window would auto-pass before we could reply
+host.resolveBlock(1, 0, 'Sneaky Swipe', b => { stoleR = !b; });
+T('the react ask reaches the remote defender with the threatening card',
+  asksR.length === 1 && asksR[0].ask.type === 'react' && asksR[0].ask.card && asksR[0].ask.card.kind === 'swipe');
+T('nothing resolves until the window answers', stoleR === null);
+client.__B.NET.reply('react', { use: true, id: ndR.id });
+T('a remote block through the window cancels the steal', stoleR === false && host.__B.G.discard.some(c => c.id === ndR.id));
+stoleR = null;
+host.resolveBlock(1, 0, 'Swap Meet', b => { stoleR = !b; });
+client.__B.NET.reply('react', { use: false });
+T('a remote pass lets it happen', stoleR === true);
+client.enterReactMode = realERM;
+client.__B.NET.onMessage = omR;
+
+
 /* ===== the crown: host dies mid-game, resurrects from its blob, the client reconverges ===== */
 host.__B.G.turn = 1; host.__B.NET.pushState();
 const blob = host.__B.NET.persistBlob();
@@ -185,6 +211,7 @@ client.__B.G.players.forEach(p => { takeAll(p.hand); takeAll(p.bank); Object.val
 if(process.env.NETSIM_DEBUG) console.log('  DBG conserve: total', idsAll.length, 'unique', new Set(idsAll).size, 'deck', client.__B.G.deck.length, 'hands', client.__B.G.players.map(p=>p.hand.length).join('/'));
 T('the rebuilt table conserves all 106 cards exactly once', idsAll.length === 106 && new Set(idsAll).size === 106);
 T('the game continues — two players still stand', client.__B.G.over === false && client.__B.G.turn === 1);
+
 
 console.log(fails === 0 ? 'NETSIM: ALL PASS' : 'NETSIM FAILURES: ' + fails);
 process.exit(fails === 0 ? 0 : 1);

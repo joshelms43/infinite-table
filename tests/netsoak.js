@@ -81,6 +81,7 @@ function playGame(gameNo) {
     if (t !== 'ask' || m.seat !== 1) return;
     const a = m.ask, me = client.__B.G.players[1], NETc = client.__B.NET;
     if (a.type === 'jsn') NETc.reply('jsn', { use: false });
+    if (a.type === 'react') NETc.reply('react', { use: false });
     if (a.type === 'hike') NETc.reply('hike', { use: Math.random() < 0.5 });
     if (a.type === 'discard') NETc.reply('discard', { ids: me.hand.slice(0, a.need).map(c => c.id) });
     if (a.type === 'pay') {

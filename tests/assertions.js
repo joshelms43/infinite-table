@@ -1,3 +1,4 @@
+if(typeof AI_REACT_MS!=='undefined') AI_REACT_MS = 0;   // engine tests run synchronously
 // 0. CSS integrity: every load-bearing selector must exist in the stylesheet
 const _P = require('path'), _F = require('fs');
 const HTML_PATH = _F.existsSync(_P.join(__dirname,'coastline.html')) ? _P.join(__dirname,'coastline.html') : _P.join(__dirname,'..','coastline','index.html');
@@ -433,6 +434,28 @@ const knownSet = new Set([...G.players[0].hand, ...G.players[1].bank, dkm[10]].m
 T('rebuild returns every unknown card to the deck', G.deck.length===106-knownSet.size && G.discard.length===0);
 const rIds = new Set(G.deck.map(c=>c.id));
 T('rebuild never duplicates a visible card', !G.players[0].hand.some(c=>rIds.has(c.id)) && !G.players[1].bank.some(c=>rIds.has(c.id)));
+newGame();
+
+
+// ===== reaction windows: uniform, leak-free, drag-grammar =====
+newGame();
+const dkw3 = buildDeck();
+G.turn=1; G.playsLeft=3; G.turnCount=5; G.over=false; MYSEAT=0; NET.mode='off';
+const nd3 = dkw3.find(c=>c.t==='action'&&c.kind==='nodeal');
+me().hand = [nd3];
+G.players[1].hand = [];   // the attacker holds no counter: the chain resolves synchronously
+let stole=false, blocked3=false;
+resolveBlock(0, 1, 'Sneaky Swipe', b=>{ if(b) blocked3=true; else stole=true; });
+T('a steal against a human opens the window, never resolves instantly', MODE.type==='react' && !stole && !blocked3);
+MODE.reactUse(nd3);
+T('dragging the No Deal through the window cancels the steal', blocked3===true && stole===false && G.discard.some(c=>c.id===nd3.id)===true && !me().hand.some(c=>c.id===nd3.id));
+exitReactMode(true);
+me().hand = [];   // now WITHOUT a No Deal: the window must still open
+stole=false; blocked3=false;
+resolveBlock(0, 1, 'Hostile Takeover', b=>{ if(b) blocked3=true; else stole=true; });
+T('the window opens even with no No Deal in hand — no information leaks', MODE.type==='react' && !stole);
+MODE.reactPass();
+T('letting the window expire resolves the action', stole===true && blocked3===false && MODE.type===null);
 newGame();
 
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====

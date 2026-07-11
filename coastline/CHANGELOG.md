@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.9.6 — 2026-07-11
+The reaction windows land for real, and the win moment gets its results card. Ready to play.
+
+**Reaction windows, shipped and proven** — steals, swaps and takeovers against a human no longer resolve instantly or raise a menu. A uniform 2.6-second window opens: the threatening card front and centre over a draining gold bar, your hand scrimmed with any No Deal lit — drag it to your table to cancel, or let the bar run out. The window runs identically whether or not you hold the card, so the attacker learns nothing from timing; there is deliberately no early-dismiss, because a fast pass is a tell. Counters get the same window in reverse. The AI holds its whole decision — including whether it even has a No Deal — inside a matching thinking beat, so bots don't leak either. Remote play carries it as a proper ask with a host safety net that now measures real elapsed time before forcing a pass (which also made it honest under the test rig's instant timers).
+
+**Getting it green found real things** — the AI's thinking beat had silently turned synchronous engine tests async (now sync-safe when zeroed under test); the react wire tests from the cut-off session had been written against post-migration contexts whose roles are corrupted by design (relocated to honest ground); and the 106-card invariant caught its fourth fixture bug — a cloned card sharing an id with its deck original. That invariant has now out-earned every other assertion in the suite.
+
+**The results card** — game over shows per-player rows: name, mini-swatches of each completed set in its colour, final bank worth, and a badge — gold WINNER, red OUT — winner on top, eliminated rows dimmed. All three victory paths feed one function.
+
+**Tests** — engine 104/104, wire 34/34, soak, flows 12/12, drop matrix 38/38. Go play.
+
 ## v0.9.5 — 2026-07-11
 Block four: the AAA pass. The platform gets a front page; the room gets glanceability.
 
