@@ -1775,7 +1775,8 @@ document.addEventListener('pointermove', e=>{
     const dist = Math.hypot(dx,dy);
     if(dist > 8) clearTimeout(HOLDT);
     if(G.over){ if(dist > 8){ unpress(); DRAG.pend = null; } return; } // post-game: hold-inspect only
-    if(MODE.type){ if(dist > 10){ unpress(); DRAG.pend = null; } return; } // modes: taps only
+    const armedBlock = MODE.type==='pay' && !!MODE.jsn && DRAG.pend.c && DRAG.pend.c.t==='action' && DRAG.pend.c.kind==='nodeal';
+    if(MODE.type && !armedBlock){ if(dist > 10){ unpress(); DRAG.pend = null; } return; } // modes: taps only — except the armed No Deal
     // raised card: already committed to it — any direction picks it up
     if(DRAG.pend.raised && dist > 6){ startDrag(e); return; }
     // any upward pull commits to a drag, even diagonal ones
@@ -2742,8 +2743,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=088"></script>
-<script src="../shared/identity.js?v=088"></script>
+<script src="../shared/config.js?v=089"></script>
+<script src="../shared/identity.js?v=089"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

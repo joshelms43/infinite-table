@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.8.9 — 2026-07-11
+The third lock on the same door.
+
+- The drag died in the pointermove handler: modes are taps-only, and it killed any pending drag past 10px while pay mode was active — after the down-handler had already been exempted and the card visually armed. The armed No Deal is now exempt here too. For the record, the block gesture had to pass four gates that all predated it: container pointer-events, the down-handler mode guard, this taps-only rule, and the zone builder. Three needed exemptions; each was found one live report at a time because only the last gate shows on screen.
+
+**Tests** — npm run check green.
+
 ## v0.8.8 — 2026-07-11
 The No Deal lights up for real this time — and the dim is pretty again.
 
