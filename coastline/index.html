@@ -2749,8 +2749,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0810"></script>
-<script src="../shared/identity.js?v=0810"></script>
+<script src="../shared/config.js?v=0811"></script>
+<script src="../shared/identity.js?v=0811"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3346,6 +3346,7 @@ function brainCandidates(p, idx, next){
     add(progressGain(p,c.color), ()=>{
       playFromHandAI(c,p); addProp(p,c,c.color);
       log(p.name+' played '+cardName(c)+'.');
+      aiShowcase(c, idx);
       if(checkAllWin())return; next();
     }, {cardId:c.id, mode:'play', label:'Play '+cardName(c)});
   });
@@ -3359,6 +3360,7 @@ function brainCandidates(p, idx, next){
       add(progressGain(p,col)*odds*0.95, ()=>{
         playFromHandAI(c,p); addProp(p,c,col);
         log(p.name+' played a wild into '+COLORS[col].label+'.');
+        aiShowcase(c, idx);
         if(checkAllWin())return; next();
       }, {cardId:c.id, mode:'play', label:'Wild into '+COLORS[col].label});
     }
@@ -3520,19 +3522,19 @@ function brainCandidates(p, idx, next){
   const gr = p.hand.find(c=>c.t==='action'&&c.kind==='granny');
   if(gr){
     const col = completeColors(p).find(c=>c!=='black'&&!p.bldg[c]?.granny);
-    if(col) add(3.8, ()=>{ playFromHandAI(gr,p); if(!p.bldg[col])p.bldg[col]={}; p.bldg[col].granny=gr; log(p.name+' added a Granny Flat to '+COLORS[col].label+'.'); next(); }, {cardId:gr.id, mode:'play', label:'Granny Flat on '+COLORS[col].label});
+    if(col) add(3.8, ()=>{ playFromHandAI(gr,p); if(!p.bldg[col])p.bldg[col]={}; p.bldg[col].granny=gr; log(p.name+' added a Granny Flat to '+COLORS[col].label+'.'); aiShowcase(gr, idx); next(); }, {cardId:gr.id, mode:'play', label:'Granny Flat on '+COLORS[col].label});
   }
   const rs = p.hand.find(c=>c.t==='action'&&c.kind==='resort');
   if(rs){
     const col = completeColors(p).find(c=>p.bldg[c]?.granny&&!p.bldg[c]?.resort);
-    if(col) add(4.2, ()=>{ playFromHandAI(rs,p); p.bldg[col].resort=rs; log(p.name+' built a Beach Resort on '+COLORS[col].label+'.'); next(); }, {cardId:rs.id, mode:'play', label:'Beach Resort on '+COLORS[col].label});
+    if(col) add(4.2, ()=>{ playFromHandAI(rs,p); p.bldg[col].resort=rs; log(p.name+' built a Beach Resort on '+COLORS[col].label+'.'); aiShowcase(rs, idx); next(); }, {cardId:rs.id, mode:'play', label:'Beach Resort on '+COLORS[col].label});
   }
 
   // banking — money, then spare cards
   const mn = [...p.hand].filter(c=>c.t==='money').sort((a,b)=>b.v-a.v)[0];
-  if(mn) add(0.8 + mn.v*wOf(p).bank_v, ()=>{ playFromHandAI(mn,p); p.bank.push(mn); log(p.name+' banked some money.'); next(); }, {cardId:mn.id, mode:'bank', label:'Bank $'+mn.v+'M'});
+  if(mn) add(0.8 + mn.v*wOf(p).bank_v, ()=>{ playFromHandAI(mn,p); p.bank.push(mn); log(p.name+' banked some money.'); aiShowcase(mn, idx); next(); }, {cardId:mn.id, mode:'bank', label:'Bank $'+mn.v+'M'});
   const spare = [...p.hand].filter(c=>(c.t==='action'&&c.kind!=='nodeal')||c.t==='rent'||c.t==='rentall').sort((a,b)=>keepScore(a,p)-keepScore(b,p))[0];
-  if(spare) add((G.playsLeft<3?0.7:0.45) + spare.v*0.08, ()=>{ playFromHandAI(spare,p); p.bank.push(spare); log(p.name+' banked a card.'); next(); }, {cardId:spare.id, mode:'bank', label:'Bank '+cardName(spare)});
+  if(spare) add((G.playsLeft<3?0.7:0.45) + spare.v*0.08, ()=>{ playFromHandAI(spare,p); p.bank.push(spare); log(p.name+' banked a card.'); aiShowcase(spare, idx); next(); }, {cardId:spare.id, mode:'bank', label:'Bank '+cardName(spare)});
 
   return C;
 }

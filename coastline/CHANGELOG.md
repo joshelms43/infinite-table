@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.8.11 — 2026-07-11
+The AI's quiet hands, caught.
+
+- v0.8.10 routed the executors through the play announcer — but the AI doesn't use the executors for placements. It plays properties, wilds, buildings and banked cash through direct playFromHandAI + mutation, six separate sites, all silent. Every one now showcases. AI actions were the only plays that popped before, which is exactly the shape of the report: actions pop, properties don't.
+
+**Tests** — npm run check green.
+
 ## v0.8.10 — 2026-07-11
 Broke players keep their dignity (and their block). Plays get their moment.
 
