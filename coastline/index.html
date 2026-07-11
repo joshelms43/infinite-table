@@ -1055,16 +1055,20 @@ let VISLOCK = 0;
 function visWait(){ return Math.max(0, VISLOCK - Date.now()); }
 function visDefer(fn){ const w = visWait(); if(w < 30) fn(); else setTimeout(fn, w); }
 /* AI showcase: the played card takes centre stage, then flies to the pile */
+function announcePlay(b, c){
+  if(b===MYSEAT){ NET.evt(b, c); return; }   // my own plays: broadcast only, no self-showcase
+  aiShowcase(c, b);                           // anyone else's: pop it here, and broadcast if hosting
+}
 function aiShowcase(card, oppIdx){
-  if(NET.mode==='host' && G.players[oppIdx] && G.players[oppIdx].isAI) NET.evt(oppIdx, card);
+  if(NET.mode==='host' && oppIdx!==MYSEAT) NET.evt(oppIdx, card);
   const oppEl = document.querySelector(`#opponents .opp[data-idx="${oppIdx}"]`);
   if(!oppEl || !oppEl.getBoundingClientRect || !document.body || !document.body.appendChild) return;
   const r = oppEl.getBoundingClientRect();
   if(!r || r.left===undefined || isNaN(+r.left)) return;
   oppEl.classList.add('aiplay');
-  setTimeout(()=>{ if(oppEl.classList) oppEl.classList.remove('aiplay'); }, 500);
+  setTimeout(()=>{ if(oppEl.classList) oppEl.classList.remove('aiplay'); }, 750);
   const quick = card.t==='action' && (card.kind==='payday' || card.kind==='hike');
-  const HOLD = quick ? 520 : 780, FLY = 320;
+  const HOLD = quick ? 850 : 1250, FLY = 320;
   VISLOCK = Date.now() + HOLD + FLY + 180;
   const f = document.createElement('div');
   f.className = 'showcase';
@@ -1507,7 +1511,8 @@ function payToggle(id){
   renderAll(); updatePayHUD();
 }
 function updatePayHUD(){
-  const tot=paySelTotal(), amount=MODE.amount, r=G.players[MODE.receiverIdx];
+  const tot=paySelTotal(), r=G.players[MODE.receiverIdx];
+  const amount = Math.min(MODE.amount, payAssetsTotal(me()));
   const enough = tot>=amount;
   if(enough && !MODE.wasEnough){ sfx('good'); haptic(8); }
   MODE.wasEnough = enough;
@@ -1890,12 +1895,13 @@ function buildZones(c){
   DRAG.zones = [];
   if(MODE.type==='pay'){
     if(MODE.jsn && c.t==='action' && c.kind==='nodeal'){
-      const el = $('#playpile');
-      if(el && el.classList){
-        el.classList.add('droppable');
-        DRAG.zones.push({ el, act: ()=>blockWithNoDeal(c), hint:'', rect: inflate(el.getBoundingClientRect(), 30) });
-      }
-      showPrompt('Drop it on the pile — cancel the demand', false);
+      [$('#myprops'), $('#playpile')].forEach(el=>{
+        if(el && el.classList){
+          el.classList.add('droppable');
+          DRAG.zones.push({ el, act: ()=>blockWithNoDeal(c), hint:'', rect: inflate(el.getBoundingClientRect(), 26) });
+        }
+      });
+      showPrompt('Drop it on your table — cancel the demand', false);
     } else {
       showPrompt('Pay up — or drag a No Deal! onto the pile', false);
     }
@@ -2216,7 +2222,7 @@ function runOpt(i){ const o=window._opts[i]; if(o&&o.fn){ o.fn(); } }
 function removeHand(c){ const p=me(); const i=p.hand.findIndex(x=>x.id===c.id); if(i>-1)p.hand.splice(i,1); }
 function bankCard(c, by){
   if(NET.intercept('bank',{id:c.id})) return;
-  const b=(by==null?MYSEAT:by); removeHandOf(G.players[b], c); G.players[b].bank.push(c); log(nameOf(b)+' banked $'+c.v+'M.'); usePlay(); if(b===MYSEAT) zonePop('#mybank'); closeSheet(); }
+  const b=(by==null?MYSEAT:by); removeHandOf(G.players[b], c); G.players[b].bank.push(c); log(nameOf(b)+' banked $'+c.v+'M.'); announcePlay(b,c); usePlay(); if(b===MYSEAT) zonePop('#mybank'); closeSheet(); }
 function removeHandOf(p,c){ const i=p.hand.findIndex(x=>x.id===c.id); if(i>-1) p.hand.splice(i,1); }
 function playProp(c,color,by){
   if(NET.intercept('prop',{id:c.id,color})) return;
@@ -2227,7 +2233,7 @@ function playProp(c,color,by){
   }
   removeHandOf(p,c); addProp(p,c,color);
   log(nameOf(b)+' played '+cardName(c)+' ('+COLORS[color].label+').');
-  NET.evt(b,c);
+  announcePlay(b,c);
   usePlay(); sfx('tick'); if(b===MYSEAT) zonePop('#myprops'); closeSheet();
 }
 function placeBldg(c,color,slot,by){
@@ -2237,7 +2243,7 @@ function placeBldg(c,color,slot,by){
   if(!p.bldg[color]) p.bldg[color]={};
   p.bldg[color][slot]=c;
   log(nameOf(b)+' added a '+ACTIONS[c.kind].n+' to '+COLORS[color].label+'.');
-  NET.evt(b,c);
+  announcePlay(b,c);
   usePlay(); sfx('good'); closeSheet();
 }
 function canMoveWildFrom(p,color){
@@ -2535,8 +2541,8 @@ function requestPayment(payerIdx, amount, receiverIdx, done, jsnCtx){
   if(amount<=0) return done();
   const worth = payAssetsTotal(payer);
   if(worth===0){ log(payer.name+' has nothing to pay with.'); return done(); }
-  if(worth<=amount){
-    // hand over everything on the table
+  if(worth<=amount && payer.isAI){
+    // AI hands over everything; humans always get the pay screen (and their block chance)
     payer.bank.splice(0).forEach(c=>receiver.bank.push(c));
     propList(payer).forEach(x=>transferProp(payer,receiver,x.card));
     Object.keys(payer.bldg).forEach(col=>{ // stray buildings discarded
@@ -2618,7 +2624,7 @@ function processQueue(idxs, perFn, done){
 /* ----- human action executions ----- */
 function doFavour(c,targetIdx,by){
   if(NET.intercept('favour',{id:c.id,t:targetIdx})) return;
-  const b=(by==null?MYSEAT:by); NET.evt(b,c);
+  const b=(by==null?MYSEAT:by); announcePlay(b,c);
   spendAction(c,b);
   log(nameOf(b)+' played Call In a Favour on '+nameOf(targetIdx)+'.');
   resolveBlock(targetIdx,b,'Call In a Favour',(blocked,x)=>{
@@ -2629,7 +2635,7 @@ function doFavour(c,targetIdx,by){
 }
 function doShout(c,by){
   if(NET.intercept('shout',{id:c.id})) return;
-  const b=(by==null?MYSEAT:by); NET.evt(b,c);
+  const b=(by==null?MYSEAT:by); announcePlay(b,c);
   spendAction(c,b);
   log(nameOf(b)+' shouted a round — everyone owes them $2M.');
   processQueue(othersOf(b),(t,next)=>{
@@ -2642,7 +2648,7 @@ function doShout(c,by){
 }
 function doRent(c,color,targetIdx,by){
   if(NET.intercept('rent',{id:c.id,color,t:targetIdx})) return;
-  const b=(by==null?MYSEAT:by); NET.evt(b,c);
+  const b=(by==null?MYSEAT:by); announcePlay(b,c);
   const actor = G.players[b];
   const base = rentFor(actor,color);
   const hikeCard = actor.hand.find(x=>x.t==='action'&&x.kind==='hike');
@@ -2684,7 +2690,7 @@ function stealTargetsOf(pIdx){ // props not in complete sets
 }
 function execSwipe(c, tIdx, cardId, by){
   if(NET.intercept('swipe',{id:c.id,t:tIdx,cid:cardId})) return;
-  const b=(by==null?MYSEAT:by); NET.evt(b,c);
+  const b=(by==null?MYSEAT:by); announcePlay(b,c);
   const target = G.players[tIdx];
   const entry = propList(target).find(x=>x.card.id===cardId);
   if(!entry) return;
@@ -2700,7 +2706,7 @@ function execSwipe(c, tIdx, cardId, by){
 }
 function execTakeoverD(c, tIdx, color, by){
   if(NET.intercept('takeover',{id:c.id,t:tIdx,color})) return;
-  const b=(by==null?MYSEAT:by); NET.evt(b,c);
+  const b=(by==null?MYSEAT:by); announcePlay(b,c);
   spendAction(c,b);
   log(nameOf(b)+' launched a Hostile Takeover on '+nameOf(tIdx)+"'s "+COLORS[color].label+' set!');
   resolveBlock(tIdx,b,'Hostile Takeover',blocked=>{
@@ -2711,7 +2717,7 @@ function execTakeoverD(c, tIdx, color, by){
 }
 function execSwapFinal(c, tIdx, theirCardId, mineCardId, by){
   if(NET.intercept('swap',{id:c.id,t:tIdx,cid:theirCardId,mid:mineCardId})) return;
-  const b=(by==null?MYSEAT:by); NET.evt(b,c);
+  const b=(by==null?MYSEAT:by); announcePlay(b,c);
   const target=G.players[tIdx];
   const actorP = G.players[b];
   const theirEntry = propList(target).find(x=>x.card.id===theirCardId);
@@ -2743,8 +2749,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=089"></script>
-<script src="../shared/identity.js?v=089"></script>
+<script src="../shared/config.js?v=0810"></script>
+<script src="../shared/identity.js?v=0810"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

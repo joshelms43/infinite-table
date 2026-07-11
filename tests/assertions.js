@@ -293,6 +293,25 @@ const dst2 = me().props[other2]||[];
 T('rainbow rides along when its anchor moves', !((me().props['teal']||[]).length) && dst2.some(c=>c.id===rain2.id) && dst2.some(c=>c.id===dual2.id));
 newGame();
 
+
+// ===== short payers get the screen; AI still auto-strips =====
+newGame();
+const dks = buildDeck();
+G.turn=1; G.playsLeft=3; G.over=false; MYSEAT=0;
+me().hand=[]; me().bank=[dks.find(c=>c.t==='money'&&c.v===1)]; me().props={};
+let shortDone=false;
+requestPayment(0, 8, 1, ()=>{ shortDone=true; });
+T('a short human payer still gets the pay screen', MODE.type==='pay' && shortDone===false);
+T('the pay target caps at what they own', paySelTotal()===0 && Math.min(MODE.amount, payAssetsTotal(me()))===1);
+payAutoM(); payConfirm();
+T('paying everything completes the short payment', shortDone===true && me().bank.length===0);
+G.players[1].isAI = true;
+G.players[1].hand=[]; G.players[1].bank=[dks.find(c=>c.t==='money'&&c.v===2)]; G.players[1].props={};
+let aiDone=false;
+requestPayment(1, 9, 0, ()=>{ aiDone=true; });
+T('a short AI payer auto-strips with no screen', aiDone===true && G.players[1].bank.length===0);
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

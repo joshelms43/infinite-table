@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.8.10 — 2026-07-11
+Broke players keep their dignity (and their block). Plays get their moment.
+
+**The auto-strip is AI-only now** — a human who owes more than they own still gets the pay screen: the target caps at what they actually have, auto-select and Pay work, and — the point of the report — the No Deal block is available right there, because the block lives in the payment flow and the fast path was skipping the flow entirely. The AI keeps the instant strip; there's no screen to show a bot. (The remote path already tolerated short selections via its fair-cover fallback, so the wire needed nothing.)
+
+**No Deal drops on your table** — same gesture as every other action card; the pile still works as a secondary target.
+
+**Every play pops, for everyone, longer** — one announcer now routes all executors: banked cash, placed properties, buildings and actions all showcase to every other player — including the host watching remote humans, who previously saw nothing pop at all (evt only travelled outward). Holds lengthened: 780ms → 1250ms for standard plays, 520ms → 850ms for quick ones.
+
+**Tests** — engine 74/74 (short human gets the screen, capped target, pay-everything completes, AI still strips), full five-stage gate green.
+
 ## v0.8.9 — 2026-07-11
 The third lock on the same door.
 
