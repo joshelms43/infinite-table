@@ -68,27 +68,45 @@ main{width:100%;max-width:370px;display:flex;flex-direction:column;gap:16px;padd
 .game.soon:active{transform:none}
 footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity:.3}
 .game.hero{position:relative;overflow:visible;padding-top:30px}
-.herofan{position:absolute;top:-36px;right:10px;width:118px;height:66px;pointer-events:none;filter:drop-shadow(0 5px 9px rgba(8,12,10,.3))}
-.fcard{
-  position:absolute;left:var(--fx);top:var(--fy,0px);width:40px;height:58px;border-radius:5px;
-  background:#F7F2E6;
+.herofan{position:absolute;top:-38px;right:8px;width:128px;height:72px;pointer-events:none;filter:drop-shadow(0 5px 9px rgba(8,12,10,.3))}
+.fslot{position:absolute;left:var(--fx);top:var(--fy,0px);width:44px;height:65px;
   transform:rotate(var(--fr));transform-origin:50% 145%;
-  transition:transform .35s cubic-bezier(.2,.9,.3,1);
-  box-shadow:inset 0 0 0 1px rgba(36,36,29,.22);
+  transition:transform .35s cubic-bezier(.2,.9,.3,1)}
+.game.hero:active .fslot{transform:rotate(calc(var(--fr)*1.45)) translateY(-5px)}
+.mini{
+  position:absolute;left:0;top:0;width:100px;height:148px;border-radius:10px;
+  transform:scale(.44);transform-origin:0 0;
+  background:linear-gradient(178deg,#FFFDF6,#F4EFE5 70%,#EFE8D3);
+  box-shadow:inset 0 0 0 2px rgba(36,36,29,.25);
+  display:flex;flex-direction:column;overflow:hidden;
+  font-family:'Nunito',system-ui,sans-serif;
 }
-.fcard::before{content:'';position:absolute;top:0;left:0;right:0;height:17px;border-radius:5px 5px 0 0;
-  background:var(--fc);box-shadow:inset 0 -1px 0 rgba(36,36,29,.15)}
-.fcard::after{content:'';position:absolute;left:6px;right:12px;top:24px;height:4px;border-radius:2px;
-  background:rgba(36,36,29,.28);
-  box-shadow:0 9px 0 -1px rgba(36,36,29,.16);}
-.fcard.fmoney{background:linear-gradient(172deg,#EDCB6B 0%,#D9A03F 60%,#C08A2E 100%)}
-.fcard.fmoney::before{content:'';position:absolute;inset:3.5px;top:3.5px;left:3.5px;right:3.5px;height:auto;border-radius:3px;
-  background:none;border:1.2px solid rgba(244,239,229,.75);box-shadow:none}
-.fcard.fmoney::after{content:'';position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;
-  background:var(--card-ivory);box-shadow:inset 0 -2px 3px rgba(36,36,29,.28)}
-.game.hero:active .fcard{transform:rotate(calc(var(--fr)*1.45)) translateY(-5px)}
+.mini .mband{
+  height:30px;flex:0 0 30px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;font-style:normal;color:#fff;letter-spacing:1.3px;text-transform:uppercase;
+  text-shadow:0 1px 2px rgba(8,12,10,.3);
+}
+.mini .mcoin{
+  position:absolute;top:5px;right:5px;z-index:2;width:24px;height:24px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#EDCB6B,#D9A03F 70%);
+  display:flex;align-items:center;justify-content:center;
+  font-size:8.5px;font-weight:800;color:#24241D;font-style:normal;
+  box-shadow:0 1px 2px rgba(8,12,10,.35);
+}
+.mini .mrows{margin-top:auto;padding:0 8px 8px;text-decoration:none;display:block}
+.mini .mrows s{display:flex;justify-content:space-between;align-items:center;text-decoration:none;
+  font-size:9px;font-weight:700;color:#24241D;opacity:.75;padding:2.5px 0;border-top:1px dashed rgba(36,36,29,.18)}
+.mini .mrows s:first-child{border-top:none}
+.mini.mmoney{background:linear-gradient(178deg,#F2D98A,#D9A03F 65%,#C08A2E)}
+.mini.mmoney .mband.mnote{background:rgba(36,36,29,.82);letter-spacing:2px;font-size:10.5px}
+.mini .mbig{
+  margin:auto;width:56px;height:56px;border-radius:50%;background:var(--card-ivory);
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;font-weight:800;color:#24241D;font-style:normal;
+  box-shadow:inset 0 -3px 5px rgba(36,36,29,.25), 0 1px 3px rgba(8,12,10,.25);
+}
 .game.hero .gbody{position:relative;z-index:2}
-.game.hero .gmeta{margin-top:12px;font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#24241D;opacity:.38;white-space:nowrap}
+.gplayers{margin-top:9px;font-size:10px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:#24241D;opacity:.4}
 #lobbystats{margin:2px 0;padding:13px 16px;border-radius:14px;
   border:1px solid rgba(244,239,229,.12);background:rgba(244,239,229,.045);
   font-weight:800;font-size:12.5px;display:none;justify-content:space-between;align-items:center}
@@ -192,19 +210,30 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
 <main>
   <a class="game hero" href="./coastline/">
     <div class="herofan" aria-hidden="true">
-      <span class="fcard" style="--fr:-14deg;--fx:0px;--fc:#2E5EAA;--fy:7px"></span>
-      <span class="fcard" style="--fr:-5deg;--fx:24px;--fc:#C8433A;--fy:1px"></span>
-      <span class="fcard fmoney" style="--fr:4deg;--fx:48px;--fy:1px"></span>
-      <span class="fcard" style="--fr:13deg;--fx:72px;--fc:#1FA8A0;--fy:7px"></span>
+      <span class="fslot" style="--fr:-14deg;--fx:0px;--fy:7px"><span class="mini">
+        <b class="mcoin">$2M</b><i class="mband" style="background:#2E5EAA">Blue</i>
+        <u class="mrows"><s><span>1 card</span><b>$2M</b></s><s><span>2 cards ★</span><b>$5M</b></s></u>
+      </span></span>
+      <span class="fslot" style="--fr:-5deg;--fx:26px;--fy:1px"><span class="mini">
+        <b class="mcoin">$3M</b><i class="mband" style="background:#C8433A">Red</i>
+        <u class="mrows"><s><span>1 card</span><b>$2M</b></s><s><span>2 cards</span><b>$3M</b></s><s><span>3 cards ★</span><b>$6M</b></s></u>
+      </span></span>
+      <span class="fslot" style="--fr:4deg;--fx:52px;--fy:1px"><span class="mini mmoney">
+        <i class="mband mnote">Bank Note</i><b class="mbig">$5M</b>
+      </span></span>
+      <span class="fslot" style="--fr:13deg;--fx:78px;--fy:7px"><span class="mini">
+        <b class="mcoin">$3M</b><i class="mband" style="background:#1FA8A0">Teal</i>
+        <u class="mrows"><s><span>1 card</span><b>$2M</b></s><s><span>2 cards</span><b>$4M</b></s><s><span>3 cards ★</span><b>$7M</b></s></u>
+      </span></span>
     </div>
     <div class="gbody">
       <div class="ginfo">
         <div class="gname">M Deal</div>
         <div class="gdesc">Build sets, charge rent, raid your mates.</div>
+        <div class="gplayers">2–5 Players</div>
       </div>
       <span class="gplay">PLAY</span>
     </div>
-    <div class="gmeta">Solo &amp; online · 2–4 players · clocks &amp; rules</div>
   </a>
 
   <div id="lobbystats"></div>

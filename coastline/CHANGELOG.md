@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.9.8 — 2026-07-11
+Tables seat five now, and the lobby deals real cards.
+
+**2–5 players** — the seat cap rises from four to five at all three gates (roster, bot-add, table assembly), matching official Deal. Every game path already looped generically over seats, so the change is three constants; worth a live look at how four opponent panels share a phone screen before a full table gathers.
+
+**The lobby's fan is the game's own cards** — true card structure scaled down: colour band with the colour's name, the rent ladder with real prices, the gold coin value badge, and a Bank Note with its $5M circle. The hero card also compacted per the boss: title, one line, "2–5 Players", PLAY — nothing else.
+
+**Tests** — full five-stage gate green.
+
 > **Engine research has moved to [infinite-ai](https://github.com/joshelms43/infinite-ai)** *(2026-07-10)* — the ladder, trainer (+ browser twin), parity suites, CI ladder workflow and all verdict history now live there. Headline: the determinized Monte Carlo brain was **certified stronger than the greedy champion** (51.31% head-to-head over 9,000 pre-committed paired games, z = 2.99). This game still runs the greedy brain; to upgrade, copy the AI section of infinite-ai's `engine/index.html` (between the `AI` and `BOOT` markers) into this repo's `coastline/index.html` and re-run the suites. Research branches `seqplan-experiment` and `mcts-experiment` remain here for archaeology; `.github/workflows/engine-ladder.yml` here is superseded by the one in infinite-ai.
 
 ## v0.9.7 — 2026-07-11

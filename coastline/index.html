@@ -792,7 +792,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.9.7</span>
+    <span class="ver">v0.9.8</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -3107,8 +3107,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=097"></script>
-<script src="../shared/identity.js?v=097"></script>
+<script src="../shared/config.js?v=098"></script>
+<script src="../shared/identity.js?v=098"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3654,12 +3654,12 @@ const NET = {
     }));
     const list = Object.values(byKey);
     list.sort((a,b)=>((b.host?1:0)-(a.host?1:0)) || (a.joined-b.joined));
-    return list.slice(0,4);
+    return list.slice(0,5);
   },
   bots: [],
   botNames: ['Bazza','Shaz','Davo'],
   addBot(){
-    if(this.tableSeats().length>=4) return;
+    if(this.tableSeats().length>=5) return;
     const used = this.bots.map(b=>b.name);
     const name = this.botNames.find(n=>!used.includes(n)) || 'Robbo';
     this.bots.push({ key:'bot-'+name.toLowerCase(), name, isAI:true });
@@ -3670,7 +3670,7 @@ const NET = {
     this.renderLobby();
   },
   tableSeats(){
-    return [...this.lobbySeats(), ...this.bots].slice(0,4);
+    return [...this.lobbySeats(), ...this.bots].slice(0,5);
   },
   commitRename(v){
     v = (v||'').trim().slice(0,12) || this.myName || 'Player';
