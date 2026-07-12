@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Infinite Table — Mafia. Version: 0.2.4 -->
+<!-- Infinite Table — Mafia. Version: 0.2.5 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -80,7 +80,7 @@ input.namef{letter-spacing:.5px;font-size:15px;text-transform:none}
 </head>
 <body>
 <div class="wordmark"><b>MAFIA</b></div>
-<div class="ver">v0.2.4 · INFINITE TABLE</div>
+<div class="ver">v0.2.5 · INFINITE TABLE</div>
 <div id="app"></div>
 
 <script src="../shared/config.js?v=021"></script>
@@ -146,8 +146,27 @@ const NET = {
       track:(m)=>ch.track(m),
       presence:()=>ch.presenceState(),
     };
-    this.tx.track({ key:this.pkey, name:this.myName, host:!!hosting });
+    this._ch = ch;
+    this._hosting = !!hosting;
+    this._meta = { key:this.pkey, name:this.myName, host:!!hosting };
+    this.tx.track(this._meta);
     return true;
+  },
+  async revive(){
+    if(!this.code || this.mode==='off') return;
+    const st = this._ch && this._ch.state;
+    if(st!=='joined'){
+      banner('RECONNECTING…');
+      const hosting = this.mode==='lobby-host' || this.mode==='host';
+      if(await this.connect(this.code, hosting)){
+        if(this.mode==='host'){ this.tx.send('start', { roster:this.roster }); this.pushState(); }
+        else if(this.mode==='client' || this.mode==='joining'){ this.tx.send('hello', { key:this.pkey }); }
+        render();
+      }
+    } else if(this._meta){
+      try{ this.tx.track(this._meta); }catch(e){}   // a nudge: forces a presence diff both ways
+      if(G.phase==='lobby') render();
+    }
   },
   lobbySeats(){
     const seen = {}; const list = [];
@@ -496,6 +515,9 @@ NET.onMessage = (t,m)=>{
   _origOnMessage(t,m);
   if(G.phase!==prevPhase && (G.phase==='night'||G.phase==='vote')){ MYACTED=false; PICK=null; render(); }
 };
+
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') NET.revive(); });
+setInterval(()=>{ if(G.phase==='lobby' && NET.tx){ NET.revive(); } }, 4000);   // the lobby heartbeat: no zombie hosts
 
 render();
 globalThis.__B = {

@@ -1,5 +1,12 @@
 # Mafia — Changelog
 
+## v0.2.5 — 2026-07-12
+The zombie host. Joiners could see the host; the host saw nobody — because iOS had suspended the hosting phone's socket while the code was being shared around, and on resume the channel was dead-but-smiling: a stale snapshot that would never update again.
+
+**Revival machinery** — waking the page checks the channel's real state: if it isn't joined, the whole connection rebuilds on the same code and key (a returning host re-broadcasts the roster and state; a returning player re-hellos). If it is joined, the client re-tracks its presence anyway — a nudge that forces a fresh diff both ways. A four-second lobby heartbeat does the same while seats are filling, so no phone can sit zombified in the one phase where seeing each other is the entire point.
+
+Operationally: the hosting phone staying awake until Start is still the smooth path — but it no longer has to be.
+
 ## v0.2.2 — 2026-07-12
 The observability paid for itself on its first outing. The banner read HOST FAILED: supabaseKey is required — createClient was being handed window.SUPABASE_ANON_KEY, a global that never existed; the config exports SUPABASE_ANON. One identifier, corrected. This is also exactly why the game logic simulator could never catch it: the sim stubs the connection, and the bug lived in the one line the stub replaced.
 

@@ -26,6 +26,7 @@ function makeContext(name) {
     localStorage: { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
     window: {},
     document: {
+      addEventListener(){}, visibilityState: 'visible',
       querySelector: () => makeEl(),
       createElement: () => makeEl(),
       head: { appendChild(){} },
