@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Infinite Table — Mafia. Version: 0.1.0 -->
+<!-- Infinite Table — Mafia. Version: 0.2.0 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -80,10 +80,10 @@ input.namef{letter-spacing:.5px;font-size:15px;text-transform:none}
 </head>
 <body>
 <div class="wordmark"><b>MAFIA</b></div>
-<div class="ver">v0.1.0 · INFINITE TABLE</div>
+<div class="ver">v0.2.0 · INFINITE TABLE</div>
 <div id="app"></div>
 
-<script src="../shared/config.js?v=010"></script>
+<script src="../shared/config.js?v=020"></script>
 <script>
 'use strict';
 const $ = s => document.querySelector(s);
@@ -92,12 +92,14 @@ function esc(x){ return String(x==null?'':x).replace(/[&<>"']/g, c=>({'&':'&amp;
 
 /* ================= game state ================= */
 let G = { phase:'home', day:1, players:[], logs:[] };   // players: {key,name,alive,role?,revealed?}
-let MYSEAT = -1, MYROLE = null, MYMATES = [], READY = false, PICK = null, LASTINVEST = null;
+let MYSEAT = -1, MYROLE = null, MYMATES = [], READY = false, PICK = null, LASTINVEST = null, MYDETLAST = 0, MYDOCLAST = null;
 const ROLES = {
-  mafia:     { name:'Mafia',     hint:'Each night, choose someone to kill. Blend in by day.' },
-  doctor:    { name:'Doctor',    hint:'Each night, choose someone to protect. You may protect yourself.' },
-  detective: { name:'Detective', hint:'Each night, investigate someone. You learn if they are Mafia.' },
-  villager:  { name:'Villager',  hint:'Find the Mafia. Vote wisely. Trust no one completely.' },
+  mafia:     { name:'Mafia',     hint:'Choose a kill each night — but your hands are tied on night one. If there are two of you, the senior pulls the trigger.' },
+  doctor:    { name:'Doctor',    hint:'Protect someone each night — never the same person twice in a row. Self-protection allowed, same rule.' },
+  detective: { name:'Detective', hint:'Investigate someone and learn if they are Mafia — then you must rest the following night.' },
+  bodyguard: { name:'Bodyguard', hint:'Stand by someone each night. If the Mafia come for them, you take the hit instead. You only get to do this once.' },
+  insomniac: { name:'Insomniac', hint:'Watch someone each night. You learn how many people circled them — never who, never why.' },
+  mayor:     { name:'Mayor',     hint:'No night power. Your vote quietly counts twice. Tell no one, or tell everyone — your call.' },
 };
 function alive(){ return G.players.map((p,i)=>i).filter(i=>G.players[i].alive); }
 function aliveMafia(){ return alive().filter(i=>G.players[i].role==='mafia'); }
@@ -167,11 +169,14 @@ const NET = {
     this.mode = 'host';
     const n = seats.length;
     const bag = ['mafia','doctor','detective']; if(n>=7) bag.push('mafia');
-    while(bag.length < n) bag.push('villager');
+    const extras = ['bodyguard','insomniac','mayor','insomniac','bodyguard','insomniac','bodyguard'];
+    let ei = 0;
+    while(bag.length < n) bag.push(extras[ei++ % extras.length]);
     for(let i=bag.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [bag[i],bag[j]]=[bag[j],bag[i]]; }
     G = { phase:'reveal', day:1, logs:['Night is coming. Learn who you are.'],
       players: seats.map((s,i)=>({ key:s.key, name:s.name, alive:true, role:bag[i], revealed:null })) };
     this.acts={}; this.votes={}; this.readys={};
+    this.docLast = null; this.detLastDay = 0;
     MYSEAT = G.players.findIndex(p=>p.key===this.pkey);
     MYROLE = G.players[MYSEAT].role;
     const mafiaNames = G.players.filter(p=>p.role==='mafia').map(p=>p.name);
@@ -224,7 +229,9 @@ const NET = {
     }
     if(type==='priv' && m.to===this.pkey){
       if(m.kind==='role'){ MYROLE=m.role; MYMATES=m.mates||[]; render(); }
-      if(m.kind==='invest'){ LASTINVEST=m; banner(m.name.toUpperCase()+(m.isMafia?' IS MAFIA':' IS NOT MAFIA')); render(); }
+      if(m.kind==='invest'){ LASTINVEST=m; MYDETLAST=G.day; banner(m.name.toUpperCase()+(m.isMafia?' IS MAFIA':' IS NOT MAFIA')); render(); }
+      if(m.kind==='insom'){ banner(m.count+' CIRCLED '+m.name.toUpperCase()+' LAST NIGHT'); }
+      if(m.kind==='hit'){ banner('YOU TOOK THE HIT FOR '+m.name.toUpperCase()); }
     }
     if(type==='nack' && m.key===this.pkey){ banner('NOT RIGHT NOW'); PICK=null; render(); }
   },
@@ -244,6 +251,7 @@ const NET = {
       const t = m.a && m.a.target;
       if(!(t>=0 && t<G.players.length && G.players[t].alive)){ this.tx.send('nack',{key:m.key}); return; }
       if(t===seat && G.players[seat].role!=='doctor'){ this.tx.send('nack',{key:m.key}); return; }
+      if(G.players[seat].role==='doctor' && t===this.docLast){ this.tx.send('nack',{key:m.key}); return; }
       this.acts[seat]=t;
       if(alive().every(i=>this.acts[i]!=null)) this.resolveNight();
       else this.pushState();
@@ -266,20 +274,39 @@ const NET = {
   resolveNight(){
     const maf = aliveMafia();
     const killer = maf.length ? Math.min(...maf) : -1;
-    const kill = killer>=0 ? this.acts[killer] : null;
+    let kill = (killer>=0 && G.day>1) ? this.acts[killer] : null;   // night one: hands tied
     let save = null, det = null;
     alive().forEach(i=>{
-      if(G.players[i].role==='doctor') save = this.acts[i];
+      if(G.players[i].role==='doctor'){ save = this.acts[i]; this.docLast = save; }
       if(G.players[i].role==='detective') det = i;
     });
-    if(det!=null){
-      const t = this.acts[det];
-      this.tx.send('priv', { to:G.players[det].key, kind:'invest', name:G.players[t].name, isMafia:G.players[t].role==='mafia' });
-      if(det===MYSEAT){ LASTINVEST={ name:G.players[t].name, isMafia:G.players[t].role==='mafia' }; banner(LASTINVEST.name.toUpperCase()+(LASTINVEST.isMafia?' IS MAFIA':' IS NOT MAFIA')); }
-    }
     if(kill!=null && kill!==save){
-      G.players[kill].alive=false; G.players[kill].revealed=G.players[kill].role;
-      G.logs.unshift('Dawn breaks. '+G.players[kill].name+' was killed in the night — they were the '+ROLES[G.players[kill].role].name+'.');
+      const bg = alive().find(i=>G.players[i].role==='bodyguard' && this.acts[i]===kill && i!==killer);
+      if(bg!=null){
+        this.tx.send('priv', { to:G.players[bg].key, kind:'hit', name:G.players[kill].name });
+        kill = bg;   // once per game, enforced by the dying
+      }
+    }
+    if(det!=null){
+      if(this.detLastDay===0 || G.day > this.detLastDay + 1){
+        const t = this.acts[det];
+        this.detLastDay = G.day;
+        const payload = { to:G.players[det].key, kind:'invest', name:G.players[t].name, isMafia:G.players[t].role==='mafia' };
+        this.tx.send('priv', payload);
+        if(det===MYSEAT){ LASTINVEST={ name:payload.name, isMafia:payload.isMafia }; MYDETLAST=G.day; banner(payload.name.toUpperCase()+(payload.isMafia?' IS MAFIA':' IS NOT MAFIA')); }
+      }
+    }
+    alive().forEach(i=>{
+      if(G.players[i].role!=='insomniac') return;
+      const t = this.acts[i];
+      const count = alive().filter(j=>j!==i && this.acts[j]===t).length;
+      const payload = { to:G.players[i].key, kind:'insom', name:G.players[t].name, count };
+      this.tx.send('priv', payload);
+      if(i===MYSEAT){ banner(count+' CIRCLED '+G.players[t].name.toUpperCase()+' LAST NIGHT'); }
+    });
+    if(kill!=null && kill!==save){
+      G.players[kill].alive=false;
+      G.logs.unshift('Dawn breaks. '+G.players[kill].name+' was killed in the night.');
     } else {
       G.logs.unshift('Dawn breaks. Nobody died in the night.');
     }
@@ -294,13 +321,13 @@ const NET = {
   },
   resolveVote(){
     const tally={};
-    alive().forEach(i=>{ const t=this.votes[i]; if(t>=0) tally[t]=(tally[t]||0)+1; });
+    alive().forEach(i=>{ const t=this.votes[i]; if(t>=0) tally[t]=(tally[t]||0)+(G.players[i].role==='mayor'?2:1); });
     const need = Math.floor(alive().length/2)+1;
     let out=-1;
     Object.entries(tally).forEach(([t,c])=>{ if(c>=need) out=+t; });
     if(out>=0){
-      G.players[out].alive=false; G.players[out].revealed=G.players[out].role;
-      G.logs.unshift(G.players[out].name+' was voted out — they were the '+ROLES[G.players[out].role].name+'.');
+      G.players[out].alive=false;
+      G.logs.unshift(G.players[out].name+' was voted out. Their secrets go with them.');
     } else {
       G.logs.unshift('No majority. Nobody was voted out.');
     }
@@ -336,7 +363,8 @@ function pickList(allowSelfDoctor, onPick, skip){
   G.players.forEach((p,i)=>{
     if(!p.alive) return;
     if(i===MYSEAT && !(allowSelfDoctor && MYROLE==='doctor')) return;
-    h += `<button class="btn ${PICK===i?'sel':''}" onclick="setPick(${i},'${onPick}')">${esc(p.name)}${i===MYSEAT?' (you)':''}</button>`;
+    const docBlock = onPick==='act' && MYROLE==='doctor' && i===MYDOCLAST;
+    h += `<button class="btn ${PICK===i?'sel':''}" ${docBlock?'disabled':''} onclick="setPick(${i},'${onPick}')">${esc(p.name)}${i===MYSEAT?' (you)':''}${docBlock?' — protected last night':''}</button>`;
   });
   if(skip) h += `<button class="btn ${PICK===-1?'sel':''}" onclick="setPick(-1,'${onPick}')">Skip — no vote</button>`;
   h += `<button class="btn primary" ${PICK==null?'disabled':''} onclick="confirmPick('${onPick}')">Lock It In</button>`;
@@ -345,6 +373,7 @@ function pickList(allowSelfDoctor, onPick, skip){
 function setPick(i, kind){ PICK = i; render(); }
 function confirmPick(kind){
   if(PICK==null) return;
+  if(kind!=='vote' && MYROLE==='doctor') MYDOCLAST = PICK;
   NET.sendIntent(kind==='vote'?'vote':'act', { target:PICK });
   PICK = null; MYACTED = true; render();
 }
@@ -398,10 +427,13 @@ function render(){
       app.innerHTML = `<div class="phase">Night ${G.day}</div><div class="sub">You watch from beyond. The town sleeps uneasily.</div>${seats}${logs}`;
       return;
     }
-    const prompt = MYROLE==='mafia' ? 'Choose your kill.'
-      : MYROLE==='doctor' ? 'Choose someone to protect.'
-      : MYROLE==='detective' ? 'Choose someone to investigate.'
-      : 'Choose someone you dream about. (Everyone acts — nobody stands out.)';
+    const detResting = MYROLE==='detective' && MYDETLAST>0 && G.day===MYDETLAST+1;
+    const prompt = MYROLE==='mafia' ? (G.day===1 ? 'Night one — no blood yet. Pick anyone as cover.' : 'Choose your kill.')
+      : MYROLE==='doctor' ? 'Choose someone to protect. Not last night\'s pick.'
+      : MYROLE==='detective' ? (detResting ? 'You rest tonight. Pick anyone as cover.' : 'Choose someone to investigate.')
+      : MYROLE==='bodyguard' ? 'Choose someone to stand beside. If they\'re hit, you take it.'
+      : MYROLE==='insomniac' ? 'Choose someone to watch. You\'ll learn how many circled them.'
+      : 'Choose someone. Everyone acts — nobody stands out.';
     app.innerHTML = MYACTED
       ? `<div class="phase">Night ${G.day}</div><div class="sub">Your choice is made. Eyes closed.</div>${waitline}${logs}`
       : `<div class="phase">Night ${G.day}</div><div class="sub">${esc(prompt)}</div><div class="panel">${pickList(true,'act',false)}</div>${waitline}`;

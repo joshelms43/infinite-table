@@ -1,5 +1,16 @@
 # Mafia — Changelog
 
+## v0.2.0 — 2026-07-12
+Everyone gets a role. Every role gets a leash.
+
+**No more plain Villagers** — the spare seats become Bodyguard (stand beside someone; if the Mafia come for them, you take the hit — once, enforced by the dying), Insomniac (learn how many people circled your target — never who; the decoy picks keep it honestly fuzzy), and Mayor (no night power; your vote silently counts double).
+
+**And every power weakened** — the Mafia's hands are tied on night one, and a second Mafia is only a voice. The Doctor can never protect the same person two nights running — last night's save greys out in the pick list, host-enforced too. The Detective must rest the night after an investigation, with a cover pick so nothing leaks.
+
+**The global weakener: deaths keep their secrets** — kills and lynchings no longer reveal roles; everything comes out only at the end. Scarce information is what makes weak powers worth having.
+
+Weaknesses are printed on the role cards themselves. Uniform night action still holds: everyone picks, every night, so timing tells nothing.
+
 ## v0.1.0 — 2026-07-12
 Game two opens. Online lobbies, not pass-and-play — one phone each, same room codes and host-authoritative channel model M Deal proved out.
 
