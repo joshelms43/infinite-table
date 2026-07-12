@@ -71,6 +71,7 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
 .herofan{position:absolute;top:-14px;right:12px;width:112px;height:62px;pointer-events:none;filter:drop-shadow(0 5px 9px rgba(8,12,10,.28))}
 .fcard{
   position:absolute;left:var(--fx);top:var(--fy,0px);width:38px;height:56px;border-radius:5.5px;
+  background:var(--fc);
   background:linear-gradient(172deg, color-mix(in srgb, var(--fc) 88%, white) 0%, var(--fc) 45%, color-mix(in srgb, var(--fc) 82%, black) 100%);
   transform:rotate(var(--fr));transform-origin:50% 145%;
   transition:transform .35s cubic-bezier(.2,.9,.3,1);
@@ -81,7 +82,6 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
   background:var(--card-ivory);box-shadow:inset 0 -1.5px 2px rgba(36,36,29,.25)}
 .game.hero:active .fcard{transform:rotate(calc(var(--fr)*1.45)) translateY(-5px)}
 .game.hero .gbody{position:relative;z-index:2}
-.game.hero:active .fcard{transform:rotate(calc(var(--fr)*1.5)) translateY(-4px)}
 .game.hero .gmeta{margin-top:12px;font-size:10px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:#24241D;opacity:.38}
 #lobbystats{margin:2px 0;padding:13px 16px;border-radius:14px;
   border:1px solid rgba(244,239,229,.12);background:rgba(244,239,229,.045);
