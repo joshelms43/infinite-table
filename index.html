@@ -68,7 +68,7 @@ main{width:100%;max-width:370px;display:flex;flex-direction:column;gap:16px;padd
 .game.soon:active{transform:none}
 footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity:.3}
 .game.hero{position:relative;overflow:visible;padding-top:0}
-.herofan{position:absolute;top:-46px;right:8px;width:128px;height:72px;pointer-events:none;filter:drop-shadow(0 5px 9px rgba(8,12,10,.3))}
+.herofan{position:absolute;top:-44px;left:50%;transform:translateX(-50%);width:160px;height:72px;pointer-events:none;filter:drop-shadow(0 5px 9px rgba(8,12,10,.3))}
 .fslot{position:absolute;left:var(--fx);top:var(--fy,0px);width:44px;height:65px;
   transform:rotate(var(--fr));transform-origin:50% 145%;
   transition:transform .35s cubic-bezier(.2,.9,.3,1)}
@@ -93,10 +93,6 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
   font-size:8.5px;font-weight:800;color:#24241D;font-style:normal;
   box-shadow:0 1px 2px rgba(8,12,10,.35);
 }
-.mini .mrows{margin-top:auto;padding:0 8px 8px;text-decoration:none;display:block}
-.mini .mrows s{display:flex;justify-content:space-between;align-items:center;text-decoration:none;
-  font-size:9px;font-weight:700;color:#24241D;opacity:.75;padding:2.5px 0;border-top:1px dashed rgba(36,36,29,.18)}
-.mini .mrows s:first-child{border-top:none}
 .mini.mmoney{background:linear-gradient(178deg,#F2D98A,#D9A03F 65%,#C08A2E)}
 .mini.mmoney .mband.mnote{background:rgba(36,36,29,.82);letter-spacing:2px;font-size:10.5px}
 .mini .mbig{
@@ -210,20 +206,20 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
 <main>
   <a class="game hero" href="./coastline/">
     <div class="herofan" aria-hidden="true">
-      <span class="fslot" style="--fr:-14deg;--fx:0px;--fy:7px"><span class="mini">
+      <span class="fslot" style="--fr:-18deg;--fx:0px;--fy:13px"><span class="mini">
         <b class="mcoin">$2M</b><i class="mband" style="background:#2E5EAA">Blue</i>
-        <u class="mrows"><s><span>1 card</span><b>$2M</b></s><s><span>2 cards ★</span><b>$5M</b></s></u>
       </span></span>
-      <span class="fslot" style="--fr:-5deg;--fx:26px;--fy:1px"><span class="mini">
+      <span class="fslot" style="--fr:-9deg;--fx:29px;--fy:4px"><span class="mini">
         <b class="mcoin">$3M</b><i class="mband" style="background:#C8433A">Red</i>
-        <u class="mrows"><s><span>1 card</span><b>$2M</b></s><s><span>2 cards</span><b>$3M</b></s><s><span>3 cards ★</span><b>$6M</b></s></u>
       </span></span>
-      <span class="fslot" style="--fr:4deg;--fx:52px;--fy:1px"><span class="mini mmoney">
+      <span class="fslot" style="--fr:0deg;--fx:58px;--fy:0px"><span class="mini mmoney">
         <i class="mband mnote">Bank Note</i><b class="mbig">$5M</b>
       </span></span>
-      <span class="fslot" style="--fr:13deg;--fx:78px;--fy:7px"><span class="mini">
+      <span class="fslot" style="--fr:9deg;--fx:87px;--fy:4px"><span class="mini">
         <b class="mcoin">$3M</b><i class="mband" style="background:#1FA8A0">Teal</i>
-        <u class="mrows"><s><span>1 card</span><b>$2M</b></s><s><span>2 cards</span><b>$4M</b></s><s><span>3 cards ★</span><b>$7M</b></s></u>
+      </span></span>
+      <span class="fslot" style="--fr:18deg;--fx:116px;--fy:13px"><span class="mini">
+        <b class="mcoin">$1M</b><i class="mband" style="background:#DE559C">Pink</i>
       </span></span>
     </div>
     <div class="gbody">
