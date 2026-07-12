@@ -67,16 +67,17 @@ main{width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px}
 }
 .game.soon:active{transform:none}
 footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity:.3}
-.game.hero{position:relative;overflow:hidden}
-.herofan{position:absolute;top:-10px;right:16px;width:110px;height:74px;pointer-events:none}
+.game.hero{position:relative;overflow:hidden;padding-top:58px}
+.herofan{position:absolute;top:-16px;right:14px;width:96px;height:56px;pointer-events:none}
 .fcard{
-  position:absolute;left:var(--fx);top:0;width:42px;height:62px;border-radius:6px;
+  position:absolute;left:var(--fx);top:0;width:36px;height:52px;border-radius:5px;
   background:#123B2E;
   box-shadow:0 4px 10px rgba(8,12,10,.3);
   transform:rotate(var(--fr));transform-origin:50% 140%;
   transition:transform .35s cubic-bezier(.2,.9,.3,1);
 }
-.fcard::after{content:'';position:absolute;inset:4px;border-radius:4px;border:1.5px solid rgba(217,160,63,.55)}
+.fcard::after{content:'';position:absolute;inset:3.5px;border-radius:3.5px;border:1.5px solid rgba(217,160,63,.55)}
+.game.hero .gbody{position:relative;z-index:2}
 .game.hero:active .fcard{transform:rotate(calc(var(--fr)*1.5)) translateY(-4px)}
 .quickrow{display:flex;gap:8px;margin:10px 0 2px}
 .quick{
@@ -190,8 +191,8 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
   <a class="game hero" href="./coastline/">
     <div class="herofan" aria-hidden="true">
       <span class="fcard" style="--fr:-9deg;--fx:0px"></span>
-      <span class="fcard" style="--fr:1deg;--fx:26px"></span>
-      <span class="fcard" style="--fr:11deg;--fx:52px"></span>
+      <span class="fcard" style="--fr:1deg;--fx:23px"></span>
+      <span class="fcard" style="--fr:11deg;--fx:46px"></span>
     </div>
     <div class="gbody">
       <div class="ginfo">
