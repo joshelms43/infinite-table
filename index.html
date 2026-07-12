@@ -100,6 +100,10 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
   font-weight:800;font-size:12.5px;display:none;justify-content:space-between;align-items:center}
 #lobbystats.show{display:flex}
 #lobbystats .elo{font-family:'Lilita One',cursive;font-size:19px;color:var(--money-gold);letter-spacing:.5px}
+.game.hero.mafiacard{padding-top:16px;background:linear-gradient(168deg,#1B2A44 0%,#12203A 55%,#0A1220 100%);border-color:rgba(244,239,229,.2)}
+.game.hero.mafiacard .gname,.game.hero.mafiacard .gdesc{color:var(--card-ivory)}
+.game.hero.mafiacard .gdesc{opacity:.75}
+.game.hero.mafiacard .gplayers{color:var(--card-ivory);opacity:.4}
 .game.soon{display:flex;align-items:center;justify-content:space-between;padding:16px 18px}
 .soonname{font-weight:800;font-size:14px;opacity:.55}
 .soondesc{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;opacity:.3}
@@ -214,8 +218,19 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
 
   <div id="lobbystats"></div>
 
+  <a class="game hero mafiacard" href="./mafia/">
+    <div class="gbody">
+      <div class="ginfo">
+        <div class="gname">Mafia</div>
+        <div class="gdesc">Night falls. Someone's lying.</div>
+        <div class="gplayers">4–10 Players</div>
+      </div>
+      <span class="gplay">PLAY</span>
+    </div>
+  </a>
+
   <div class="game soon">
-    <div class="soonname">Game two</div>
+    <div class="soonname">Game three</div>
     <div class="soondesc">In the workshop</div>
   </div>
 </main>

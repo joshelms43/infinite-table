@@ -1,0 +1,448 @@
+<!doctype html>
+<!-- Infinite Table — Mafia. Version: 0.1.0 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Mafia — Infinite Table</title>
+<meta property="og:title" content="Mafia — Infinite Table">
+<meta property="og:description" content="Night falls. Someone's lying.">
+<style>
+:root{
+  --table-deep:#0E241C; --table-felt:#143028; --card-ivory:#F4EFE5; --ink-black:#24241D;
+  --money-gold:#D9A03F; --danger-red:#C8433A; --success-green:#4A9D5A; --warning-amber:#D9832E;
+  --night:#0A1220; --blood:#8E2F32;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow-x:hidden}
+body{
+  background:radial-gradient(120% 90% at 50% 0%, var(--table-felt), var(--table-deep) 70%);
+  color:var(--card-ivory);
+  font-family:'Nunito',system-ui,-apple-system,sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  padding:calc(env(safe-area-inset-top,0px) + 26px) 22px 40px;
+}
+body.night{background:radial-gradient(120% 90% at 50% 0%, #12203A 0%, var(--night) 70%)}
+@font-face{font-family:'Lilita One';src:local('Lilita One')}
+.wordmark{font-family:'Lilita One','Nunito',cursive;font-size:30px;letter-spacing:1px;margin-bottom:2px}
+.wordmark b{color:var(--money-gold)}
+.ver{font-size:10px;font-weight:800;letter-spacing:1.5px;opacity:.35;margin-bottom:22px}
+#app{width:100%;max-width:370px;display:flex;flex-direction:column;gap:12px}
+.panel{background:rgba(244,239,229,.05);border:1px solid rgba(244,239,229,.13);border-radius:16px;padding:16px}
+.btn{
+  display:block;width:100%;padding:15px 14px;border-radius:14px;border:1px solid rgba(244,239,229,.18);
+  background:rgba(244,239,229,.07);color:var(--card-ivory);font-family:inherit;font-weight:800;font-size:15px;
+  letter-spacing:.3px;transition:transform .1s ease;text-align:center;
+}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--money-gold);color:var(--table-deep);border-color:var(--money-gold)}
+.btn.danger{background:var(--blood);border-color:var(--blood)}
+.btn.sel{background:var(--card-ivory);color:var(--table-deep);border-color:var(--card-ivory)}
+.btn:disabled{opacity:.4}
+.row{display:flex;gap:8px}
+.row .btn{flex:1}
+input.code{
+  width:100%;padding:15px;border-radius:14px;border:1px solid rgba(244,239,229,.2);background:rgba(9,20,16,.5);
+  color:var(--card-ivory);font-weight:800;font-size:18px;text-align:center;letter-spacing:6px;text-transform:uppercase;font-family:inherit;
+}
+input.namef{letter-spacing:.5px;font-size:15px;text-transform:none}
+.seat{display:flex;align-items:center;gap:10px;padding:12px 6px;border-bottom:1px solid rgba(244,239,229,.09);font-weight:800;font-size:14.5px}
+.seat:last-child{border-bottom:none}
+.seatdot{width:8px;height:8px;border-radius:50%;background:var(--success-green);box-shadow:0 0 7px rgba(74,157,90,.6);flex:0 0 auto}
+.seat.dead{opacity:.38}
+.seat.dead .seatdot{background:var(--danger-red);box-shadow:none}
+.seat .srole{margin-left:auto;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--money-gold);opacity:.9}
+.phase{font-family:'Lilita One','Nunito',cursive;font-size:24px;letter-spacing:1px;text-align:center;margin-top:4px}
+.sub{font-size:13.5px;font-weight:700;opacity:.75;text-align:center;line-height:1.5}
+.roomcode{font-family:'Lilita One','Nunito',cursive;font-size:34px;letter-spacing:10px;text-align:center;color:var(--money-gold)}
+#rolecard{
+  margin:6px auto;width:210px;height:130px;border-radius:16px;background:var(--card-ivory);color:var(--ink-black);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  box-shadow:0 10px 24px rgba(8,12,10,.4);user-select:none;-webkit-user-select:none;touch-action:none;
+}
+#rolecard .rname{font-family:'Lilita One','Nunito',cursive;font-size:26px;letter-spacing:1px}
+#rolecard .rhint{font-size:11px;font-weight:800;letter-spacing:.4px;opacity:.6;text-align:center;padding:0 14px}
+#rolecard.hidden .rname,#rolecard.hidden .rhint{visibility:hidden}
+#rolecard.hidden::after{content:'HOLD TO SEE YOUR ROLE';position:absolute;font-size:12px;font-weight:800;letter-spacing:1.5px;color:var(--ink-black);opacity:.55}
+#rolecard{position:relative}
+.logline{font-size:12.5px;font-weight:700;opacity:.72;padding:3px 0;line-height:1.45}
+.banner{
+  position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);
+  background:rgba(9,20,16,.9);border:1px solid var(--money-gold);color:var(--money-gold);
+  padding:9px 18px;border-radius:24px;font-weight:800;font-size:12.5px;letter-spacing:.8px;z-index:50;
+  animation:bfade 2.6s ease forwards;white-space:nowrap;
+}
+@keyframes bfade{0%{opacity:0;transform:translate(-50%,-8px)}12%{opacity:1;transform:translate(-50%,0)}80%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion: reduce){ .banner{animation:none} }
+.waitline{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;opacity:.45;text-align:center}
+.mates{font-size:12px;font-weight:800;color:var(--blood);text-align:center;letter-spacing:.3px}
+</style>
+</head>
+<body>
+<div class="wordmark"><b>MAFIA</b></div>
+<div class="ver">v0.1.0 · INFINITE TABLE</div>
+<div id="app"></div>
+
+<script src="../shared/config.js?v=010"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+function banner(t){ const b=document.createElement('div'); b.className='banner'; b.textContent=t; document.body.appendChild(b); setTimeout(()=>b.remove(), 2700); }
+function esc(x){ return String(x==null?'':x).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ================= game state ================= */
+let G = { phase:'home', day:1, players:[], logs:[] };   // players: {key,name,alive,role?,revealed?}
+let MYSEAT = -1, MYROLE = null, MYMATES = [], READY = false, PICK = null, LASTINVEST = null;
+const ROLES = {
+  mafia:     { name:'Mafia',     hint:'Each night, choose someone to kill. Blend in by day.' },
+  doctor:    { name:'Doctor',    hint:'Each night, choose someone to protect. You may protect yourself.' },
+  detective: { name:'Detective', hint:'Each night, investigate someone. You learn if they are Mafia.' },
+  villager:  { name:'Villager',  hint:'Find the Mafia. Vote wisely. Trust no one completely.' },
+};
+function alive(){ return G.players.map((p,i)=>i).filter(i=>G.players[i].alive); }
+function aliveMafia(){ return alive().filter(i=>G.players[i].role==='mafia'); }
+function me(){ return G.players[MYSEAT]; }
+
+/* ================= net (trimmed from M Deal's proven core) ================= */
+const NET = {
+  mode:'off', code:null, seat:-1, pkey:null, myName:'', tx:null, roster:null, sb:null,
+  acts:{}, votes:{}, readys:{},
+  async ensure(){
+    if(this.sb) return true;
+    if(!window.SUPABASE_URL) { banner('NO CONFIG'); return false; }
+    await new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; sc.onload=res; sc.onerror=()=>rej(new Error('cdn')); document.head.appendChild(sc); }).catch(()=>null);
+    if(!window.supabase) { banner('OFFLINE?'); return false; }
+    this.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    let pk = null; try{ pk = localStorage.getItem('it_pkey'); }catch(e){}
+    if(!pk){ pk = Math.random().toString(36).slice(2,10); try{ localStorage.setItem('it_pkey', pk); }catch(e){} }
+    this.pkey = pk;
+    return true;
+  },
+  async connect(code, hosting){
+    if(!(await this.ensure())) return false;
+    this.code = code;
+    const ch = this.sb.channel('mafia-'+code, { config:{ presence:{ key:this.pkey }, broadcast:{ self:false } } });
+    const self = this;
+    ['state','priv','start','hello','intent','nack'].forEach(ev=>{
+      ch.on('broadcast', { event:ev }, p => self.onMessage(ev, p.payload||{}));
+    });
+    ch.on('presence', { event:'sync' }, ()=>{ if(G.phase==='lobby') render(); });
+    await new Promise((res)=>{ ch.subscribe(st=>{ if(st==='SUBSCRIBED') res(); }); });
+    this.tx = {
+      send:(ev,payload)=>ch.send({ type:'broadcast', event:ev, payload }),
+      track:(m)=>ch.track(m),
+      presence:()=>ch.presenceState(),
+    };
+    this.tx.track({ key:this.pkey, name:this.myName, host:!!hosting });
+    return true;
+  },
+  lobbySeats(){
+    const seen = {}; const list = [];
+    try{
+      Object.values(this.tx.presence()||{}).forEach(arr=>arr.forEach(m=>{
+        if(m && m.key && !seen[m.key]){ seen[m.key]=1; list.push({ key:m.key, name:m.name||'Player', host:!!m.host }); }
+      }));
+    }catch(e){}
+    list.sort((a,b)=> (b.host?1:0)-(a.host?1:0) || a.key.localeCompare(b.key));
+    return list.slice(0,10);
+  },
+  async host(){
+    this.myName = nameField();
+    const code = Array.from({length:4},()=>'ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
+    if(!(await this.connect(code, true))) return;
+    this.mode = 'lobby-host'; G.phase = 'lobby'; render();
+  },
+  async join(){
+    this.myName = nameField();
+    const code = (($('#jcode')||{}).value||'').toUpperCase().trim();
+    if(code.length!==4){ banner('FOUR LETTERS'); return; }
+    if(!(await this.connect(code, false))) return;
+    this.mode = 'joining'; G.phase = 'lobby'; render();
+    this.tx.send('hello', { key:this.pkey });
+  },
+  startGame(){
+    const seats = this.lobbySeats();
+    if(seats.length < 4){ banner('NEED FOUR PLAYERS'); return; }
+    this.roster = seats;
+    this.mode = 'host';
+    const n = seats.length;
+    const bag = ['mafia','doctor','detective']; if(n>=7) bag.push('mafia');
+    while(bag.length < n) bag.push('villager');
+    for(let i=bag.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [bag[i],bag[j]]=[bag[j],bag[i]]; }
+    G = { phase:'reveal', day:1, logs:['Night is coming. Learn who you are.'],
+      players: seats.map((s,i)=>({ key:s.key, name:s.name, alive:true, role:bag[i], revealed:null })) };
+    this.acts={}; this.votes={}; this.readys={};
+    MYSEAT = G.players.findIndex(p=>p.key===this.pkey);
+    MYROLE = G.players[MYSEAT].role;
+    const mafiaNames = G.players.filter(p=>p.role==='mafia').map(p=>p.name);
+    MYMATES = MYROLE==='mafia' ? mafiaNames.filter(nm=>nm!==G.players[MYSEAT].name) : [];
+    this.tx.send('start', { roster: seats });
+    G.players.forEach((p,i)=>{
+      if(i===MYSEAT) return;
+      this.tx.send('priv', { to:p.key, kind:'role', role:p.role,
+        mates: p.role==='mafia' ? mafiaNames.filter(nm=>nm!==p.name) : [] });
+    });
+    this.pushState(); render();
+  },
+  serialize(){
+    return {
+      phase:G.phase, day:G.day, logs:G.logs.slice(0,20),
+      players: G.players.map(p=>({ key:p.key, name:p.name, alive:p.alive, revealed:p.revealed })),
+      waiting: this.waitingNames(),
+    };
+  },
+  waitingNames(){
+    if(this.mode!=='host') return [];
+    const pool = alive();
+    if(G.phase==='reveal') return G.players.filter((p,i)=>!this.readys[i]).map(p=>p.name);
+    if(G.phase==='night')  return pool.filter(i=>this.acts[i]==null).map(i=>G.players[i].name);
+    if(G.phase==='vote')   return pool.filter(i=>this.votes[i]==null).map(i=>G.players[i].name);
+    return [];
+  },
+  pushState(){ if(this.mode==='host') this.tx.send('state', this.serialize()); persistNothing(); },
+  onMessage(type, m){
+    if(this.mode==='host'){
+      if(type==='hello'){ this.tx.send('start', { roster:this.roster||this.lobbySeats() }); if(G.phase!=='lobby') this.pushState(); if(m.key){ const p=G.players.find(q=>q.key===m.key); if(p && p.role){ this.tx.send('priv',{to:m.key,kind:'role',role:p.role,mates:p.role==='mafia'?G.players.filter(q=>q.role==='mafia'&&q.key!==m.key).map(q=>q.name):[]}); } } }
+      if(type==='intent') this.applyIntent(m);
+      return;
+    }
+    if(type==='start'){
+      this.roster = m.roster||[];
+      MYSEAT = this.roster.findIndex(r=>r.key===this.pkey);
+      if(this.mode==='joining') this.mode='client';
+      if(G.phase==='home') G.phase='lobby';
+      render();
+    }
+    if(type==='state'){
+      const keepRoles = {}; G.players.forEach(p=>{ if(p.role) keepRoles[p.key]=p.role; });
+      G.phase=m.phase; G.day=m.day; G.logs=m.logs||[];
+      G.players=(m.players||[]).map(p=>({ ...p, role:keepRoles[p.key]||null }));
+      G.waiting=m.waiting||[];
+      MYSEAT = G.players.findIndex(p=>p.key===this.pkey);
+      if(G.phase==='night' || G.phase==='vote'){ /* fresh phase resets local pick if server moved on */ }
+      render();
+    }
+    if(type==='priv' && m.to===this.pkey){
+      if(m.kind==='role'){ MYROLE=m.role; MYMATES=m.mates||[]; render(); }
+      if(m.kind==='invest'){ LASTINVEST=m; banner(m.name.toUpperCase()+(m.isMafia?' IS MAFIA':' IS NOT MAFIA')); render(); }
+    }
+    if(type==='nack' && m.key===this.pkey){ banner('NOT RIGHT NOW'); PICK=null; render(); }
+  },
+  sendIntent(k, a){
+    if(this.mode==='host'){ this.applyIntent({ key:this.pkey, k, a }); return; }
+    this.tx.send('intent', { key:this.pkey, k, a });
+  },
+  applyIntent(m){
+    const seat = G.players.findIndex(p=>p.key===m.key);
+    if(seat<0){ this.tx.send('nack',{key:m.key}); return; }
+    if(m.k==='ready' && G.phase==='reveal'){
+      this.readys[seat]=true;
+      if(Object.keys(this.readys).length >= G.players.length) this.beginNight();
+      else this.pushState();
+    }
+    else if(m.k==='act' && G.phase==='night' && G.players[seat].alive && this.acts[seat]==null){
+      const t = m.a && m.a.target;
+      if(!(t>=0 && t<G.players.length && G.players[t].alive)){ this.tx.send('nack',{key:m.key}); return; }
+      if(t===seat && G.players[seat].role!=='doctor'){ this.tx.send('nack',{key:m.key}); return; }
+      this.acts[seat]=t;
+      if(alive().every(i=>this.acts[i]!=null)) this.resolveNight();
+      else this.pushState();
+    }
+    else if(m.k==='vote' && G.phase==='vote' && G.players[seat].alive && this.votes[seat]==null){
+      const t = m.a && m.a.target;   // -1 = skip
+      if(!(t===-1 || (t>=0 && t<G.players.length && G.players[t].alive && t!==seat))){ this.tx.send('nack',{key:m.key}); return; }
+      this.votes[seat]=t;
+      if(alive().every(i=>this.votes[i]!=null)) this.resolveVote();
+      else this.pushState();
+    }
+    else if(m.k==='day' && G.phase==='dawn' && seat===0){ this.beginVote(); }
+    else { this.tx.send('nack',{key:m.key}); }
+  },
+  beginNight(){
+    G.phase='night'; this.acts={};
+    G.logs.unshift('Night '+G.day+' falls. Everyone, choose in silence.');
+    this.pushState(); render();
+  },
+  resolveNight(){
+    const maf = aliveMafia();
+    const killer = maf.length ? Math.min(...maf) : -1;
+    const kill = killer>=0 ? this.acts[killer] : null;
+    let save = null, det = null;
+    alive().forEach(i=>{
+      if(G.players[i].role==='doctor') save = this.acts[i];
+      if(G.players[i].role==='detective') det = i;
+    });
+    if(det!=null){
+      const t = this.acts[det];
+      this.tx.send('priv', { to:G.players[det].key, kind:'invest', name:G.players[t].name, isMafia:G.players[t].role==='mafia' });
+      if(det===MYSEAT){ LASTINVEST={ name:G.players[t].name, isMafia:G.players[t].role==='mafia' }; banner(LASTINVEST.name.toUpperCase()+(LASTINVEST.isMafia?' IS MAFIA':' IS NOT MAFIA')); }
+    }
+    if(kill!=null && kill!==save){
+      G.players[kill].alive=false; G.players[kill].revealed=G.players[kill].role;
+      G.logs.unshift('Dawn breaks. '+G.players[kill].name+' was killed in the night — they were the '+ROLES[G.players[kill].role].name+'.');
+    } else {
+      G.logs.unshift('Dawn breaks. Nobody died in the night.');
+    }
+    G.phase='dawn';
+    if(this.checkWin()) return;
+    this.pushState(); render();
+  },
+  beginVote(){
+    G.phase='vote'; this.votes={};
+    G.logs.unshift('Day '+G.day+'. Talk it out — then vote.');
+    this.pushState(); render();
+  },
+  resolveVote(){
+    const tally={};
+    alive().forEach(i=>{ const t=this.votes[i]; if(t>=0) tally[t]=(tally[t]||0)+1; });
+    const need = Math.floor(alive().length/2)+1;
+    let out=-1;
+    Object.entries(tally).forEach(([t,c])=>{ if(c>=need) out=+t; });
+    if(out>=0){
+      G.players[out].alive=false; G.players[out].revealed=G.players[out].role;
+      G.logs.unshift(G.players[out].name+' was voted out — they were the '+ROLES[G.players[out].role].name+'.');
+    } else {
+      G.logs.unshift('No majority. Nobody was voted out.');
+    }
+    if(this.checkWin()) return;
+    G.day++; this.beginNight();
+  },
+  checkWin(){
+    const maf = aliveMafia().length;
+    const town = alive().length - maf;
+    if(maf===0){ G.phase='over'; G.winner='village'; G.logs.unshift('The village wins. The Mafia are gone.'); G.players.forEach(p=>p.revealed=p.role); this.pushState(); render(); return true; }
+    if(maf>=town){ G.phase='over'; G.winner='mafia'; G.logs.unshift('The Mafia win. The town never saw it coming.'); G.players.forEach(p=>p.revealed=p.role); this.pushState(); render(); return true; }
+    return false;
+  },
+};
+function persistNothing(){}
+function nameField(){
+  let n = (($('#namef')||{}).value||'').trim().slice(0,12);
+  if(!n){ try{ n = localStorage.getItem('it_name')||''; }catch(e){} }
+  if(!n) n = 'Player';
+  try{ localStorage.setItem('it_name', n); }catch(e){}
+  return n;
+}
+
+/* ================= render ================= */
+function seatRow(p, i){
+  const dead = !p.alive;
+  const role = p.revealed ? `<span class="srole">${esc(ROLES[p.revealed].name)}</span>` : '';
+  return `<div class="seat ${dead?'dead':''}"><span class="seatdot"></span>${esc(p.name)}${i===MYSEAT?' · you':''}${role}</div>`;
+}
+function pickList(allowSelfDoctor, onPick, skip){
+  const meAlive = me() && me().alive;
+  let h = '';
+  G.players.forEach((p,i)=>{
+    if(!p.alive) return;
+    if(i===MYSEAT && !(allowSelfDoctor && MYROLE==='doctor')) return;
+    h += `<button class="btn ${PICK===i?'sel':''}" onclick="setPick(${i},'${onPick}')">${esc(p.name)}${i===MYSEAT?' (you)':''}</button>`;
+  });
+  if(skip) h += `<button class="btn ${PICK===-1?'sel':''}" onclick="setPick(-1,'${onPick}')">Skip — no vote</button>`;
+  h += `<button class="btn primary" ${PICK==null?'disabled':''} onclick="confirmPick('${onPick}')">Lock It In</button>`;
+  return h;
+}
+function setPick(i, kind){ PICK = i; render(); }
+function confirmPick(kind){
+  if(PICK==null) return;
+  NET.sendIntent(kind==='vote'?'vote':'act', { target:PICK });
+  PICK = null; MYACTED = true; render();
+}
+let MYACTED = false;
+function render(){
+  document.body.classList.toggle('night', G.phase==='night' || G.phase==='reveal');
+  const app = $('#app'); if(!app) return;
+  const logs = `<div class="panel">${(G.logs||[]).slice(0,5).map(l=>`<div class="logline">${esc(l)}</div>`).join('')}</div>`;
+  const seats = `<div class="panel">${G.players.map(seatRow).join('')}</div>`;
+  const waitline = (G.waiting && G.waiting.length) ? `<div class="waitline">Waiting on ${G.waiting.map(esc).join(', ')}</div>` : '';
+
+  if(G.phase==='home'){
+    let saved=''; try{ saved = localStorage.getItem('it_name')||''; }catch(e){}
+    app.innerHTML = `
+      <input id="namef" class="code namef" maxlength="12" placeholder="Your name" value="${esc(saved)}" autocomplete="off">
+      <button class="btn primary" onclick="NET.host()">Host a Room</button>
+      <div class="row"><input id="jcode" class="code" maxlength="4" placeholder="CODE" autocomplete="off"><button class="btn" style="flex:0 0 42%" onclick="NET.join()">Join</button></div>
+      <div class="sub">Four or more players. One phone each.</div>`;
+    return;
+  }
+  if(G.phase==='lobby'){
+    const seatsL = NET.tx ? NET.lobbySeats() : [];
+    const hosting = NET.mode==='lobby-host';
+    app.innerHTML = `
+      <div class="roomcode">${esc(NET.code||'')}</div>
+      <div class="panel">${seatsL.map(s=>`<div class="seat"><span class="seatdot"></span>${esc(s.name)}${s.key===NET.pkey?' · you':''}${s.host?' · host':''}</div>`).join('')||'<div class="sub">Waiting for players…</div>'}</div>
+      ${hosting?`<button class="btn primary" ${seatsL.length<4?'disabled':''} onclick="NET.startGame()">${seatsL.length<4?'Waiting for players…':'Start Game'}</button>`:`<div class="sub">The host starts once four are seated.</div>`}`;
+    return;
+  }
+  if(G.phase==='reveal'){
+    const known = MYROLE && ROLES[MYROLE];
+    app.innerHTML = `
+      <div class="phase">Who Are You?</div>
+      <div id="rolecard" class="hidden">
+        <div class="rname">${known?esc(ROLES[MYROLE].name):'…'}</div>
+        <div class="rhint">${known?esc(ROLES[MYROLE].hint):''}</div>
+      </div>
+      ${MYMATES.length?`<div class="mates">Your partner in crime: ${MYMATES.map(esc).join(' & ')}</div>`:''}
+      <button class="btn primary" ${(!known||READY)?'disabled':''} onclick="READY=true;NET.sendIntent('ready',{});render()">${READY?'Waiting for the table…':"I'm Ready"}</button>
+      ${waitline}`;
+    const rc = $('#rolecard');
+    if(rc){
+      rc.onpointerdown = ()=>rc.classList.remove('hidden');
+      rc.onpointerup = rc.onpointercancel = rc.onpointerleave = ()=>rc.classList.add('hidden');
+    }
+    return;
+  }
+  if(G.phase==='night'){
+    const meP = me();
+    if(!meP || !meP.alive){
+      app.innerHTML = `<div class="phase">Night ${G.day}</div><div class="sub">You watch from beyond. The town sleeps uneasily.</div>${seats}${logs}`;
+      return;
+    }
+    const prompt = MYROLE==='mafia' ? 'Choose your kill.'
+      : MYROLE==='doctor' ? 'Choose someone to protect.'
+      : MYROLE==='detective' ? 'Choose someone to investigate.'
+      : 'Choose someone you dream about. (Everyone acts — nobody stands out.)';
+    app.innerHTML = MYACTED
+      ? `<div class="phase">Night ${G.day}</div><div class="sub">Your choice is made. Eyes closed.</div>${waitline}${logs}`
+      : `<div class="phase">Night ${G.day}</div><div class="sub">${esc(prompt)}</div><div class="panel">${pickList(true,'act',false)}</div>${waitline}`;
+    return;
+  }
+  if(G.phase==='dawn'){
+    MYACTED = false;
+    const inv = LASTINVEST ? `<div class="mates" style="color:var(--money-gold)">${esc(LASTINVEST.name)} ${LASTINVEST.isMafia?'IS MAFIA':'is not Mafia'}.</div>` : '';
+    app.innerHTML = `<div class="phase">Dawn</div>${logs}${MYROLE==='detective'?inv:''}${seats}
+      ${MYSEAT===0?`<button class="btn primary" onclick="NET.sendIntent('day',{})">Open the Day</button>`:`<div class="sub">The host opens the day when the table's ready.</div>`}`;
+    return;
+  }
+  if(G.phase==='vote'){
+    const meP = me();
+    if(!meP || !meP.alive){
+      app.innerHTML = `<div class="phase">The Vote</div><div class="sub">The living decide. You already know too much.</div>${seats}${logs}`;
+      return;
+    }
+    app.innerHTML = MYACTED
+      ? `<div class="phase">The Vote</div><div class="sub">Your vote is in.</div>${waitline}${logs}`
+      : `<div class="phase">The Vote</div><div class="sub">Talk first. Then point the finger — a majority sends someone out.</div><div class="panel">${pickList(false,'vote',true)}</div>${waitline}`;
+    return;
+  }
+  if(G.phase==='over'){
+    MYACTED = false;
+    app.innerHTML = `<div class="phase">${G.winner==='mafia'?'The Mafia Win':'The Village Wins'}</div>${seats}${logs}
+      <button class="btn primary" onclick="location.reload()">Back to the Door</button>`;
+    return;
+  }
+}
+window.setPick = setPick; window.confirmPick = confirmPick;
+
+/* votes/night phase transitions reset MYACTED */
+const _origOnMessage = NET.onMessage.bind(NET);
+NET.onMessage = (t,m)=>{
+  const prevPhase = G.phase;
+  _origOnMessage(t,m);
+  if(G.phase!==prevPhase && (G.phase==='night'||G.phase==='vote')){ MYACTED=false; PICK=null; render(); }
+};
+
+render();
+</script>
+</body>
+</html>
