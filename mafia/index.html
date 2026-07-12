@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Infinite Table — Mafia. Version: 0.2.2 -->
+<!-- Infinite Table — Mafia. Version: 0.2.3 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -80,7 +80,7 @@ input.namef{letter-spacing:.5px;font-size:15px;text-transform:none}
 </head>
 <body>
 <div class="wordmark"><b>MAFIA</b></div>
-<div class="ver">v0.2.2 · INFINITE TABLE</div>
+<div class="ver">v0.2.3 · INFINITE TABLE</div>
 <div id="app"></div>
 
 <script src="../shared/config.js?v=021"></script>
@@ -111,7 +111,9 @@ const NET = {
   acts:{}, votes:{}, readys:{},
   async ensure(){
     if(this.sb) return true;
-    if(!window.SUPABASE_URL) { banner('NO CONFIG'); return false; }
+    // the anon key is public by design — baked in so no cache or load-order state can strand a phone
+    if(!window.SUPABASE_URL) window.SUPABASE_URL = 'https://spkhqgzgnzeeizxrycjq.supabase.co';
+    if(!window.SUPABASE_ANON) window.SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwa2hxZ3pnbnplZWl6eHJ5Y2pxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1ODE1MzEsImV4cCI6MjA5OTE1NzUzMX0.dMdqx-KJ7uXEKwln2SSdCDi-N9QBRo5aSJyQTjL8Pv4';
     await new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; sc.onload=res; sc.onerror=()=>rej(new Error('cdn')); document.head.appendChild(sc); }).catch(()=>null);
     if(!window.supabase) { banner('OFFLINE?'); return false; }
     this.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
