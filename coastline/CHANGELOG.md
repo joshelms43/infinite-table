@@ -1,5 +1,22 @@
 # Coastline — Changelog
 
+## v0.10.0 — 2026-07-12
+The economy is now official Monopoly Deal, and the stacks sit flat.
+
+**Rules aligned to the infinite-ai audit (v0.5.0 of that repo)** — the lab did a 1:1 check against the official game and found the economy had drifted. All of it is now corrected here, and pinned by a census suite so it can never drift again:
+- **Rent ladders**: Cyan/Light Blue 1/2/4 → 1/2/3 · Green/Yellow 1/3/5 → 2/4/6 · Black/Stations 1/2/3/5 → 1/2/3/4 · Blue/Utilities 2/5 → 1/2.
+- **Property values**: Teal/Green $3 → $4 · Cyan/Light Blue $2 → $1 · Green/Yellow $2 → $3 · Blue/Utilities $3 → $2.
+- **The nine dual wilds** get their official pairings and prices: Red/Yellow ×2 ($3), Utility/Station ($2), Light Blue/Brown ($1), Station/Green ($4), Light Blue/Station ($4 — was $2). Dark Blue/Green and Pink/Orange were already right.
+- **Rent cards** now carry the official five set-pairs (Red/Yellow, Station/Utility and Brown/Light Blue were wrong).
+- **Houses are banned on Utilities as well as Stations** — three play sites, now behind a single buildable() predicate.
+- Six census assertions pin every value, ladder, wild pairing, rent pair and building ban permanently.
+
+Verified faithful and unchanged: moving a played wild between sets remains free and unlimited during your turn (Hasbro FAQ) — now asserted twice, including moving one out and straight back in the same turn.
+
+**The stacks sit flat** — v0.9.0 gave buried wilds a "grab tab" by shoving the whole card 13px sideways. It worked, and it also meant any set holding a wild rendered staggered instead of square, and a wild in a 106px-wide set could spill into its neighbour: both of the reported symptoms, one line. The card no longer moves at all. The grab marker is now a gold tab drawn inside the wild's own exposed strip — visible at any depth, impossible to overhang, and the whole strip stays draggable as before.
+
+**Tests** — engine 119/119, wire 37/37, soak, flows, matrix, mafiasim.
+
 ## v0.9.10 — 2026-07-12
 The hardening block: one critical bug and four professional-grade gaps.
 

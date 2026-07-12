@@ -502,6 +502,48 @@ RULES.clock = JSON.parse(JSON.stringify(RULES_DEFAULTS.clock));
 NET.mode='off'; GAME_STARTED=false; NET.pendingAsks={}; NET.pendingAskInfo={}; clearInterval(CLK._iv);
 newGame();
 
+
+// ===== ECONOMY CENSUS: pinned to official Monopoly Deal (aligned with infinite-ai v0.5.0 audit) =====
+const dkE = buildDeck();
+const propV = col => (dkE.find(c=>c.t==='prop' && c.color===col)||{}).v;
+T('property values are official', propV('brown')===1 && propV('sky')===1 && propV('purple')===2 && propV('orange')===2
+  && propV('green')===2 && propV('black')===2 && propV('coral')===3 && propV('sage')===3
+  && propV('teal')===4 && propV('gold')===4);
+const ladder = col => COLORS[col].rent.join('/');
+T('rent ladders are official', ladder('brown')==='1/2' && ladder('sky')==='1/2/3' && ladder('purple')==='1/2/4'
+  && ladder('orange')==='1/3/5' && ladder('coral')==='2/3/6' && ladder('sage')==='2/4/6'
+  && ladder('teal')==='2/4/7' && ladder('gold')==='3/8' && ladder('black')==='1/2/3/4' && ladder('green')==='1/2');
+const wilds = dkE.filter(c=>c.t==='wild');
+const wkey = c => c.colors.slice().sort().join('+') + '@' + c.v;
+const wcount = {}; wilds.forEach(c=>{ wcount[wkey(c)] = (wcount[wkey(c)]||0)+1; });
+T('the nine dual wilds are official pairings and values',
+  wilds.length===9
+  && wcount['gold+teal@4']===1 && wcount['black+teal@4']===1 && wcount['black+sky@4']===1
+  && wcount['black+green@2']===1 && wcount['brown+sky@1']===1
+  && wcount['orange+purple@2']===2 && wcount['coral+sage@3']===2);
+const rents = dkE.filter(c=>c.t==='rent' && c.colors && c.colors.length===2);
+const rkey = c => c.colors.slice().sort().join('+');
+const rset = {}; rents.forEach(c=>{ rset[rkey(c)] = (rset[rkey(c)]||0)+1; });
+T('rent cards carry the official five set-pairs, two apiece',
+  rents.length===10 && Object.keys(rset).length===5
+  && rset['gold+teal']===2 && rset['black+green']===2 && rset['brown+sky']===2
+  && rset['orange+purple']===2 && rset['coral+sage']===2);
+T('houses are banned on Stations and Utilities only',
+  buildable('coral')===true && buildable('teal')===true && buildable('black')===false && buildable('green')===false);
+// the wild move is free and unlimited (Hasbro FAQ) — no play is spent
+newGame();
+G.turn=0; G.playsLeft=3; G.turnCount=5; G.over=false; MYSEAT=0; NET.mode='off';
+const dkW = buildDeck();
+const wCard = dkW.find(c=>c.t==='wild' && c.colors.includes('coral') && c.colors.includes('sage'));
+addProp(me(), wCard, 'coral');
+const playsBefore = G.playsLeft;
+moveWildTo(wCard.id, 'sage', 0);
+T('moving a played wild costs no play and is unlimited',
+  G.playsLeft===playsBefore && (me().props['sage']||[]).some(c=>c.id===wCard.id));
+moveWildTo(wCard.id, 'coral', 0);
+T('and it can move straight back, same turn', G.playsLeft===playsBefore && (me().props['coral']||[]).some(c=>c.id===wCard.id));
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

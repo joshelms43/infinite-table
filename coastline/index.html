@@ -348,8 +348,13 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 .snapped{animation:snapin .28s cubic-bezier(.2,1.4,.4,1)}
 @keyframes snapin{35%{transform:scale(1.06)}}
-.tcard.twild{touch-action:none;transform:translateX(13px)}
-.tcard.twild::before{content:'';position:absolute;left:-13px;top:0;bottom:0;width:13px}
+.tcard.twild{touch-action:none}
+/* the grab marker lives INSIDE the wild's exposed strip — the card never moves, so stacks sit flat */
+.tcard.twild::before{
+  content:'';position:absolute;right:0;top:0;width:11px;height:26px;
+  border-radius:0 6px 0 6px;background:var(--money-gold);
+  box-shadow:-1px 1px 4px rgba(8,12,10,.3);z-index:3;
+}
 .wildfly{
   position:fixed;z-index:90;width:68px;pointer-events:none;
   transform:rotate(-4deg) scale(1.06);
@@ -798,7 +803,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.9.10</span>
+    <span class="ver">v0.10.0</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -913,24 +918,24 @@ const COLORS = {
   gold:  {label:'Yellow', hex:'#E8C63B', ink:'#24241D', size:2, rent:[3,8]},
   teal:  {label:'Teal',   hex:'#1FA8A0', size:3, rent:[2,4,7]},
   coral: {label:'Red',    hex:'#C8433A', size:3, rent:[2,3,6]},
-  green: {label:'Blue',   hex:'#2E5EAA', size:2, rent:[2,5]},
+  green: {label:'Blue',   hex:'#2E5EAA', size:2, rent:[1,2]},
   purple:{label:'Pink',   hex:'#DE559C', size:3, rent:[1,2,4]},
   orange:{label:'Orange', hex:'#F08A24', size:3, rent:[1,3,5]},
   brown: {label:'Brown',  hex:'#8A5A38', size:2, rent:[1,2]},
-  sky:   {label:'Cyan',   hex:'#4FC3E8', ink:'#24241D', size:3, rent:[1,2,4]},
-  sage:  {label:'Green',  hex:'#3F9142', size:3, rent:[1,3,5]},
-  black: {label:'Black',  hex:'#2B2F33', size:4, rent:[1,2,3,5]},
+  sky:   {label:'Cyan',   hex:'#4FC3E8', ink:'#24241D', size:3, rent:[1,2,3]},
+  sage:  {label:'Green',  hex:'#3F9142', size:3, rent:[2,4,6]},
+  black: {label:'Black',  hex:'#2B2F33', size:4, rent:[1,2,3,4]},
 };
 const PROPS = [
   ['gold','',4],['gold','',4],
-  ['teal','',3],['teal','',3],['teal','',3],
+  ['teal','',4],['teal','',4],['teal','',4],
   ['coral','',3],['coral','',3],['coral','',3],
-  ['green','',3],['green','',3],
+  ['green','',2],['green','',2],
   ['purple','',2],['purple','',2],['purple','',2],
   ['orange','',2],['orange','',2],['orange','',2],
   ['brown','',1],['brown','',1],
-  ['sky','',2],['sky','',2],['sky','',2],
-  ['sage','',2],['sage','',2],['sage','',2],
+  ['sky','',1],['sky','',1],['sky','',1],
+  ['sage','',3],['sage','',3],['sage','',3],
   ['black','',2],['black','',2],
   ['black','',2],['black','',2],
 ];
@@ -948,11 +953,15 @@ const ACTIONS = {
 };
 const MONEY = [[1,6],[2,5],[3,3],[4,3],[5,2],[10,1]];
 const DUAL_WILDS = [
-  [['gold','teal'],4,1],[['coral','sky'],2,2],[['orange','purple'],2,2],
-  [['green','sage'],3,1],[['brown','black'],1,1],[['teal','coral'],3,1],
-  [['sky','black'],2,1],
+  [['gold','teal'],4,1],      // Dark Blue / Green
+  [['teal','black'],4,1],     // Green / Railroad
+  [['sky','black'],4,1],      // Light Blue / Railroad
+  [['green','black'],2,1],    // Utility / Railroad
+  [['sky','brown'],1,1],      // Light Blue / Brown
+  [['orange','purple'],2,2],  // Pink / Orange
+  [['coral','sage'],3,2],     // Red / Yellow
 ];
-const RENT_DUALS = [['gold','teal'],['coral','sky'],['orange','purple'],['green','sage'],['brown','black']];
+const RENT_DUALS = [['gold','teal'],['black','green'],['brown','sky'],['orange','purple'],['coral','sage']];
 
 let CID = 0;
 function mk(c){ c.id = ++CID; return c; }
@@ -2253,7 +2262,7 @@ function buildZones(c){
     if(k==='swipe') oppEls.forEach(el=>{ const si=seatOfEl(el); if(stealTargetsOf(si).length) add(el, ()=>viewOppSelect(si,'swipe',c)); });
     if(k==='takeover') oppEls.forEach(el=>{ const si=seatOfEl(el); if(completeColors(G.players[si]).length) add(el, ()=>viewOppSelect(si,'takeover',c)); });
     if(k==='swap'){ if(propList(me()).some(x=>!isComplete(me(),x.color))) oppEls.forEach(el=>{ const si=seatOfEl(el); if(stealTargetsOf(si).length) add(el, ()=>viewOppSelect(si,'swapTheirs',c)); }); }
-    if(k==='granny') completeColors(me()).filter(col=>col!=='black' && !(me().bldg[col]&&me().bldg[col].granny)).forEach(col=>add(group(col), ()=>placeBldg(c,col,'granny')));
+    if(k==='granny') completeColors(me()).filter(col=>buildable(col) && !(me().bldg[col]&&me().bldg[col].granny)).forEach(col=>add(group(col), ()=>placeBldg(c,col,'granny')));
     if(k==='resort') completeColors(me()).filter(col=>me().bldg[col]&&me().bldg[col].granny&&!me().bldg[col].resort).forEach(col=>add(group(col), ()=>placeBldg(c,col,'resort')));
     if(k==='nodeal') hint = 'No Deal! plays itself when you are attacked';
     else if(k==='hike') hint = 'Bank it — or play a Rent card and add the hike';
@@ -2505,7 +2514,7 @@ function openOptions(c){
       play('Play — steal a complete set','pick it on their board',()=>playActionVia(c,'takeover'), targets.length===0);
     }
     if(k==='granny'){
-      const sets = completeColors(me()).filter(col=>col!=='black' && !(me().bldg[col]&&me().bldg[col].granny));
+      const sets = completeColors(me()).filter(col=>buildable(col) && !(me().bldg[col]&&me().bldg[col].granny));
       play('Play on a complete set','+$3M rent',()=>pickColor(sets,col=>placeBldg(c,col,'granny')), sets.length===0);
     }
     if(k==='resort'){
@@ -2561,6 +2570,7 @@ function placeBldg(c,color,slot,by){
   announcePlay(b,c);
   usePlay(); sfx('good'); closeSheet();
 }
+function buildable(color){ return color!=='black' && color!=='green'; }   // no houses on Stations or Utilities
 function canMoveWildFrom(p,color){
   const b = p.bldg[color];
   return !(b && (b.granny || b.resort));
@@ -3126,8 +3136,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0910"></script>
-<script src="../shared/identity.js?v=0910"></script>
+<script src="../shared/config.js?v=0100"></script>
+<script src="../shared/identity.js?v=0100"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -4237,7 +4247,7 @@ function brainCandidates(p, idx, next){
   // buildings
   const gr = p.hand.find(c=>c.t==='action'&&c.kind==='granny');
   if(gr){
-    const col = completeColors(p).find(c=>c!=='black'&&!p.bldg[c]?.granny);
+    const col = completeColors(p).find(c=>buildable(c)&&!p.bldg[c]?.granny);
     if(col) add(3.8, ()=>{ playFromHandAI(gr,p); if(!p.bldg[col])p.bldg[col]={}; p.bldg[col].granny=gr; log(p.name+' added a Granny Flat to '+COLORS[col].label+'.'); aiShowcase(gr, idx); next(); }, {cardId:gr.id, mode:'play', label:'Granny Flat on '+COLORS[col].label});
   }
   const rs = p.hand.find(c=>c.t==='action'&&c.kind==='resort');
