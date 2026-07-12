@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Infinite Table — Mafia. Version: 0.2.0 -->
+<!-- Infinite Table — Mafia. Version: 0.2.1 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -80,10 +80,10 @@ input.namef{letter-spacing:.5px;font-size:15px;text-transform:none}
 </head>
 <body>
 <div class="wordmark"><b>MAFIA</b></div>
-<div class="ver">v0.2.0 · INFINITE TABLE</div>
+<div class="ver">v0.2.1 · INFINITE TABLE</div>
 <div id="app"></div>
 
-<script src="../shared/config.js?v=020"></script>
+<script src="../shared/config.js?v=021"></script>
 <script>
 'use strict';
 const $ = s => document.querySelector(s);
@@ -129,7 +129,14 @@ const NET = {
       ch.on('broadcast', { event:ev }, p => self.onMessage(ev, p.payload||{}));
     });
     ch.on('presence', { event:'sync' }, ()=>{ if(G.phase==='lobby') render(); });
-    await new Promise((res)=>{ ch.subscribe(st=>{ if(st==='SUBSCRIBED') res(); }); });
+    const ok = await new Promise((res)=>{
+      const to = setTimeout(()=>res(false), 8000);
+      ch.subscribe(st=>{
+        if(st==='SUBSCRIBED'){ clearTimeout(to); res(true); }
+        if(st==='CHANNEL_ERROR' || st==='TIMED_OUT'){ clearTimeout(to); res(false); }
+      });
+    });
+    if(!ok){ banner('COULD NOT CONNECT — CHECK SIGNAL'); return false; }
     this.tx = {
       send:(ev,payload)=>ch.send({ type:'broadcast', event:ev, payload }),
       track:(m)=>ch.track(m),
@@ -149,18 +156,22 @@ const NET = {
     return list.slice(0,10);
   },
   async host(){
-    this.myName = nameField();
-    const code = Array.from({length:4},()=>'ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
-    if(!(await this.connect(code, true))) return;
-    this.mode = 'lobby-host'; G.phase = 'lobby'; render();
+    try{
+      this.myName = nameField();
+      const code = Array.from({length:4},()=>'ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
+      if(!(await this.connect(code, true))) return;
+      this.mode = 'lobby-host'; G.phase = 'lobby'; render();
+    }catch(e){ banner('HOST FAILED: '+(e && e.message || e)); }
   },
   async join(){
-    this.myName = nameField();
-    const code = (($('#jcode')||{}).value||'').toUpperCase().trim();
-    if(code.length!==4){ banner('FOUR LETTERS'); return; }
-    if(!(await this.connect(code, false))) return;
-    this.mode = 'joining'; G.phase = 'lobby'; render();
-    this.tx.send('hello', { key:this.pkey });
+    try{
+      this.myName = nameField();
+      const code = (($('#jcode')||{}).value||'').toUpperCase().trim();
+      if(code.length!==4){ banner('FOUR LETTERS'); return; }
+      if(!(await this.connect(code, false))) return;
+      this.mode = 'joining'; G.phase = 'lobby'; render();
+      this.tx.send('hello', { key:this.pkey });
+    }catch(e){ banner('JOIN FAILED: '+(e && e.message || e)); }
   },
   startGame(){
     const seats = this.lobbySeats();
@@ -206,6 +217,10 @@ const NET = {
   },
   pushState(){ if(this.mode==='host') this.tx.send('state', this.serialize()); persistNothing(); },
   onMessage(type, m){
+    if(this.mode==='lobby-host'){
+      if(type==='hello'){ /* presence carries the lobby; nothing to send yet */ }
+      return;
+    }
     if(this.mode==='host'){
       if(type==='hello'){ this.tx.send('start', { roster:this.roster||this.lobbySeats() }); if(G.phase!=='lobby') this.pushState(); if(m.key){ const p=G.players.find(q=>q.key===m.key); if(p && p.role){ this.tx.send('priv',{to:m.key,kind:'role',role:p.role,mates:p.role==='mafia'?G.players.filter(q=>q.role==='mafia'&&q.key!==m.key).map(q=>q.name):[]}); } } }
       if(type==='intent') this.applyIntent(m);
@@ -236,6 +251,10 @@ const NET = {
     if(type==='nack' && m.key===this.pkey){ banner('NOT RIGHT NOW'); PICK=null; render(); }
   },
   sendIntent(k, a){
+    if(this.mode==='lobby-host'){
+      if(type==='hello'){ /* presence carries the lobby; nothing to send yet */ }
+      return;
+    }
     if(this.mode==='host'){ this.applyIntent({ key:this.pkey, k, a }); return; }
     this.tx.send('intent', { key:this.pkey, k, a });
   },
@@ -475,6 +494,11 @@ NET.onMessage = (t,m)=>{
 };
 
 render();
+globalThis.__B = {
+  get NET(){ return NET; }, get G(){ return G; },
+  get MYSEAT(){ return MYSEAT; }, get MYROLE(){ return MYROLE; }, get LASTINVEST(){ return LASTINVEST; },
+  set G(v){ G = v; },
+};
 </script>
 </body>
 </html>

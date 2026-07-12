@@ -1,5 +1,12 @@
 # Mafia — Changelog
 
+## v0.2.1 — 2026-07-12
+"Host doesn't work" — so Mafia got what every game here gets eventually: a wire simulator.
+
+**mafiasim** — four sandboxed players over a fake presence bus play a complete game: lobby, role deal and privacy, night-one no-kill, detective verdicts and rest nights, secret-keeping deaths, votes, the village win, the final reveal. Eighteen assertions, all green, now part of the permanent five-stage-plus-one gate. Verdict: the game logic is innocent — the failure lives in the live connection seam, the one part a simulator cannot reach.
+
+**So the seam becomes observable** — subscribe now times out after eight seconds with COULD NOT CONNECT instead of hanging forever on a bad status; host and join are wrapped so any thrown error surfaces as a banner carrying its own message; the lobby-host acknowledges hellos cleanly. Whatever the phone hits next, the report writes itself.
+
 ## v0.2.0 — 2026-07-12
 Everyone gets a role. Every role gets a leash.
 
