@@ -79,14 +79,7 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
 .fcard::after{content:'';position:absolute;inset:3.5px;border-radius:3.5px;border:1.5px solid rgba(217,160,63,.55)}
 .game.hero .gbody{position:relative;z-index:2}
 .game.hero:active .fcard{transform:rotate(calc(var(--fr)*1.5)) translateY(-4px)}
-.quickrow{display:flex;gap:8px;margin:10px 0 2px}
-.quick{
-  flex:1;text-align:center;padding:13px 0;border-radius:13px;font-weight:800;font-size:13px;
-  letter-spacing:.4px;color:var(--card-ivory);text-decoration:none;line-height:1;
-  border:1px solid rgba(244,239,229,.16);background:rgba(244,239,229,.06);
-  transition:transform .12s ease, background .12s ease;
-}
-.quick:active{transform:scale(.96);background:rgba(244,239,229,.12)}
+.game.hero .gmeta{margin-top:12px;font-size:10px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:#24241D;opacity:.38}
 #lobbystats{margin:2px 0;padding:13px 16px;border-radius:14px;
   border:1px solid rgba(244,239,229,.12);background:rgba(244,239,229,.045);
   font-weight:800;font-size:12.5px;display:none;justify-content:space-between;align-items:center}
@@ -201,13 +194,8 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
       </div>
       <span class="gplay">PLAY</span>
     </div>
+    <div class="gmeta">Solo &amp; online · 2–4 players · clocks &amp; house rules</div>
   </a>
-  <div class="quickrow">
-    <a class="quick" href="./coastline/?solo=1">Solo</a>
-    <a class="quick" href="./coastline/?host=1">Host</a>
-    <a class="quick" href="./coastline/?joinui=1">Join</a>
-  </div>
-  <div class="gmeta">Solo &amp; online · 2–4 players · clocks &amp; house rules</div>
 
   <div id="lobbystats"></div>
 
