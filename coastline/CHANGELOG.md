@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.9.10 — 2026-07-12
+The hardening block: one critical bug and four professional-grade gaps.
+
+**Critical: elimination answers its ask** — eliminating a seat mid-payment (leave-as-loss during a rent, a timeout during a shout) deleted their pending ask without resolving it, orphaning the chain's callback and freezing the turn forever. eliminatePlayer now force-resolves any in-flight ask with fair defaults before the seat goes dark, and clears local interrupt modes if the eliminated seat is you. Asserted.
+
+**Also** — flag-falls earn no Fischer increment (the stall exploit dies); Table Rules lock once a game is live (mid-game toggles were silently allowed); activation memory resets between games; out players get a spectating strip instead of a dead UI; and four opponent panels share a phone width with squeeze styling for five-player tables.
+
+**Tests** — engine 111/111, wire 37/37, soak, flows, matrix.
+
 ## v0.9.9 — 2026-07-11
 Live report: the clock felt haunted, and your own clock was nowhere. Three real bugs.
 

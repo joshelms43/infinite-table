@@ -480,6 +480,12 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 .opp.away{opacity:.5;filter:saturate(.4)}
 .opp.isout{opacity:.32;filter:grayscale(.8)}
+#opponents{flex-wrap:nowrap}
+#opponents .opp{min-width:0;flex:1 1 0}
+#opponents .opp:nth-child(4):last-child, #opponents .opp:nth-child(4):last-child ~ .opp{font-size:.92em}
+#opponents:has(.opp:nth-child(4)) .opp-meta{font-size:9.5px;letter-spacing:.1px}
+#opponents:has(.opp:nth-child(4)) .oppclk{font-size:9.5px}
+#opponents:has(.opp:nth-child(4)) .opp{padding-left:6px;padding-right:6px}
 .oppclk{font-size:10.5px;font-weight:800;letter-spacing:.4px;opacity:.55;font-variant-numeric:tabular-nums}
 .oppclk.clkactive{opacity:1;color:var(--money-gold)}
 .oppclk.clklow{color:var(--danger-red);opacity:1}
@@ -792,7 +798,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.9.9</span>
+    <span class="ver">v0.9.10</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1196,6 +1202,7 @@ function clockActiveSeat(){
 }
 function GAME_STARTED_OR_SOLO(){ return (typeof GAME_STARTED!=='undefined' && GAME_STARTED) || NET.mode==='off'; }
 function clockInit(){
+  CLK._lastAct = null;
   CLK.bank = G.players.map(()=> RULES.clock.totalMs>0 ? RULES.clock.totalMs : Infinity);
   CLK.turnLeft = RULES.clock.turnMs || 0;
   CLK.active = null;
@@ -1236,7 +1243,7 @@ function forceEndTurnFor(seat){
   const p = G.players[seat]; if(!p || G.over) return;
   while(p.hand.length > 7) G.discard.push(p.hand.shift());   // overflow discards oldest-first, no choices left to make
   if(seat===MYSEAT){ MODE.type=null; MODE.sel=null; hidePrompt(); }
-  finishEnd();
+  finishEnd(true);   // a flag-fall earns no increment
   renderAll();
   if(NET.mode==='host') NET.pushState();
 }
@@ -1323,7 +1330,7 @@ function renderRuleChips(){
   el.innerHTML = bits.length ? bits.map(b=>`<span class="rulechip">${b}</span>`).join('') : '';
 }
 function openRulesSheet(){
-  const editable = NET.mode==='off' || NET.mode==='lobby-host' || NET.mode==='host';
+  const editable = !GAME_STARTED && (NET.mode==='off' || NET.mode==='lobby-host');
   openSheet(`<h3>Table Rules</h3>
     <div class="rulerow ${editable?'':'rulelocked'}" ${editable?`onclick="toggleRule('firstTurnAttack')"`:''}>
       <span class="rulename">Attacks on the first go-round</span>
@@ -2443,8 +2450,8 @@ function endTurn(){
     } else discardPrompt();
   } else finishEnd();
 }
-function finishEnd(){
-  if(RULES.clock.mode==='on' && RULES.clock.incrementMs>0 && CLK.bank[G.turn]!=null && !G.players[G.turn].out){
+function finishEnd(skipInc){
+  if(!skipInc && RULES.clock.mode==='on' && RULES.clock.incrementMs>0 && CLK.bank[G.turn]!=null && !G.players[G.turn].out){
     CLK.bank[G.turn] += RULES.clock.incrementMs;   // Fischer increment on the turn owner
   }
   let guard = 0;
@@ -3119,8 +3126,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=099"></script>
-<script src="../shared/identity.js?v=099"></script>
+<script src="../shared/config.js?v=0910"></script>
+<script src="../shared/identity.js?v=0910"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3905,7 +3912,11 @@ function eliminatePlayer(seat, reason){
   banner((seat===MYSEAT?'YOU ARE':p.name.toUpperCase()+' IS')+' OUT','var(--danger-red)');
   sfx('alert');
   if(typeof NET!=='undefined' && NET.pendingAsks && NET.pendingAsks[seat]){
-    delete NET.pendingAsks[seat]; delete NET.pendingAskInfo[seat];
+    forceResolveAsk(seat);   // the chain gets its answer before the seat goes dark — no orphaned callbacks
+  }
+  if(seat===MYSEAT){ MODE.type=null; MODE.sel=null; MODE.jsn=null; exitReactMode(true); hidePrompt(); }
+  if(seat===MYSEAT && !G.over){
+    showPrompt("You're out — spectating. The table plays on.", false);
   }
   const alive = alivePlayers();
   if(alive.length===1){

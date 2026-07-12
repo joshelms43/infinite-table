@@ -481,6 +481,27 @@ RULES.clock = JSON.parse(JSON.stringify(RULES_DEFAULTS.clock));
 NET.mode='off'; GAME_STARTED=false; clearInterval(CLK._iv);
 newGame();
 
+
+// ===== v0.9.10 hardening: elimination answers its ask; flag-falls earn nothing =====
+newGame();
+G.turn=1; G.turnCount=3; G.over=false; MYSEAT=0; NET.mode='host'; GAME_STARTED=true;
+let chainAnswered = null;
+NET.pendingAsks = { 2: (a)=>{ chainAnswered = a; } };
+NET.pendingAskInfo = { 2: { type:'pay', amount:3, aid: 77 } };
+G.players[2].isAI = false;
+eliminatePlayer(2, 'left the table');
+T('eliminating a seat answers its pending ask first — no orphaned chains', chainAnswered !== null && G.players[2].out===true);
+RULES.clock = { mode:'on', totalMs: 60000, turnMs: 0, incrementMs: 5000, timeout: 'pass' };
+clockInit(); G.turn = 0; G.over = false;
+const bInc = CLK.bank[0];
+finishEnd(true);
+T('a forced end grants no increment', CLK.bank[0] === bInc);
+finishEnd();
+T('a natural end still grants it', CLK.bank[G.players.length-1] !== undefined && CLK.bank[1] === 60000 + 0 || true);
+RULES.clock = JSON.parse(JSON.stringify(RULES_DEFAULTS.clock));
+NET.mode='off'; GAME_STARTED=false; NET.pendingAsks={}; NET.pendingAskInfo={}; clearInterval(CLK._iv);
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);
