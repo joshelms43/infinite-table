@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Infinite Table — Mafia. Version: 0.2.1 -->
+<!-- Infinite Table — Mafia. Version: 0.2.2 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -80,7 +80,7 @@ input.namef{letter-spacing:.5px;font-size:15px;text-transform:none}
 </head>
 <body>
 <div class="wordmark"><b>MAFIA</b></div>
-<div class="ver">v0.2.1 · INFINITE TABLE</div>
+<div class="ver">v0.2.2 · INFINITE TABLE</div>
 <div id="app"></div>
 
 <script src="../shared/config.js?v=021"></script>
@@ -114,7 +114,7 @@ const NET = {
     if(!window.SUPABASE_URL) { banner('NO CONFIG'); return false; }
     await new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; sc.onload=res; sc.onerror=()=>rej(new Error('cdn')); document.head.appendChild(sc); }).catch(()=>null);
     if(!window.supabase) { banner('OFFLINE?'); return false; }
-    this.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    this.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON);
     let pk = null; try{ pk = localStorage.getItem('it_pkey'); }catch(e){}
     if(!pk){ pk = Math.random().toString(36).slice(2,10); try{ localStorage.setItem('it_pkey', pk); }catch(e){} }
     this.pkey = pk;

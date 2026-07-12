@@ -1,5 +1,8 @@
 # Mafia — Changelog
 
+## v0.2.2 — 2026-07-12
+The observability paid for itself on its first outing. The banner read HOST FAILED: supabaseKey is required — createClient was being handed window.SUPABASE_ANON_KEY, a global that never existed; the config exports SUPABASE_ANON. One identifier, corrected. This is also exactly why the game logic simulator could never catch it: the sim stubs the connection, and the bug lived in the one line the stub replaced.
+
 ## v0.2.1 — 2026-07-12
 "Host doesn't work" — so Mafia got what every game here gets eventually: a wire simulator.
 
