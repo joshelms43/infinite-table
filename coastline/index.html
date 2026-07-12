@@ -792,7 +792,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.9.8</span>
+    <span class="ver">v0.9.9</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1218,6 +1218,10 @@ function clockTick(dt){
   const act = clockActiveSeat();
   if(act==null) return;
   if(authority) CLK.active = act;
+  if(authority && CLK._lastAct !== act){
+    CLK._lastAct = act;
+    CLK.turnLeft = RULES.clock.turnMs || 0;   // a fresh cap for whoever the game now waits on
+  }
   const p = G.players[act];
   if(!p || p.isAI || p.out) return;
   if(RULES.clock.totalMs>0 && CLK.bank[act]!=null && CLK.bank[act]!==Infinity) CLK.bank[act] = Math.max(0, CLK.bank[act]-dt);
@@ -1227,6 +1231,14 @@ function clockTick(dt){
   const bankOut = RULES.clock.totalMs>0 && CLK.bank[act]===0;
   const turnOut = RULES.clock.turnMs>0 && CLK.turnLeft===0;
   if(bankOut || turnOut) clockTimeout(act, bankOut);
+}
+function forceEndTurnFor(seat){
+  const p = G.players[seat]; if(!p || G.over) return;
+  while(p.hand.length > 7) G.discard.push(p.hand.shift());   // overflow discards oldest-first, no choices left to make
+  if(seat===MYSEAT){ MODE.type=null; MODE.sel=null; hidePrompt(); }
+  finishEnd();
+  renderAll();
+  if(NET.mode==='host') NET.pushState();
 }
 function clockTimeout(seat, bankExhausted){
   if(seat===MYSEAT && MODE.type==='pay'){
@@ -1242,7 +1254,7 @@ function clockTimeout(seat, bankExhausted){
     forceResolveAsk(seat);
   } else if(G.turn===seat){
     log(nameOf(seat)+' ran out of time.');
-    endTurn();
+    forceEndTurnFor(seat);
   }
   if(RULES.clock.timeout==='loss' && (bankExhausted || RULES.clock.totalMs===0)){
     eliminatePlayer(seat, 'out of time');
@@ -1284,7 +1296,7 @@ function renderClocks(){
   });
   const mc = $('#myclock');
   if(mc && mc.style){
-    mc.style.display = '';
+    mc.style.display = 'block';
     mc.textContent = clockFmt(clockRemaining(MYSEAT));
     if(mc.classList){ mc.classList.toggle('clkactive', MYSEAT===act); mc.classList.toggle('clklow', clockRemaining(MYSEAT)<15000); }
   }
@@ -3107,8 +3119,8 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=098"></script>
-<script src="../shared/identity.js?v=098"></script>
+<script src="../shared/config.js?v=099"></script>
+<script src="../shared/identity.js?v=099"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

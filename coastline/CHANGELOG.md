@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.9.9 — 2026-07-11
+Live report: the clock felt haunted, and your own clock was nowhere. Three real bugs.
+
+**Your clock could never appear** — renderClocks "un-hid" it by clearing the inline style, which just falls back to the stylesheet's display:none. It now sets display:block. With every clock invisible while timeouts fired unseen, the whole system read as possessed — most of the haunting was this one line.
+
+**The per-turn cap now belongs to whoever the game waits on** — it only reset at end of turn, so a payer inherited the turn owner's dying cap and could be auto-resolved almost instantly. The cap refreshes on every activation change: turn owner to payer, payer back to owner, each gets their full allotment. Asserted through the whole cycle.
+
+**Expiring a remote player's turn no longer borrows the local player's hands** — the host called endTurn(), a function written for the person holding the phone. forceEndTurnFor(seat) does it properly for any seat: overflow discards oldest-first, local mode cleanup only if it is you, then the normal turn advance.
+
+**Tests** — engine 108/108, wire 37/37, soak, flows 12/12, drop matrix 38/38.
+
 ## v0.9.8 — 2026-07-11
 Tables seat five now, and the lobby deals real cards.
 

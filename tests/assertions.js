@@ -458,6 +458,29 @@ MODE.reactPass();
 T('letting the window expire resolves the action', stole===true && blocked3===false && MODE.type===null);
 newGame();
 
+
+// ===== clock repairs: activation caps and any-seat expiry =====
+newGame();
+RULES.clock = { mode:'on', totalMs: 0, turnMs: 30000, incrementMs: 0, timeout: 'pass' };
+G.turn=0; G.playsLeft=3; G.turnCount=4; G.over=false; MYSEAT=0; NET.mode='host'; GAME_STARTED=true;
+clockInit(); CLK._lastAct = null;
+G.players.forEach(p=>p.isAI=false);
+clockTick(5000);
+T('the turn owner burns their cap', CLK.turnLeft===25000);
+NET.pendingAsks = { 2: ()=>{} }; NET.pendingAskInfo = { 2: {type:'hike', aid:1} };
+clockTick(1000);
+T('a new waited-on seat gets a fresh cap', CLK.turnLeft===29000);
+NET.pendingAsks = {}; NET.pendingAskInfo = {};
+clockTick(1000);
+T('control returning to the turn owner refreshes the cap again', CLK.turnLeft===29000);
+const turnBefore9 = G.turn;
+G.players[turnBefore9].hand = buildDeck().slice(0,10);
+forceEndTurnFor(turnBefore9);
+T('forcing any seat to end discards overflow and advances the turn', G.players[turnBefore9].hand.length===7 && G.turn!==turnBefore9);
+RULES.clock = JSON.parse(JSON.stringify(RULES_DEFAULTS.clock));
+NET.mode='off'; GAME_STARTED=false; clearInterval(CLK._iv);
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);
