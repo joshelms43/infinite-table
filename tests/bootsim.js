@@ -24,27 +24,11 @@ const T = (n, c, d) => {
 
 const ROOT = path.join(__dirname, '..');
 const PAGES = [
-  { name: 'M Deal', file: 'coastline/index.html', wants: ['COLORS', 'ACTIONS', 'buildDeck', 'NET', 'G', 'TableKit'] },
-  { name: 'Mafia', file: 'mafia/index.html', wants: ['NET', 'G', 'ROLES', 'TableKit'] },
+  { name: 'M Deal', key: 'mdeal', wants: ['COLORS', 'ACTIONS', 'buildDeck', 'NET', 'G', 'TableKit'] },
+  { name: 'Mafia', key: 'mafia', wants: ['NET', 'G', 'ROLES', 'TableKit'] },
 ];
 
-/* The document, in the order the document gives it. */
-function documentOrder(file) {
-  const full = path.join(ROOT, file);
-  const html = fs.readFileSync(full, 'utf8');
-  const re = /<script([^>]*)>([\s\S]*?)<\/script>/g;
-  const parts = [];
-  let m;
-  while ((m = re.exec(html))) {
-    const attrs = m[1] || '';
-    const src = (/src="([^"]+)"/.exec(attrs) || [])[1];
-    if (!src) { parts.push({ what: 'inline', code: m[2] }); continue; }
-    if (/^https?:/.test(src)) continue;                    // CDNs aren't ours to test
-    const p = path.resolve(path.dirname(full), src.split('?')[0]);
-    parts.push({ what: src, code: fs.readFileSync(p, 'utf8') });
-  }
-  return parts;
-}
+const { partsFor } = require('./_document');
 
 function stubBrowser() {
   const el = () => new Proxy({ classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, style: {} }, {
@@ -78,7 +62,7 @@ function stubBrowser() {
 }
 
 PAGES.forEach(page => {
-  const parts = documentOrder(page.file);
+  const parts = partsFor(page.key);
   const sandbox = stubBrowser();
   vm.createContext(sandbox);
 

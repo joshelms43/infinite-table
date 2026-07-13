@@ -1,8 +1,6 @@
 const fs=require('fs');
-const html=fs.readFileSync(require('path').join(__dirname,'..','coastline','index.html'),'utf8');
-const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
-const rulesCode=fs.readFileSync(require('path').join(__dirname,'..','shared','mdeal-rules.js'),'utf8');
-const gameCode=rulesCode+'\n'+scripts.join('\n');   // the rulebook is a module now — the game no longer carries it
+const { sourceFor } = require('./_document');
+const gameCode = sourceFor('mdeal');   // the document decides the order, not this file
 const el=()=>new Proxy({classList:{add(){},remove(){},toggle(){}},style:{}},{
   get(t,k){ if(k in t)return t[k]; return ()=>{}; },
   set(){return true;}
@@ -15,8 +13,5 @@ global.setTimeout=(fn)=>setImmediate(fn);
 let fails=0;
 global.T=function(name,cond){ console.log((cond?'PASS':'FAIL')+' — '+name); if(!cond)fails++; };
 global.DONE=function(){ console.log(fails===0?'ALL TESTS PASS':'FAILURES: '+fails); process.exit(fails===0?0:1); };
-const _P=require('path'),_F=require('fs');
-const identPath=_F.existsSync(_P.join(__dirname,'shared_identity.js'))?_P.join(__dirname,'shared_identity.js'):_P.join(__dirname,'..','shared','identity.js');
-const identCode=_F.readFileSync(identPath,'utf8');
 const testCode=fs.readFileSync(require('path').join(__dirname,'assertions.js'),'utf8');
-eval(gameCode + '\n' + identCode + '\n' + testCode);
+eval(gameCode + '\n' + testCode);   // identity.js already rides in document order

@@ -65,6 +65,13 @@ server keeps your presence alive. On wake, check `tx.alive()` — never trust th
 
 Nothing ships red — and since v0.10.5 that is enforced by CI (.github/workflows/gate.yml), not by whoever remembered to run it. Every push carries a changelog entry with the root cause, not the symptom.
 
+## One program, one definition
+Every harness loads the game through `tests/_document.js`, which reads the page's scripts
+**in document order** — external files from disk, in place, nothing reordered. Seven
+harnesses once had seven ways of doing this, and the differences between them were where a
+bug hid: a load order that was fatal in a browser and invisible to all of them. What the
+browser runs is now what the tests run, by construction.
+
 ## Conventions
 - Anchor-asserted patches only (never line numbers); a failed anchor aborts atomically.
 - Semver per game, not per platform. `npm run bump -- mdeal 0.10.3`.

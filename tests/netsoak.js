@@ -6,10 +6,8 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'coastline', 'index.html'), 'utf8');
-const rulesCode = fs.readFileSync(path.join(__dirname, '..', 'shared', 'mdeal-rules.js'), 'utf8');
-const gameCode = rulesCode + '\n' + [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n')
-  + '\n;globalThis.__B = { get NET(){ return NET; }, get G(){ return G; }, get MYSEAT(){ return MYSEAT; }, get RULES(){ return RULES; } };';
+const { sourceFor, BRIDGE } = require('./_document');
+const gameCode = sourceFor('mdeal', BRIDGE);   // the document decides the order
 
 let fails = 0;
 const T = (n, c) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + n); if (!c) fails++; };

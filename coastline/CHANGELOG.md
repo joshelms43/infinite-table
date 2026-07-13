@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.10.8 — 2026-07-12
+One program, one definition. The cure for yesterday's fatal bug rather than its symptom.
+
+**tests/_document.js** — the real cause of the browser-fatal load order was not a misplaced tag; it was that **seven harnesses each had their own idea of how to load the game**. Some concatenated the inline blocks, some prepended the rulebook, one prepended the platform layer too, and jsdom quietly fetched none of it. The differences between them were precisely where a bug could live unseen — and one did. Every harness now asks a single module for the program, and that module takes it from the document: scripts in declared order, external files read from disk in place, nothing reordered for convenience. What the browser runs is what the tests run, by construction.
+
+**Proof it holds** — reintroduce the fatal order and it now dies in two independent stages: bootsim names it outright, and repro3, which finally sees the real document instead of a hand-assembled one, throws on it too. 266 assertions green across ten stages.
+
+**A confession about method** — two of the substitutions in this refactor silently did not match, because a regex stopped at a semicolon inside a string literal. One left revivesim running the game with no rulebook; two left dangling syntax in the wire tests. The gate caught all three within a minute, but they should never have been written that way: this codebase's rule is exact-string anchors with assertions, never regex, precisely because a failed anchor must abort rather than half-apply. The rule exists because of mornings like this one.
+
 ## v0.10.7 — 2026-07-12
 I shipped a fatal bug and CI applauded. This is the fix, and the test that ends the whole class.
 

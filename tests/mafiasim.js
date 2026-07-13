@@ -8,8 +8,8 @@ function T(name, cond) {
   if (!cond) fails++;
 }
 
-const html = fs.readFileSync(__dirname + '/../mafia/index.html', 'utf8');
-const code = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+const { sourceFor } = require('./_document');
+const code = sourceFor('mafia');
 
 function makeEl() {
   return {

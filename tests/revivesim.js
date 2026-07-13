@@ -18,11 +18,8 @@ process.on('unhandledRejection', (e) => {
 });
 const T = (n, c) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + n); if (!c) fails++; };
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'coastline', 'index.html'), 'utf8');
-const gameCode = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n')
-  + '\n;globalThis.__B = { get NET(){ return NET; }, get G(){ return G; }, get MYSEAT(){ return MYSEAT; } };';
-const kitCode = fs.readFileSync(path.join(__dirname, '..', 'shared', 'tablekit.js'), 'utf8');
-const rulesCode = fs.readFileSync(path.join(__dirname, '..', 'shared', 'mdeal-rules.js'), 'utf8');
+const { sourceFor, BRIDGE } = require('./_document');
+const gameCode = sourceFor('mdeal', BRIDGE);   // platform, rulebook and game, in document order
 
 /* a Supabase that does exactly what the script says, and keeps the receipts */
 function fakeSDK(script) {
@@ -85,9 +82,7 @@ function makeGame(script) {
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(kitCode, sandbox, { filename: 'tablekit.js' });
-  vm.runInContext(rulesCode, sandbox, { filename: 'mdeal-rules.js' });
-  vm.runInContext(gameCode, sandbox, { filename: 'coastline.js' });
+  vm.runInContext(gameCode, sandbox, { filename: 'coastline.js' });   // platform, rulebook and game, in document order
   return sandbox;
 }
 
