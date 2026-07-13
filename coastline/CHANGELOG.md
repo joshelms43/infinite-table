@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.10.1 — 2026-07-12
+Under the hood. Mafia parked; the platform gets a spine.
+
+**shared/tablekit.js — the platform layer** — M Deal and Mafia had each hand-rolled the same plumbing (credentials, the Supabase client, the player key, room codes, channel subscription), and the second copy shipped a bug the first one didn't have: it asked for a credential global that never existed, and every phone stranded on it. That plumbing now lives in one module, with the public anon key baked in as a fallback so no cache state or script order can strand anyone again, a subscribe that times out and throws a sentence a human can read, and a channel handle that can be asked whether it is actually still alive (a suspended socket lies still and smiles — that was the zombie-host bug). Both games consume it. Game three inherits it for free.
+
+**Two real leaks closed** — the game's log ledger was unbounded: every line ever written stayed in memory for the life of the tab. It caps at 120 now. And the network layer never stopped its own clocks — the ask watchdog interval outlived the game, forever, along with a fistful of timeouts. NET.teardown() stops every one of them, and all three victory paths call it.
+
+**Versions stop drifting** — the root lobby was serving shared/config.js?v=062 while the game ran 0.10.0, both repro tests referenced a version that hadn't existed for a month, and the game file's own header still claimed 0.4.1. Cache-busters are now the literal version string, and a new lint stage fronts the gate: every inline script must parse, every <script src> must point at a file that exists, and a file's header, badge and cache-busters must all agree. Three bug classes I have been catching by hand, or not catching at all, are now the machine's problem.
+
+**Mafia is parked** — its card is off the front door. The code, the tests and the wire simulator all stay in the gate, so it stays healthy and revivable rather than rotting quietly. Visit /mafia/ directly if you want to poke it.
+
+**Tests** — lint, engine 119/119, wire 37/37, soak, flows, matrix, mafiasim.
+
 ## v0.10.0 — 2026-07-12
 The economy is now official Monopoly Deal, and the stacks sit flat.
 

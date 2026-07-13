@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.4.1
+  Version: 0.10.1
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -803,7 +803,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.10.0</span>
+    <span class="ver">v0.10.1</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1401,6 +1401,7 @@ function toggleRule(k){
 const logs = [];
 function log(msg){
   logs.unshift(msg);
+  if(logs.length > 120) logs.length = 120;   // the ledger grew forever — a slow leak across long games
   $('#log').textContent = msg;
   $('#loglist').innerHTML = logs.slice(0,120).map(l=>`<div>${l}</div>`).join('');
 }
@@ -2381,7 +2382,7 @@ function checkAllWin(){
       if(NET.mode==='host' && typeof ID!=='undefined') ID.recordMatch(G.players.indexOf(p));
       $('#wintitle').textContent = p===me() ? 'You win' : p.name+' wins';
       $('#winsub').textContent = 'Three complete sets: ' + completeColors(p).map(c=>COLORS[c].label).join(', ');
-      fillWinRows();
+      fillWinRows(); NET.teardown();
       setTimeout(()=>{
         const wc = document.querySelector('.wincard');
         if(wc && wc.style){ wc.style.animation='none'; void (wc.offsetWidth||0); wc.style.animation=''; }
@@ -3136,8 +3137,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0100"></script>
-<script src="../shared/identity.js?v=0100"></script>
+<script src="../shared/config.js?v=0.10.1"></script>
+<script src="../shared/tablekit.js?v=0.10.1"></script>
+<script src="../shared/identity.js?v=0.10.1"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3175,6 +3177,15 @@ const NET = {
 
   /* --- host: ask a remote seat for a decision --- */
   hostKey: null,
+  teardown(){
+    clearInterval(CLK._iv); CLK._iv = null;
+    clearInterval(this._askWD); this._askWD = null;
+    clearTimeout(this._healT); this._healT = null;
+    clearTimeout(this._hostDeadT); this._hostDeadT = null;
+    clearTimeout(this._promoT); this._promoT = null;
+    Object.keys(this._goneTimers||{}).forEach(k=>clearTimeout(this._goneTimers[k])); this._goneTimers = {};
+    Object.keys(this._elimT||{}).forEach(k=>clearTimeout(this._elimT[k])); this._elimT = {};
+  },
   hostSeat(){ const i = this.roster ? this.roster.findIndex(r=>r.key===this.hostKey) : -1; return i; },
   pendingAskInfo: {},
   pendingAskAt: {},
@@ -3387,7 +3398,7 @@ const NET = {
       if(w){
         $('#wintitle').textContent = w===me() ? 'You win' : w.name+' wins';
         $('#winsub').textContent = 'Three complete sets: ' + completeColors(w).map(c=>COLORS[c].label).join(', ');
-        fillWinRows();
+        fillWinRows(); NET.teardown();
         setTimeout(()=>{ refreshWinBtn(); $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); }, 500);
       }
     }
@@ -3458,14 +3469,9 @@ const NET = {
   /* --- lobby --- */
   makeCode(){ const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c=''; for(let i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)]; return c; },
   async connect(code, hosting){
-    if(!SUPABASE_URL || !SUPABASE_ANON){
-      alert('Online needs Supabase keys pasted into the config at the top of this file (SUPABASE_URL / SUPABASE_ANON). Solo works without them.');
-      return false;
-    }
-    if(!window.supabase){
-      await new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; sc.onload=res; sc.onerror=()=>rej(new Error('supabase cdn failed')); document.head.appendChild(sc); });
-    }
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    let sb;
+    try{ sb = await TableKit.client(); }   // credentials, SDK, client: the platform's job
+    catch(e){ banner('OFFLINE — '+(e && e.message || 'no connection'),'var(--danger-red)'); return false; }
     if(!this.pkey){
       let pk = null;
       try{ pk = localStorage.getItem('it_pkey'); }catch(e){}
@@ -3936,7 +3942,7 @@ function eliminatePlayer(seat, reason){
     const w = G.players[alive[0]];
     $('#wintitle').textContent = alive[0]===MYSEAT ? 'You win' : w.name+' wins';
     $('#winsub').textContent = 'Last one standing';
-    fillWinRows();
+    fillWinRows(); NET.teardown();
     const ws=$('#winscreen'); if(ws&&ws.classList) ws.classList.add('show');
     if(NET.mode==='host') NET.pushState();
     return;
