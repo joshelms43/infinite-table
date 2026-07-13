@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.10.4
+  Version: 0.10.5
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -802,7 +802,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.10.4</span>
+    <span class="ver">v0.10.5</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -3135,9 +3135,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.10.4"></script>
-<script src="../shared/tablekit.js?v=0.10.4"></script>
-<script src="../shared/identity.js?v=0.10.4"></script>
+<script src="../shared/config.js?v=0.10.5"></script>
+<script src="../shared/tablekit.js?v=0.10.5"></script>
+<script src="../shared/identity.js?v=0.10.5"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

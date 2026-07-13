@@ -47,14 +47,16 @@ server keeps your presence alive. On wake, check `tx.alive()` — never trust th
 2. **kitsim** — the connection seam against a fake Supabase: credential fallback, a
    subscribe that throws instead of hanging, a socket that admits when it is dead.
    Mutation-tested — reintroduce any of the three shipped connection bugs and it goes red.
-3. **test** — engine assertions incl. the economy census (official Monopoly Deal values,
+3. **revivesim** — M Deal's own connect() and revive() against a fake Supabase: the code
+   that recovers your game when iOS suspends the socket. Mutation-tested.
+4. **test** — engine assertions incl. the economy census (official Monopoly Deal values,
    pinned) and full-game soak with 106-card conservation.
-4. **netsim** — the wire: two sandboxed players, host death, migration, reaction windows.
-5. **netsoak** — random full games over the wire.
-6. **repro3 / repro2** — jsdom flows and the drop matrix.
-7. **mafiasim** — a complete four-player Mafia game over a fake bus.
+5. **netsim** — the wire: two sandboxed players, host death, migration, reaction windows.
+6. **netsoak** — random full games over the wire.
+7. **repro3 / repro2** — jsdom flows and the drop matrix.
+8. **mafiasim** — a complete four-player Mafia game over a fake bus.
 
-Nothing ships red. Every push carries a changelog entry with the root cause, not the symptom.
+Nothing ships red — and since v0.10.5 that is enforced by CI (.github/workflows/gate.yml), not by whoever remembered to run it. Every push carries a changelog entry with the root cause, not the symptom.
 
 ## Conventions
 - Anchor-asserted patches only (never line numbers); a failed anchor aborts atomically.

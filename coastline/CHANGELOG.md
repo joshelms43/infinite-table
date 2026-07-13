@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.10.5 — 2026-07-12
+The last untested seam, and a gate that no longer depends on my memory.
+
+**revivesim** — kitsim proves the platform module in isolation; netsim starts from a table that is already connected. Between them sat NET.connect() and NET.revive(): the code that recovers your game when iOS suspends the socket mid-session. The code most likely to run on a bad night, and the least examined — it shipped in v0.10.2 with no coverage whatsoever. Fourteen assertions now drive it against a fake Supabase: a healthy connect through the platform, broadcasts landing in the game's own handler, a living line nudged rather than rebuilt, a dead socket rebuilt on the same room with the host re-announcing the table it still owns and a returning player saying hello, a broken line returning false instead of hanging, and teardown hanging up the phone.
+
+**Mutation-tested** — teach revive() to trust a zombie socket and three assertions go red; let a returning host re-announce nothing and the right single assertion goes red. The suite fails when the code is wrong, which is the only property a suite really has.
+
+**CI** — the gate ran because I chose to run it. Now it runs because it must: every push to main and every pull request executes all nine stages on GitHub Actions. A red gate is now a red repository.
+
 ## v0.10.4 — 2026-07-12
 Failures speak now. All of them.
 

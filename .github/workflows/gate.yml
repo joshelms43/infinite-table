@@ -1,0 +1,21 @@
+name: gate
+
+# The gate used to run because I chose to run it. Now it runs because it must.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: install
+        run: npm install --no-audit --no-fund
+      - name: nine stages, nothing ships red
+        run: npm run check
