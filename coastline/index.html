@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.10.3
+  Version: 0.10.4
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -802,7 +802,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.10.3</span>
+    <span class="ver">v0.10.4</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -3135,9 +3135,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.10.3"></script>
-<script src="../shared/tablekit.js?v=0.10.3"></script>
-<script src="../shared/identity.js?v=0.10.3"></script>
+<script src="../shared/config.js?v=0.10.4"></script>
+<script src="../shared/tablekit.js?v=0.10.4"></script>
+<script src="../shared/identity.js?v=0.10.4"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3821,6 +3821,37 @@ function shareCode(){
   try{ navigator.clipboard.writeText(url); banner('LINK COPIED','var(--gold-money)'); }catch(e){}
 }
 let GAME_STARTED = false;
+if(typeof TableKit!=='undefined') TableKit.watchErrors({   // headless harnesses run the game without a platform
+  game: 'mdeal', version: '0.10.4',
+  onError: (msg)=>banner('SOMETHING BROKE — '+String(msg).slice(0,42),'var(--danger-red)'),
+});
+function diagnostics(){
+  const alive = (NET.tx && NET.tx.alive) ? (NET.tx.alive() ? 'alive' : 'DEAD') : 'none';
+  const L = [
+    'M Deal v0.10.4',
+    'mode ' + NET.mode + ' · room ' + (NET.code||'—') + ' · seat ' + MYSEAT + ' · socket ' + alive,
+    'turn ' + G.turn + ' · plays ' + G.playsLeft + ' · round ' + G.turnCount + (G.over ? ' · OVER' : ''),
+    'waiting on: ' + (Object.keys(NET.pendingAsks||{}).join(', ') || 'nobody'),
+    'seats: ' + G.players.map((p,i)=>i+':'+p.name+(p.out?'(out)':'')+(NET.isGone&&NET.isGone(i)?'(away)':'')).join(' · '),
+    'rules: ' + (rulesSummary().join(' · ') || 'default'),
+  ];
+  const errs = TableKit.errors();
+  L.push('errors: ' + (errs.length ? '' : 'none'));
+  errs.slice(0,6).forEach(e=>L.push('  · [' + e.kind + '] ' + e.msg + (e.where ? ' @' + e.where : '')));
+  return L.join('\n');
+}
+(function(){
+  try{
+    if(!new URLSearchParams(location.search||'').get('diag')) return;
+    const d = document.createElement('pre');
+    d.textContent = diagnostics();
+    d.style.cssText = 'position:fixed;inset:10px;z-index:999;background:rgba(9,20,16,.97);color:#F4EFE5;'
+      + 'padding:16px;border-radius:14px;border:1px solid rgba(217,160,63,.5);font:600 11.5px/1.6 ui-monospace,monospace;'
+      + 'white-space:pre-wrap;overflow:auto';
+    d.onclick = ()=>{ try{ navigator.clipboard.writeText(d.textContent); banner('COPIED','var(--success-green)'); }catch(e){} };
+    setTimeout(()=>{ d.textContent = diagnostics() + '\n\n(tap to copy)'; document.body.appendChild(d); }, 700);
+  }catch(e){}
+})();
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') NET.revive(); });
 window.addEventListener('online', ()=>NET.revive());
 (function autoRejoin(){

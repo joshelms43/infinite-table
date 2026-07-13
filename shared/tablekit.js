@@ -107,6 +107,54 @@
       return tx;
     },
 
+    /* Silence is the enemy — it always has been here. An uncaught error used to freeze a
+       phone with no explanation, and the only diagnostic was a screenshot of a stuck game.
+       Now a failure says its own name, and remembers it. */
+    watchErrors: function (opts) {
+      opts = opts || {};
+      var say = opts.onError || function () {};
+      var seen = {};
+      function record(kind, msg, where) {
+        msg = String((msg && msg.message) || msg || 'unknown error').slice(0, 200);
+        var now = Date.now();
+        if (seen[msg] && now - seen[msg] < 4000) return;   // one voice, not a chorus
+        seen[msg] = now;
+        var all = [];
+        try {
+          var raw = JSON.parse(localStorage.getItem('it_errors') || '[]');
+          if (Array.isArray(raw)) all = raw;
+        } catch (e) { all = []; }   // a poisoned ledger must not swallow the error that follows it
+        try {
+          all.unshift({
+            t: new Date().toISOString(), kind: kind, msg: msg,
+            where: String(where || '').slice(0, 120),
+            game: opts.game || '', v: opts.version || '',
+          });
+          localStorage.setItem('it_errors', JSON.stringify(all.slice(0, 12)));
+        } catch (e) {}
+        try { console.error('[' + kind + '] ' + msg + ' ' + (where || '')); } catch (e) {}
+        say(msg);
+      }
+      if (global.addEventListener) {
+        global.addEventListener('error', function (e) {
+          record('error', e && (e.message || e.error), e && e.filename
+            ? String(e.filename).split('/').pop() + ':' + e.lineno : '');
+        });
+        global.addEventListener('unhandledrejection', function (e) {
+          record('promise', (e && (e.reason || e.detail)) || 'rejected', '');
+        });
+      }
+      this._record = record;   // so a game can report its own swallowed errors
+      return this;
+    },
+    errors: function () {
+      try {
+        var a = JSON.parse(localStorage.getItem('it_errors') || '[]');
+        return Array.isArray(a) ? a : [];
+      } catch (e) { return []; }
+    },
+    clearErrors: function () { try { localStorage.removeItem('it_errors'); } catch (e) {} },
+
     /* Presence snapshots arrive keyed and duplicated. This is the one true seat list. */
     seatsFrom: function (presence, cap) {
       var seen = {}, list = [];

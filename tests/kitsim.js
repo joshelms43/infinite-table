@@ -85,6 +85,10 @@ function loadKit(globals) {
     },
     document: { createElement: () => ({}), head: { appendChild() {} } },
   };
+  const listeners = {};
+  sandbox.addEventListener = (ev, cb) => { (listeners[ev] = listeners[ev] || []).push(cb); };
+  sandbox.fire = (ev, payload) => (listeners[ev] || []).forEach(cb => cb(payload));
+  sandbox.store = store;
   Object.assign(sandbox, globals || {});
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
@@ -194,6 +198,38 @@ function loadKit(globals) {
       seats.length === 3 && seats[0].key === 'hk' && seats.filter(s => s.key === 'ck').length === 1);
     T('seatsFrom caps a full table', kit.seatsFrom(snap, 2).length === 2);
     T('seatsFrom survives a garbage snapshot', kit.seatsFrom(null).length === 0);
+  }
+
+  finished = true;
+  /* ===== failures speak, and are remembered ===== */
+  {
+    const box = loadKit({});
+    const kit = box.TableKit;
+    const said = [];
+    kit.clearErrors();
+    kit.watchErrors({ onError: m => said.push(m), game: 'mdeal', version: '9.9.9' });
+
+    box.fire('error', { message: 'boom', filename: '/a/coastline/index.html', lineno: 42 });
+    T('an uncaught error announces itself', said.length === 1 && said[0] === 'boom');
+    const rec = kit.errors();
+    T('and is remembered with its scene of the crime',
+      rec.length === 1 && rec[0].msg === 'boom' && /index.html:42/.test(rec[0].where)
+      && rec[0].game === 'mdeal' && rec[0].v === '9.9.9');
+
+    box.fire('error', { message: 'boom' });
+    T('a repeat inside four seconds does not become a chorus', said.length === 1 && kit.errors().length === 1);
+
+    box.fire('unhandledrejection', { reason: new Error('the promise nobody caught') });
+    T('a dead promise speaks too', said.length === 2 && kit.errors()[0].kind === 'promise');
+
+    for (let i = 0; i < 20; i++) box.fire('error', { message: 'e' + i });
+    T('the ledger caps at a dozen and keeps the newest',
+      kit.errors().length === 12 && kit.errors()[0].msg === 'e19');
+
+    box.store['it_errors'] = 'not json at all';
+    T('a corrupted ledger reads as empty, never throws', kit.errors().length === 0);
+    box.fire('error', { message: 'after the corruption' });
+    T('and it heals on the next error', kit.errors().length === 1);
   }
 
   finished = true;

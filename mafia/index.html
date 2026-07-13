@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Infinite Table — Mafia. Version: 0.2.5 -->
+<!-- Infinite Table — Mafia. Version: 0.2.6 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -80,11 +80,11 @@ input.namef{letter-spacing:.5px;font-size:15px;text-transform:none}
 </head>
 <body>
 <div class="wordmark"><b>MAFIA</b></div>
-<div class="ver">v0.2.5 · INFINITE TABLE</div>
+<div class="ver">v0.2.6 · INFINITE TABLE</div>
 <div id="app"></div>
 
-<script src="../shared/config.js?v=0.2.5"></script>
-<script src="../shared/tablekit.js?v=0.2.5"></script>
+<script src="../shared/config.js?v=0.2.6"></script>
+<script src="../shared/tablekit.js?v=0.2.6"></script>
 <script>
 'use strict';
 const $ = s => document.querySelector(s);
@@ -516,6 +516,7 @@ NET.onMessage = (t,m)=>{
   if(G.phase!==prevPhase && (G.phase==='night'||G.phase==='vote')){ MYACTED=false; PICK=null; render(); }
 };
 
+if(typeof TableKit!=='undefined') TableKit.watchErrors({ game:'mafia', version:'0.2.6', onError:(msg)=>banner('BROKE — '+String(msg).slice(0,40)) });
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') NET.revive(); });
 setInterval(()=>{ if(G.phase==='lobby' && NET.tx){ NET.revive(); } }, 4000);   // the lobby heartbeat: no zombie hosts
 

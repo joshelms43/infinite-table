@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.10.4 — 2026-07-12
+Failures speak now. All of them.
+
+**The pattern worth naming** — every bug this month cost a round trip: something breaks on a phone, the game freezes with no explanation, a screenshot arrives, I guess. The one exception was Mafia's host failure, which announced its own cause in a banner and was fixed in a single turn. So the platform gets that treatment everywhere: uncaught errors and dead promises are caught, shown as a banner in the game's own voice, and written to a ledger that survives a reload. A repeat inside four seconds is silenced — one voice, not a chorus. The ledger keeps the newest dozen.
+
+**?diag=1** — appending it to either game's URL dumps the state a bug report actually needs: version, mode, room, seat, whether the socket is genuinely alive, turn and plays, who the host is waiting on, every seat with its out/away status, the table rules in force, and the last errors with their file and line. Tap it to copy. A future "it broke" becomes a paste.
+
+**The new tests found a bug in the new code, immediately** — a poisoned error ledger (corrupt JSON in storage) threw inside the same try that performs the write, so the error being reported was swallowed along with the corruption. A ledger that eats the next error is worse than no ledger. Fixed, asserted.
+
+**Also** — the platform call is guarded, because the headless harnesses deliberately run each game with no platform layer beneath it, and the engine tests caught that within one run of the gate.
+
+Eight stages, 25 kitsim assertions.
+
 ## v0.10.3 — 2026-07-12
 The seam that broke every time is finally under test — and testing it found the same disease in the test harness.
 
