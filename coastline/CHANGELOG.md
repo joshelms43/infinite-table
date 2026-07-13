@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.10.7 — 2026-07-12
+I shipped a fatal bug and CI applauded. This is the fix, and the test that ends the whole class.
+
+**The bug** — extracting the rulebook (v0.10.6) left its `<script src>` sitting *below* 1,600 lines of game code that run `Object.keys(COLORS)` at load. In a browser, scripts execute in document order: COLORS would not exist yet, the page would die on an instant ReferenceError, and M Deal would not have started at all. Nine gate stages passed it without a murmur — because **every harness concatenates the scripts in whatever order suits it**, and is therefore structurally incapable of seeing the one order that matters. The rulebook now loads ahead of every line of game code.
+
+**bootsim** — the gate now boots each page the way a browser does: external scripts read from disk *in place*, inline blocks in sequence, nothing reordered, and then it asks whether the things the page needs are actually there. It runs first: a page that cannot boot fails before anything else is allowed to have an opinion. Mutation-tested against the exact bug — put the rulebook back where I had it and bootsim names it: *"M Deal boots in document order [inline: COLORS is not defined]"*.
+
+**And its first probe was wrong, too** — `const NET = …` creates a lexical global, shared across scripts but never a property of window, so checking `sandbox.NET` reported phantom failures on perfectly good code. It asks the context now, the way a browser resolves a name. A test that lies in the other direction is just as useless.
+
+Ten stages.
+
 ## v0.10.6 — 2026-07-12
 The rulebook becomes a single source of truth — the fix for the one bug class we already paid for.
 
