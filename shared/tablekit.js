@@ -86,7 +86,7 @@
         });
       }
       var status = await new Promise(function (res) {
-        var to = setTimeout(function () { res('TIMED_OUT'); }, 8000);
+        var to = setTimeout(function () { res('TIMED_OUT'); }, opts.timeoutMs || 8000);
         ch.subscribe(function (st) {
           if (st === 'SUBSCRIBED') { clearTimeout(to); res(true); }
           if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { clearTimeout(to); res(st); }

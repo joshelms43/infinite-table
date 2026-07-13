@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.10.3 — 2026-07-12
+The seam that broke every time is finally under test — and testing it found the same disease in the test harness.
+
+**kitsim** — every production bug this platform has shipped lived in the connection code, and no simulator had ever touched it: netsim and netsoak stub the transport and start from a table that is already connected. Worse, the previous release refactored M Deal's connection onto tablekit with no coverage at all. So: a fake Supabase, and nineteen assertions over the real thing — credential fallback, either config-global name, room codes without ambiguous glyphs, broadcast and presence routing, meta tracking, a suspended socket admitting it is dead, a channel error throwing a sentence instead of hanging, and a silent line timing out.
+
+**Mutation-tested, because a test that cannot fail is theatre** — each of the three shipped connection bugs was reintroduced deliberately: the missing credential fallback that stranded every phone, the timeout-less subscribe that hung forever, and an alive() that cannot see a dead socket. All three turn the suite red. The clean code passes.
+
+**And the mutation exposed the harness itself** — with the timeout removed, kitsim did not hang: an unresolved promise emptied Node's event loop and the process exited **zero, silently, mid-suite**, which the gate's && chain reads as success. The exact failure mode — quiet, plausible, wrong — that this file exists to catch, living in the file. It now refuses to count anything unless it reaches the end, and unhandled rejections fail loud.
+
+Eight gate stages.
+
 ## v0.10.2 — 2026-07-12
 The refactor continues: M Deal moves onto the platform layer completely, and gets the resilience Mafia's bugs taught us.
 
