@@ -7,7 +7,9 @@ html = html
   .replace('<script src="../shared/config.js?v=062"></script>', '<scr'+'ipt>window.SUPABASE_URL="";window.SUPABASE_ANON="";</scr'+'ipt>')
   .replace('<script src="../shared/identity.js?v=062"></script>', '<scr'+'ipt>'+_shared('identity.js')+'</scr'+'ipt>');
 const errors = [];
-const dom = new JSDOM(html, { runScripts:'dangerously', pretendToBeVisual:true, url:'https://localhost/' });
+const rulesSrc = require('fs').readFileSync(require('path').join(__dirname,'..','shared','mdeal-rules.js'),'utf8');
+const htmlWithRules = html.replace('<script>', '<script>' + rulesSrc + '\n');   // jsdom does not fetch <script src>
+const dom = new JSDOM(htmlWithRules, { runScripts:'dangerously', pretendToBeVisual:true, url:'https://localhost/' });
 const win = dom.window;
 win.addEventListener('error', e => errors.push((e.message||'?') + ' :' + (e.lineno||'?')));
 function fire(el, type, x, y){

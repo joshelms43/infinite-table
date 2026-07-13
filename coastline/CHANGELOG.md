@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.10.6 — 2026-07-12
+The rulebook becomes a single source of truth — the fix for the one bug class we already paid for.
+
+**shared/mdeal-rules.js** — the rules of M Deal lived in two places: inside the game, and inside joshelms43/infinite-ai, which trains brains against them. The copies drifted. Rent ladders, property values, wild pairings and rent-card pairs all fell out of step with the official game, and nobody noticed until the lab audited them and this repo had to be corrected to match (v0.10.0). **Two copies of a spec is a bug generator.** There is now one copy: pure, DOM-free, node-requirable, stamped with a RULEBOOK version both repos can compare. A drift is now a diff rather than an archaeology dig.
+
+**Lint refuses to let it regress** — the gate now asserts that the game reads the rulebook rather than carrying its own, that it actually loads it, that the rulebook is stamped, and that it still builds a 106-card deck. Re-inline the rules and the repository goes red.
+
+**The lab's files leave the game repo** — tests/ladder\*, tests/trainer\* and their npm scripts are gone. That work lives in infinite-ai now, per the ruling; keeping stale forks here was exactly how the rules drifted in the first place. This repo is the platform; that repo is the brain.
+
+All nine gate stages green, on CI.
+
 ## v0.10.5 — 2026-07-12
 The last untested seam, and a gate that no longer depends on my memory.
 

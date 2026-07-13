@@ -8,6 +8,9 @@ index.html            the platform lobby (game cards; a game gets a card when it
 coastline/index.html  M Deal — the flagship. Single file. URL path kept for history.
 mafia/index.html      Mafia — PARKED (no lobby card; the URL still works). Kept green in the gate.
 shared/tablekit.js    the platform layer: credentials, client, identity, room codes, channels
+shared/mdeal-rules.js THE rulebook. Official Monopoly Deal, pure, no DOM. Both this repo
+                      and joshelms43/infinite-ai read it — two copies is a bug generator,
+                      and the copies had already drifted before anyone noticed (v0.10.0).
 shared/config.js      Supabase URL + public anon key
 shared/identity.js    accounts (username + password via an Edge Function)
 tests/                the gate — seven stages, run on every push

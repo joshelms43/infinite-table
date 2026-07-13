@@ -60,5 +60,17 @@ HTML.forEach(rel => {
   }
 });
 
+/* ---- the rulebook lives in exactly one place ---- */
+{
+  const rb = require(path.join(ROOT, 'shared', 'mdeal-rules.js'));
+  T('the rulebook is stamped', typeof rb.RULEBOOK === 'string' && rb.RULEBOOK.length > 0, rb.RULEBOOK);
+  T('the rulebook builds the official 106-card deck', rb.buildDeck().length === 106);
+
+  const game = fs.readFileSync(path.join(ROOT, 'coastline', 'index.html'), 'utf8');
+  T('the game reads the rulebook rather than carrying its own copy',
+    !/const\s+(COLORS|PROPS|DUAL_WILDS|RENT_DUALS|ACTIONS)\s*=/.test(game));
+  T('and it actually loads it', /shared\/mdeal-rules\.js/.test(game));
+}
+
 console.log(fails === 0 ? 'LINT: ALL PASS' : 'LINT FAILURES: ' + fails);
 process.exit(fails ? 1 : 0);

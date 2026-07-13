@@ -1,7 +1,8 @@
 const fs=require('fs');
 const html=fs.readFileSync(require('path').join(__dirname,'..','coastline','index.html'),'utf8');
 const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
-const gameCode=scripts.join('\n');
+const rulesCode=fs.readFileSync(require('path').join(__dirname,'..','shared','mdeal-rules.js'),'utf8');
+const gameCode=rulesCode+'\n'+scripts.join('\n');   // the rulebook is a module now — the game no longer carries it
 const el=()=>new Proxy({classList:{add(){},remove(){},toggle(){}},style:{}},{
   get(t,k){ if(k in t)return t[k]; return ()=>{}; },
   set(){return true;}
