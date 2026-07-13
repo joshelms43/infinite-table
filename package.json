@@ -9,9 +9,10 @@
     "ladder": "node tests/ladder.js",
     "trainer": "node tests/trainer.js",
     "test:trainer": "node tests/trainer.parity.js",
-    "check": "node tests/test.js && node tests/netsim.js && node tests/netsoak.js && node tests/repro3.js && node tests/repro2.js && node tests/mafiasim.js",
+    "check": "node tests/lint.js && node tests/test.js && node tests/netsim.js && node tests/netsoak.js && node tests/repro3.js && node tests/repro2.js && node tests/mafiasim.js",
     "test:wire": "node tests/netsim.js",
-    "test:soak": "node tests/netsoak.js"
+    "test:soak": "node tests/netsoak.js",
+    "bump": "node tools/bump.js"
   },
   "devDependencies": {
     "jsdom": "^24.0.0"

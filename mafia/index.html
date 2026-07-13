@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Infinite Table — Mafia. Version: 0.10.1 -->
+<!-- Infinite Table — Mafia. Version: 0.2.5 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -80,11 +80,11 @@ input.namef{letter-spacing:.5px;font-size:15px;text-transform:none}
 </head>
 <body>
 <div class="wordmark"><b>MAFIA</b></div>
-<div class="ver">v0.10.1 · INFINITE TABLE</div>
+<div class="ver">v0.2.5 · INFINITE TABLE</div>
 <div id="app"></div>
 
-<script src="../shared/config.js?v=0.10.1"></script>
-<script src="../shared/tablekit.js?v=0.10.1"></script>
+<script src="../shared/config.js?v=0.2.5"></script>
+<script src="../shared/tablekit.js?v=0.2.5"></script>
 <script>
 'use strict';
 const $ = s => document.querySelector(s);
@@ -239,7 +239,7 @@ const NET = {
     if(G.phase==='vote')   return pool.filter(i=>this.votes[i]==null).map(i=>G.players[i].name);
     return [];
   },
-  pushState(){ if(this.mode==='host') this.tx.send('state', this.serialize()); persistNothing(); },
+  pushState(){ if(this.mode==='host') this.tx.send('state', this.serialize()); },
   onMessage(type, m){
     if(this.mode==='lobby-host'){
       if(type==='hello'){ /* presence carries the lobby; nothing to send yet */ }
@@ -385,7 +385,6 @@ const NET = {
     return false;
   },
 };
-function persistNothing(){}
 function nameField(){
   let n = (($('#namef')||{}).value||'').trim().slice(0,12);
   if(!n){ try{ n = localStorage.getItem('it_name')||''; }catch(e){} }

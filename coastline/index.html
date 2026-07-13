@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.10.1
+  Version: 0.10.2
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -305,7 +305,6 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 @keyframes winpop{from{transform:scale(.85) translateY(14px);opacity:0}}
 #winscreen h1{font-family:'Lilita One',cursive;font-size:34px;color:var(--gold-money);text-shadow:0 4px 14px rgba(0,0,0,.4)}
 #winscreen p{font-weight:700;opacity:.85;max-width:300px;line-height:1.45}
-#winstats{display:none}
 #winrows{margin:14px 0 16px}
 .wrow{display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid rgba(36,36,29,.1)}
 .wrow:last-child{border-bottom:none}
@@ -803,7 +802,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.10.1</span>
+    <span class="ver">v0.10.2</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -905,7 +904,6 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <h1 id="wintitle"></h1>
     <p id="winsub"></p>
     <div id="winrows"></div>
-    <div id="winstats"></div>
     <button id="winagain" onclick="playAgain()">Play Again</button>
   </div>
 </div>
@@ -3137,9 +3135,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.10.1"></script>
-<script src="../shared/tablekit.js?v=0.10.1"></script>
-<script src="../shared/identity.js?v=0.10.1"></script>
+<script src="../shared/config.js?v=0.10.2"></script>
+<script src="../shared/tablekit.js?v=0.10.2"></script>
+<script src="../shared/identity.js?v=0.10.2"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3177,7 +3175,8 @@ const NET = {
 
   /* --- host: ask a remote seat for a decision --- */
   hostKey: null,
-  teardown(){
+  teardown(closeLine){
+    if(closeLine && this.tx && this.tx.close){ try{ this.tx.close(); }catch(e){} }
     clearInterval(CLK._iv); CLK._iv = null;
     clearInterval(this._askWD); this._askWD = null;
     clearTimeout(this._healT); this._healT = null;
@@ -3467,33 +3466,51 @@ const NET = {
   },
 
   /* --- lobby --- */
-  makeCode(){ const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c=''; for(let i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)]; return c; },
+  makeCode(){ return TableKit.roomCode(); },
   async connect(code, hosting){
-    let sb;
-    try{ sb = await TableKit.client(); }   // credentials, SDK, client: the platform's job
-    catch(e){ banner('OFFLINE — '+(e && e.message || 'no connection'),'var(--danger-red)'); return false; }
-    if(!this.pkey){
-      let pk = null;
-      try{ pk = localStorage.getItem('it_pkey'); }catch(e){}
-      if(!pk){ pk = Math.random().toString(36).slice(2,10); try{ localStorage.setItem('it_pkey', pk); }catch(e){} }
-      this.pkey = pk;
-    }
-    const ch = sb.channel('room-'+code, { config:{ broadcast:{ self:false }, presence:{ key: this.pkey } } });
     const self = this;
-    this.tx = {
-      send(type, payload){ ch.send({ type:'broadcast', event:type, payload }); },
-      track(meta){ ch.track(meta); },
-      presence(){ return ch.presenceState(); },
-    };
-    ['state','hand','evt','ask','intent','start','hello','nack','needhands','myhand'].forEach(ev=>{
-      ch.on('broadcast', { event:ev }, (msg)=>self.onMessage(ev, msg.payload));
-    });
-    ch.on('presence', { event:'sync' }, ()=>{ self.renderLobby(); self.reconcilePresence(); });
-    ch.on('presence', { event:'leave' }, (ev)=>self.onLeave((ev && ev.leftPresences)||[]));
-    ch.on('presence', { event:'join' }, (ev)=>self.onJoin((ev && ev.newPresences)||[]));
-    await new Promise(res=>ch.subscribe(st=>{ if(st==='SUBSCRIBED') res(); }));
+    try{
+      this.tx = await TableKit.join({
+        prefix: 'room',
+        code,
+        events: ['state','hand','evt','ask','intent','start','hello','nack','needhands','myhand'],
+        onMessage: (ev, payload)=>self.onMessage(ev, payload),
+        onPresence: ()=>{ self.renderLobby(); self.reconcilePresence(); },
+      });
+    }catch(e){
+      banner('OFFLINE — '+((e && e.message) || 'no connection'),'var(--danger-red)');
+      return false;   // it used to hang here forever, silently, on any channel error
+    }
+    this.pkey = this.tx.key;
     this.code = code;
     return true;
+  },
+  /* A backgrounded socket dies quietly and keeps smiling: the snapshot freezes, the
+     updates stop, and a host can be migrated away from while it still thinks it hosts. */
+  async revive(){
+    if(this._reviving || this._connecting) return;
+    if(!this.tx || typeof this.tx.alive!=='function' || this.mode==='off' || !this.code || G.over) return;
+    if(this.tx.alive()){
+      if(this._meta){ try{ this.tx.track(this._meta); }catch(e){} }   // nudge: forces a fresh diff both ways
+      this.reconcilePresence();
+      return;
+    }
+    this._reviving = true;
+    try{
+      banner('RECONNECTING…','var(--warning-amber)');
+      const hosting = this.mode==='host' || this.mode==='lobby-host';
+      try{ this.tx.close(); }catch(e){}
+      if(!(await this.connect(this.code, hosting))) return;
+      if(this._meta){ try{ this.tx.track(this._meta); }catch(e){} }
+      if(this.mode==='host'){
+        this.tx.send('start', { roster:this.roster, rules:RULES });
+        this.pushState();
+      } else if(this.mode==='client' || this.mode==='joining'){
+        this.tx.send('hello', { key:this.pkey });
+      }
+      banner('BACK AT THE TABLE','var(--success-green)');
+      renderAll();
+    } finally { this._reviving = false; }
   },
   _busyBtn(btn, on){ if(btn && btn.classList){ btn.classList.toggle('busy', !!on); btn.disabled = !!on; } },
   async hostGame(btn){
@@ -3804,6 +3821,8 @@ function shareCode(){
   try{ navigator.clipboard.writeText(url); banner('LINK COPIED','var(--gold-money)'); }catch(e){}
 }
 let GAME_STARTED = false;
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') NET.revive(); });
+window.addEventListener('online', ()=>NET.revive());
 (function autoRejoin(){
   try{
     const q = new URLSearchParams(location.search||'');

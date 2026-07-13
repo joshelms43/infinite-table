@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.10.2 — 2026-07-12
+The refactor continues: M Deal moves onto the platform layer completely, and gets the resilience Mafia's bugs taught us.
+
+**The connection seam is the platform's now** — M Deal had only taken the client from tablekit; it still hand-rolled channel subscription, room codes and identity. It doesn't any more. Two real defects died with the old code: the subscribe **hung forever, silently, on any channel error** (the same failure that stranded Mafia — it just never announced itself here), and there was no way to ask whether the socket was actually alive.
+
+**Wake revival** — a backgrounded socket dies quietly and keeps smiling: the presence snapshot freezes, updates stop, and a host can be migrated away from while it still believes it is hosting. On every wake (and on the browser's `online` event) M Deal now checks `tx.alive()`, rebuilds the connection if it's dead, re-broadcasts as host or re-hellos as client, and says BACK AT THE TABLE. If the line is fine, it re-tracks presence anyway — a nudge that forces a fresh diff both ways.
+
+**The drift stops at the source** — `npm run bump -- mdeal 0.10.3` rewrites every version string in a file at once: header, badge, cache-busters. The lint gate catches drift; the tool prevents it. And the lint gate is now *actually in the gate* — it had been added in a script that aborted before that line, so I'd been running it by hand for a release while believing it was automated. Seven stages now, verified.
+
+**Also** — Mafia's semver restored to its own history (I had wrongly collapsed it into the platform's number); the dead `#winstats` element and a stub function removed; teardown asserted; ARCHITECTURE.md written, because the invariants in this codebase were expensive and none of them were written down.
+
 ## v0.10.1 — 2026-07-12
 Under the hood. Mafia parked; the platform gets a spine.
 

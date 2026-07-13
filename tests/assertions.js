@@ -544,6 +544,23 @@ moveWildTo(wCard.id, 'coral', 0);
 T('and it can move straight back, same turn', G.playsLeft===playsBefore && (me().props['coral']||[]).some(c=>c.id===wCard.id));
 newGame();
 
+
+// ===== lifecycle: the table stops its own clocks =====
+newGame();
+NET.mode='host'; NET._goneTimers={}; NET._elimT={};
+CLK._iv = setInterval(()=>{}, 1000);
+NET._askWD = setInterval(()=>{}, 1000);
+NET._healT = setTimeout(()=>{}, 9000);
+NET._goneTimers['x'] = setTimeout(()=>{}, 9000);
+NET._elimT['y'] = setTimeout(()=>{}, 9000);
+NET.teardown();
+T('teardown stops every timer the table started',
+  CLK._iv===null && NET._askWD===null && NET._healT===null
+  && Object.keys(NET._goneTimers).length===0 && Object.keys(NET._elimT).length===0);
+NET.tx = null; NET.mode='off';
+T('revive is a no-op with no line to revive', (NET.revive(), true));
+newGame();
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);
