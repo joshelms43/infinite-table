@@ -1,5 +1,12 @@
 # Penalty Shootout — Changelog
 
+## v0.3.0 — 2026-07-15
+Two cameras for two jobs — the fix for "the goal is tiny and keeping feels wrong", which were the same bug.
+
+One camera served both roles from 14.6 metres behind the shooter on a wide lens: the goal filled a third of the screen, and you played the keeper as a distant figurine, dragged through a mapping calibrated to a goal size that was never real. Now: SHOOT gets a telephoto from behind the spot (28° — the goal owns ~57% of the frame, broadcast-style, ball large in the foreground); KEEP gets a camera behind your own net (the keeper is big, the goal is ~90% of the frame, and the shot flies AT you, growing all the way).
+
+The drag has a real ruler now — metres-per-pixel measured off the actual projected goalposts every camera change and resize, signed so the behind-the-goal mirror flip comes free from the projection itself. Sensitivity retuned from 3.2 (a twitch was a committed dive) to 1.3 against honest pixels: a dive now takes a deliberate fling. The keeper's tell ring grew a third for reading at the new distance. Everything else — the sacred three-tap and the fling-commit — untouched.
+
 ## v0.2.0 — 2026-07-15
 The full rebuild: true 3D, a real physics engine, and the two mechanics that were always the game left exactly alone.
 

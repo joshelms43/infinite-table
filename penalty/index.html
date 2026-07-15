@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — Penalty Shootout. Version: 0.2.0 -->
+<!-- Infinite Table — Penalty Shootout. Version: 0.3.0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -146,7 +146,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   var HALF_W=GOAL_W/2;
   var AIMX=HALF_W+1.35, AIMY_HI=3.05, AIMY_LO=0.14, AIM_ROW=1.2;   // aimer sweep bounds
   var SWEEP_X=0.90, SWEEP_Y=0.86, SWEEP_P=0.98;
-  var LEAD_MS=160, SHUFFLE_V=3.4, DIVE_SPEED=6.4, DIVE_THRESH=0.95, DRAG_SENS=3.2, KGRAV=13;
+  var LEAD_MS=160, SHUFFLE_V=4.2, DIVE_SPEED=6.4, DIVE_THRESH=0.95, DRAG_SENS=1.3, KGRAV=13;
   var MAGNUS=0.16, DT=1/120;
   var CFG={
     easy:  {pRead:0.16, adj:0.26, botPow:[0.38,0.66], botFrac:0.40, react:260, spd:0.85},
@@ -177,9 +177,31 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   var scene=new THREE.Scene();
   scene.background=new THREE.Color(0x0a1526);
   scene.fog=new THREE.Fog(0x0a1526,26,70);
-  var camera=new THREE.PerspectiveCamera(52,16/10,0.1,120);
-  var CAM_HOME=new THREE.Vector3(0,2.1,SPOT+3.6);
-  camera.position.copy(CAM_HOME); camera.lookAt(0,1.15,0);
+  var camera=new THREE.PerspectiveCamera(28,16/10,0.1,120);
+  /* two cameras for two jobs. SHOOT: telephoto from behind the spot — the goal owns
+     the frame the way a broadcast penalty does. KEEP: from behind your own net —
+     the keeper is large, the ball comes AT you, and a thumb-drag maps to the goal
+     you can actually see. One camera for both was why keeping felt wrong. */
+  var CAM={mode:null,home:new THREE.Vector3(),look:new THREE.Vector3()};
+  function setCam(mode){
+    if(CAM.mode===mode)return; CAM.mode=mode;
+    if(mode==='keep'){ CAM.home.set(0,1.8,-5.3); CAM.look.set(0,1.30,7); camera.fov=50; }
+    else { CAM.home.set(0,1.35,SPOT+5.2); CAM.look.set(0,1.15,0); camera.fov=28; }
+    camera.position.copy(CAM.home); camera.lookAt(CAM.look); camera.updateProjectionMatrix();
+    measureGoalPx();
+  }
+  /* the projected goal, in pixels — the drag's ruler. Signed: behind the goal,
+     screen-right is world-minus-x, and the sign carries that for free. */
+  var PXM={x:1,y:1};
+  function measureGoalPx(){
+    var r=stage.getBoundingClientRect(); if(!r.width)return;
+    camera.updateMatrixWorld();
+    var pL=new THREE.Vector3(-HALF_W,1.2,0).project(camera), pR=new THREE.Vector3(HALF_W,1.2,0).project(camera);
+    var pB=new THREE.Vector3(0,0,0).project(camera), pT=new THREE.Vector3(0,GOAL_H,0).project(camera);
+    PXM.x=((pR.x-pL.x)*0.5*r.width)/GOAL_W;
+    PXM.y=((pT.y-pB.y)*0.5*r.height)/GOAL_H;
+  }
+  setCam('shoot');
 
   // light rig: cool night ambience + four warm floodlights
   scene.add(new THREE.HemisphereLight(0x2c4a72,0x0c1a10,0.55));
@@ -259,7 +281,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   guideV.position.z=0.01; guideV.visible=false; scene.add(guideV);
   var guideH=new THREE.Mesh(new THREE.PlaneGeometry(GOAL_W+2.6,0.03), new THREE.MeshBasicMaterial({color:0x4ea1ff,transparent:true,opacity:0.5}));
   guideH.position.z=0.01; guideH.visible=false; scene.add(guideH);
-  var tell=new THREE.Mesh(new THREE.RingGeometry(0.16,0.24,26), new THREE.MeshBasicMaterial({color:0xff5d6c,transparent:true,opacity:0.95}));
+  var tell=new THREE.Mesh(new THREE.RingGeometry(0.22,0.32,26), new THREE.MeshBasicMaterial({color:0xff5d6c,transparent:true,opacity:0.95}));
   tell.position.z=0.03; tell.visible=false; scene.add(tell);
 
   /* ---- the ball ---- */
@@ -440,14 +462,14 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   }
   function armKeeper(){
     K.phase='save'; K.kx=0; K.diving=false; K.reach=[0,1.4]; K.dragTarget=[0,1.4]; K.dragging=false; K.dirX=0;
+    setCam('keep');
     hud.classList.remove('on'); setPrompt('<b>Hold &amp; drag</b> to shuffle &mdash; fling to a <b>corner</b> to dive!');
   }
   function keeperDragStart(cx,cy){ if(!K||(K.phase!=='save'&&K.phase!=='flight')||K.diving)return; K.dragging=true; K.dragOrigin=[cx,cy]; K.reachOrigin=[K.kx,1.4]; }
   function keeperDragMove(cx,cy){
     if(!K||!K.dragging)return;
-    var r=stage.getBoundingClientRect(), mpp=GOAL_W/(r.width*0.52);          // rough metres-per-pixel at the goal
-    K.dragTarget=[clamp(K.reachOrigin[0]+(cx-K.dragOrigin[0])*mpp*DRAG_SENS,-HALF_W-0.6,HALF_W+0.6),
-                  clamp(K.reachOrigin[1]-(cy-K.dragOrigin[1])*mpp*DRAG_SENS,0.15,GOAL_H+0.4)];
+    K.dragTarget=[clamp(K.reachOrigin[0]+(cx-K.dragOrigin[0])/PXM.x*DRAG_SENS,-HALF_W-0.6,HALF_W+0.6),
+                  clamp(K.reachOrigin[1]-(cy-K.dragOrigin[1])/PXM.y*DRAG_SENS,0.15,GOAL_H+0.4)];   // screen-down is world-down
     if(!K.diving){
       var dgx=K.dragTarget[0]-K.kx, dgy=K.dragTarget[1]-1.4;
       if(Math.sqrt(dgx*dgx+dgy*dgy)>DIVE_THRESH){ K.diving=true; K.dirX=dgx>=0?1:-1; sfxSave(); }
@@ -537,7 +559,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     ballMesh.position.copy(ballBody.position);
     poseKeeper(0,0,false,0); gkBody.position.set(0,0.9,0.05); gkBody.quaternion.set(0,0,0,1); gloveBody.position.set(0,1.4,0.05);
     tell.visible=false; reticle.visible=false; sprayG.visible=false; guideV.visible=false; guideH.visible=false;
-    camera.position.copy(CAM_HOME); camera.lookAt(0,1.15,0);
+    setCam('shoot');
   }
 
   /* ================= the master loop ================= */
@@ -551,10 +573,11 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
         acc+=fdt; var steps=0;
         while(acc>=DT&&steps<12){ stepFlight(DT); world.step(DT); acc-=DT; steps++; }
         ballMesh.position.copy(ballBody.position); ballMesh.quaternion.copy(ballBody.quaternion);
-        // a hint of camera follow
-        camera.position.x=CAM_HOME.x+ballBody.position.x*0.05;
-        camera.position.z=CAM_HOME.z-clamp((SPOT-ballBody.position.z)*0.03,0,0.7);
-        camera.lookAt(ballBody.position.x*0.25,1.0,0);
+        if(CAM.mode!=='keep'){ // a hint of camera follow; the keeper cam holds still — the ball comes to you
+          camera.position.x=CAM.home.x+ballBody.position.x*0.05;
+          camera.position.z=CAM.home.z-clamp((SPOT-ballBody.position.z)*0.03,0,0.7);
+          camera.lookAt(ballBody.position.x*0.25,1.0,0);
+        }
         if(flightSettled()){ finishKick(); }
       } else {
         ballMesh.position.copy(ballBody.position);
@@ -570,7 +593,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
     renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
   }
-  window.addEventListener('resize',fit); fit();
+  window.addEventListener('resize',function(){fit();measureGoalPx();}); fit(); measureGoalPx();
 
   /* ================= start / end / input / menus ================= */
   function startGame(mode){S=newState(mode,currentDiff);K=null;renderNames();renderScore();startOverlay.classList.add('hidden');endOverlay.classList.add('hidden');handoffOverlay.classList.add('hidden');hud.classList.remove('on');resetPositions();hideBanner();sfxWhistle();setPrompt('Match on!');setTimeout(nextKick,650);}
