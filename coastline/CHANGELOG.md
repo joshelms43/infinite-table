@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.10.9 — 2026-07-15
+The gate went red on a push that never touched M Deal — and it was right, twice.
+
+**The 27% coin** — netsim's conservation invariant (all 106 cards, exactly once, after host migration) began failing intermittently. Bisection with conservation probes at every stage found the corruption at the test's own hand-stacking block: it minted a SECOND deck for its scripted cards. Under the canonical catalog (v0.10.6: card ids reset every build, so card N is card N forever — a property blob resurrection depends on and which stays), those minted clones collide by id with the live cards. Which originals happened to be replaced varied per deal, hence 27%. The stacking now PULLS every stunt card from wherever it already lives in the world, and the replaced originals return to the deck: conservation by construction, with a post-stacking throw and a permanent mid-game guard ('conservation holds after the payment round') so this class dies at the scene next time.
+
+**The bug behind the bug** — fixing the stacking shifted the odds enough to expose a real game defect: takeNoDeal was id-blind. When a defender held two No Deals, the host burned the first one it found rather than the exact card the player named — desyncing the player's own render of which card left their hand. The client always named its card (reply carries the id, as the pay path does); the host ignored it, on both the remote react path and the local tap path. Both now honor the named card, with a graceful first-found fallback when no id travels. The regression test pins this deterministically: a decoy No Deal seated earlier in the hand, so an id-blind host fails every run, not 4% of them — and the pin is mutation-proven (blinding the code fails both assertions on the spot).
+
+**Flagged, not fixed** — tests/assertions.js mints fixture decks in fourteen places. Single-context, deterministic, and green, so it is recorded debt rather than today's fire; the 'never mint into a live world' rule applies there next visit.
+
 ## v0.10.8 — 2026-07-12
 One program, one definition. The cure for yesterday's fatal bug rather than its symptom.
 

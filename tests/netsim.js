@@ -9,6 +9,19 @@ const { sourceFor, BRIDGE } = require('./_document');
 const gameCode = sourceFor('mdeal', BRIDGE);   // the document decides the order
 
 let fails = 0;
+function conserve(ctx,label){
+  const G=ctx.__B.G, ids=[];
+  const take=a=>(a||[]).forEach(c=>{if(c&&c.id!=null)ids.push(c.id);});
+  take(G.deck); take(G.discard);
+  G.players.forEach(p=>{take(p.hand);take(p.bank);Object.values(p.props).forEach(take);
+    Object.values(p.bldg||{}).forEach(sl=>Object.values(sl||{}).forEach(c=>{if(c&&c.id!=null)ids.push(c.id);}));});
+  if(ids.length!==106||new Set(ids).size!==106){
+    const seen={},d=[];ids.forEach(id=>{seen[id]=(seen[id]||0)+1;if(seen[id]===2)d.push(id);});
+    console.log('  CONSERVE@'+label+': total',ids.length,'dupes',JSON.stringify(d));
+    return false;
+  }
+  return true;
+}
 const T = (n, c) => { console.log((c ? 'PASS' : 'FAIL') + ' — ' + n); if (!c) fails++; };
 const DBG = !!process.env.NETSIM_DEBUG;
 
@@ -74,19 +87,35 @@ T('client holds exactly its own real cards (order is display-local)',
   idset(client.__B.G.players[1].hand) === idset(host.__B.G.players[1].hand)
   && client.__B.G.players[0].hand.every(c => String(c.id)[0] === 'h'));
 
-/* deterministic hands for the scripted plays */
-const dk = host.buildDeck();
-const m5 = k => dk.filter(c => c.t === 'money' && c.v === 5)[k];
-const rentC = dk.find(c => c.t === 'rent' && c.colors);
-const rcol = rentC.colors[0];
-const rentC2 = dk.filter(c => c.t === 'rent' && c.colors && c.colors[0] === rentC.colors[0] && c.colors[1] === rentC.colors[1])[1];
-const propC = dk.find(c => c.t === 'prop' && c.color === rcol);
-host.__B.G.players[0].hand = [m5(0), rentC, rentC2];
-host.addProp(host.__B.G.players[0], propC, rcol);
-host.__B.G.players[1].hand = [m5(1), dk.find(c => c.t === 'action' && c.kind === 'nodeal')];
-host.__B.G.players[1].bank = [dk.find(c => c.t === 'money' && c.v === 3), dk.find(c => c.t === 'money' && c.v === 4)];  // assets must exceed rent or the engine auto-strips with no ask
-host.__B.G.turn = 0; host.__B.G.playsLeft = 3; host.__B.G.over = false;
+/* deterministic hands for the scripted plays — PULLED from the live world, never minted.
+   The old version built a second deck for its stunt cards. Under the canonical catalog
+   (ids reset every build — the property blob resurrection depends on) those clones
+   collide with the real cards by id, and 106-card conservation dies at random depending
+   on which originals happened to be replaced. Cards now come from wherever they already
+   live, and the replaced originals go back to the deck: conservation by construction. */
+const GH = host.__B.G;
+function pull(pred){
+  const scan=[GH.deck, ...GH.players.map(p=>p.hand), ...GH.players.map(p=>p.bank)];
+  for(const arr of scan){ const i=arr.findIndex(pred); if(i>-1) return arr.splice(i,1)[0]; }
+  throw new Error('netsim stacking: no card in the world satisfies the script');
+}
+const rentC = pull(c => c.t === 'rent' && c.colors);
+const rcol = rentC.colors[0], rco2 = rentC.colors[1];
+const rentC2 = pull(c => c.t === 'rent' && c.colors && c.colors[0] === rcol && c.colors[1] === rco2);
+const propC = pull(c => c.t === 'prop' && c.color === rcol);
+const m5a = pull(c => c.t === 'money' && c.v === 5), m5b = pull(c => c.t === 'money' && c.v === 5);
+const ndS = pull(c => c.t === 'action' && c.kind === 'nodeal');
+const mo3 = pull(c => c.t === 'money' && c.v === 3), mo4 = pull(c => c.t === 'money' && c.v === 4);
+GH.players[0].hand.splice(0).forEach(c => GH.deck.push(c));   // the replaced originals return to the deck
+GH.players[1].hand.splice(0).forEach(c => GH.deck.push(c));
+GH.players[1].bank.splice(0).forEach(c => GH.deck.push(c));
+GH.players[0].hand = [m5a, rentC, rentC2];
+host.addProp(GH.players[0], propC, rcol);
+GH.players[1].hand = [m5b, ndS];
+GH.players[1].bank = [mo3, mo4];   // assets must exceed rent or the engine auto-strips with no ask
+GH.turn = 0; GH.playsLeft = 3; GH.over = false;
 host.__B.NET.pushState();
+if(!conserve(host,'post-stacking')) throw new Error('stacking broke conservation');
 
 host.bankCard(host.__B.G.players[0].hand[0]);
 T('host local play reaches the client', pub(client) === pub(host) && client.__B.G.players[0].bank.length === 1);
@@ -116,6 +145,7 @@ T('the second pay ask has no block option', asks.length === 2 && asks[1].ask.typ
 client.__B.NET.reply('pay', { ids: [payId] });
 T('client payment reply moves the chosen card on the host', host.__B.G.players[0].bank.some(c => c.id === payId) && !host.__B.G.players[1].bank.some(c => c.id === payId) && host.__B.G.players[1].bank.length === 1);
 T('post-payment state converges', pub(client) === pub(host));
+T('mid-game conservation holds after the payment round', conserve(host,'post-payment'));
 
 host.endTurn();
 T('turn passes over the wire', host.__B.G.turn === 1 && client.__B.G.turn === 1);
@@ -127,11 +157,11 @@ T('client intent executes on the host as that seat', host.__B.G.players[1].bank.
 T('client sees its own play reflected back', pub(client) === pub(host));
 
 /* wild movement travels as an intent: client drags, host validates and moves */
-const wcard = dk.find(c => c.t === 'wild' && c.colors && c.colors.length === 2);
+const wcard = pull(c => c.t === 'wild' && c.colors && c.colors.length === 2);
 const wcolA = wcard.colors[0], wcolB = wcard.colors[1];
-host.addProp(host.__B.G.players[1], dk.filter(c => c.t === 'prop' && c.color === wcolA && c.id !== propC.id)[0], wcolA);
+host.addProp(host.__B.G.players[1], pull(c => c.t === 'prop' && c.color === wcolA), wcolA);
 host.addProp(host.__B.G.players[1], wcard, wcolA);
-host.addProp(host.__B.G.players[1], dk.filter(c => c.t === 'prop' && c.color === wcolB && c.id !== propC.id)[0], wcolB);
+host.addProp(host.__B.G.players[1], pull(c => c.t === 'prop' && c.color === wcolB), wcolB);
 host.__B.NET.pushState();
 client.moveWildTo(wcard.id, wcolB);
 const wdest = host.__B.G.players[1].props[wcolB] || [];
@@ -150,8 +180,9 @@ T('the dropped intent bounces back as a nack', nacks === 1);
 
 /* ===== react over the wire: the steal window travels, block and pass both work ===== */
 host.__B.G.turn = 0; host.__B.G.playsLeft = 3; host.__B.G.turnCount = 9;
-const ndRi = host.__B.G.deck.findIndex(c => c.t === 'action' && c.kind === 'nodeal');
-const ndR = host.__B.G.deck.splice(ndRi, 1)[0];   // a physical move, not a clone — the invariant is watching
+const ndDecoy = pull(c => c.t === 'action' && c.kind === 'nodeal');   // pulled from wherever they live — physical moves, never clones
+const ndR = pull(c => c.t === 'action' && c.kind === 'nodeal');
+host.__B.G.players[1].hand.push(ndDecoy);   // seated EARLIER in the hand: an id-blind host burns this one instead
 host.__B.G.players[1].hand.push(ndR);
 host.__B.NET.pushState();
 const asksR = [];
@@ -166,6 +197,8 @@ T('the react ask reaches the remote defender with the threatening card',
 T('nothing resolves until the window answers', stoleR === null);
 client.__B.NET.reply('react', { use: true, id: ndR.id });
 T('a remote block through the window cancels the steal', stoleR === false && host.__B.G.discard.some(c => c.id === ndR.id));
+T('the host burned the exact card the player named — the decoy stays in hand',
+  host.__B.G.players[1].hand.some(c => c.id === ndDecoy.id) && !host.__B.G.players[1].hand.some(c => c.id === ndR.id));
 stoleR = null;
 host.resolveBlock(1, 0, 'Swap Meet', b => { stoleR = !b; });
 client.__B.NET.reply('react', { use: false });

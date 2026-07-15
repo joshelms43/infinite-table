@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.10.8
+  Version: 0.10.9
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -770,7 +770,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.10.8"></script>
+<script src="../shared/mdeal-rules.js?v=0.10.9"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -803,7 +803,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.10.8</span>
+    <span class="ver">v0.10.9</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1002,8 +1002,11 @@ function loseBuildingsIfBroken(p,color){
 }
 function checkWin(p){ return completeColors(p).length >= 3; }
 function hasNoDeal(p){ return p.hand.some(c=>c.t==='action'&&c.kind==='nodeal'); }
-function takeNoDeal(p){
-  const i = p.hand.findIndex(c=>c.t==='action'&&c.kind==='nodeal');
+function takeNoDeal(p, wantId){
+  /* honor the exact card the player named — with two in hand, discarding the other
+     desyncs their local render of which card left (the pay path already honors ids) */
+  let i = wantId!=null ? p.hand.findIndex(c=>c.t==='action'&&c.kind==='nodeal'&&c.id===wantId) : -1;
+  if(i<0) i = p.hand.findIndex(c=>c.t==='action'&&c.kind==='nodeal');
   const c = p.hand.splice(i,1)[0]; G.discard.push(c);
   if(typeof tableDrop==='function') tableDrop(c, p===G.players[0]?'You':p.name);
   return c;
@@ -2764,7 +2767,7 @@ function jsnChain(aIdx, bIdx, count, desc, cb, viaPay){
     if(aIdx!==MYSEAT && NET.mode==='host'){
       NET.ask(aIdx, {type:'react', desc, count, card: dispCard, ms: REACT_MS}, m=>{
         if(m && m.use && hasNoDeal(p)){
-          const nd = takeNoDeal(p); log(G.players[aIdx].name+' played No Deal!');
+          const nd = takeNoDeal(p, m.id); log(G.players[aIdx].name+' played No Deal!');
           NET.evt(aIdx, nd);
           renderAll();
           setTimeout(()=>jsnChain(bIdx,aIdx,count+1,desc,cb), 400);
@@ -2779,9 +2782,9 @@ function jsnChain(aIdx, bIdx, count, desc, cb, viaPay){
     }
     visDefer(()=>enterReactMode(
       { desc, card: dispCard, atk: G.players[bIdx].name, ms: REACT_MS },
-      ()=>{
+      (cc)=>{
         if(!hasNoDeal(p)) return cb(count%2===1);
-        takeNoDeal(p); log('You played No Deal!'); sfx('alert'); renderAll();
+        takeNoDeal(p, cc && cc.id); log('You played No Deal!'); sfx('alert'); renderAll();
         jsnChain(bIdx, aIdx, count+1, desc, cb);
       },
       ()=> cb(count%2===1)
@@ -3072,9 +3075,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.10.8"></script>
-<script src="../shared/tablekit.js?v=0.10.8"></script>
-<script src="../shared/identity.js?v=0.10.8"></script>
+<script src="../shared/config.js?v=0.10.9"></script>
+<script src="../shared/tablekit.js?v=0.10.9"></script>
+<script src="../shared/identity.js?v=0.10.9"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
