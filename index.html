@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — platform lobby. Version: 1.1.0 -->
+<!-- Infinite Table — platform lobby. Version: 1.2.0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -104,6 +104,10 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
 .game.hero.mafiacard .gname,.game.hero.mafiacard .gdesc{color:var(--card-ivory)}
 .game.hero.mafiacard .gdesc{opacity:.75}
 .game.hero.mafiacard .gplayers{color:var(--card-ivory);opacity:.4}
+.game.hero.pitchcard{padding-top:16px;background:linear-gradient(168deg,#2F8340 0%,#27703A 55%,#1B5030 100%);border-color:rgba(244,239,229,.22)}
+.game.hero.pitchcard .gname,.game.hero.pitchcard .gdesc{color:var(--card-ivory)}
+.game.hero.pitchcard .gdesc{opacity:.8}
+.game.hero.pitchcard .gplayers{color:var(--card-ivory);opacity:.45}
 .game.soon{display:flex;align-items:center;justify-content:space-between;padding:16px 18px}
 .soonname{font-weight:800;font-size:14px;opacity:.55}
 .soondesc{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;opacity:.3}
@@ -220,8 +224,19 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
 
   
 
+  <a class="game hero pitchcard" href="./penalty/">
+    <div class="gbody">
+      <div class="ginfo">
+        <div class="gname">Penalty Shootout</div>
+        <div class="gdesc">Charge. Release. Dive.</div>
+        <div class="gplayers">1–2 Players</div>
+      </div>
+      <span class="gplay">PLAY</span>
+    </div>
+  </a>
+
   <div class="game soon">
-    <div class="soonname">Game two</div>
+    <div class="soonname">Game three</div>
     <div class="soondesc">In the workshop</div>
   </div>
 </main>
@@ -230,8 +245,8 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
 
 <div id="overlay" onclick="if(event.target===this){ID.sheetOpen=false;closeSheet()}"><div id="sheet"></div></div>
 
-<script src="./shared/config.js?v=1.1.0"></script>
-<script src="./shared/identity.js?v=1.1.0"></script>
+<script src="./shared/config.js?v=1.2.0"></script>
+<script src="./shared/identity.js?v=1.2.0"></script>
 <script>
 /* ---- minimal host-page adapter for the shared identity module ---- */
 function $(q){ return document.querySelector(q); }

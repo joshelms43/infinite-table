@@ -26,12 +26,13 @@ const ROOT = path.join(__dirname, '..');
 const PAGES = [
   { name: 'M Deal', key: 'mdeal', wants: ['COLORS', 'ACTIONS', 'buildDeck', 'NET', 'G', 'TableKit'] },
   { name: 'Mafia', key: 'mafia', wants: ['NET', 'G', 'ROLES', 'TableKit'] },
+  { name: 'Penalty', key: 'penalty', wants: ['Penalty'] },
 ];
 
 const { partsFor } = require('./_document');
 
 function stubBrowser() {
-  const el = () => new Proxy({ classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, style: {} }, {
+  const el = () => new Proxy({ classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, style: {}, querySelectorAll: () => [] }, {
     get(t, k) { if (k in t) return t[k]; return () => {}; },
     set() { return true; },
   });

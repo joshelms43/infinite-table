@@ -17,6 +17,7 @@ const ROOT = path.join(__dirname, '..');
 const PAGES = {
   mdeal: 'coastline/index.html',
   mafia: 'mafia/index.html',
+  penalty: 'penalty/index.html',
   lobby: 'index.html',
 };
 
