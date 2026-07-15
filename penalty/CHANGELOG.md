@@ -1,5 +1,16 @@
 # Penalty Shootout — Changelog
 
+## LAB v0.5.0 — 2026-07-15
+"Still feels like it needs a full physics engine" — correct again, and for two reasons: half the scene was not simulated, and the half that was had a bug that made it feel random.
+
+**The bug: uncompensated Magnus.** Spin applied ~18 m/s² of lateral force the launch solver knew nothing about, so every powered shot sailed roughly two metres wide of where you aimed. Shooting felt broken because it was. Magnus is tamed to a visible, playable curl, and the solver now compensates for its own spin — shots bend INTO the target like a real banana kick. Proven headless: the same aim that previously crossed the line 2.4m wide now resolves 'goal'.
+
+**The net is cloth.** A Verlet particle grid pinned along the bar and pegged at the ground, deformed by the ball itself — the mesh you see is the simulation. It starts at constraint equilibrium (pre-settled fifty steps) and the probe shows exactly what a net should do: still, then a sharp 0.24m bulge the frame the ball arrives, then decay.
+
+**The keeper is a body.** Limb poses are now spring targets that mass chases with lag and overshoot — a dive whips the lead arm to 3.15 rad past its 2.95 target; a save impact knocks it back to 2.80 before it recovers. Dives end in a real landing: bounce, slide along the turf with momentum, tumble flat. The crossbar rattles when struck.
+
+**Moving proof, rendered headless** — tools/render-clip.js drives scripted kicks through the real pipeline under a deterministic clock and writes animated GIFs plus keyframes: a goal caught by the billowing net, and a full save with dive, contact flail, and landing. The lab stays off the door until the clips earn otherwise.
+
 ## v0.3.1 (door) + LAB v0.4.0 — 2026-07-15
 "Looks like a child did it" — correct, and here is the honest reason: the 3D was being authored blind. Not one rendered frame was ever seen before it shipped. The 2D build looked good because it was crafted with eyes on it; the 3D was trigonometry and hope.
 
