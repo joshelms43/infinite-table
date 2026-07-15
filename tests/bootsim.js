@@ -27,6 +27,7 @@ const PAGES = [
   { name: 'M Deal', key: 'mdeal', wants: ['COLORS', 'ACTIONS', 'buildDeck', 'NET', 'G', 'TableKit'] },
   { name: 'Mafia', key: 'mafia', wants: ['NET', 'G', 'ROLES', 'TableKit'] },
   { name: 'Penalty', key: 'penalty', wants: ['Penalty'] },
+  { name: 'Penalty Lab', key: 'penaltylab', wants: ['Penalty'] },
 ];
 
 const { partsFor } = require('./_document');

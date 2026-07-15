@@ -18,6 +18,7 @@ const PAGES = {
   mdeal: 'coastline/index.html',
   mafia: 'mafia/index.html',
   penalty: 'penalty/index.html',
+  penaltylab: 'penalty/lab/index.html',
   lobby: 'index.html',
 };
 

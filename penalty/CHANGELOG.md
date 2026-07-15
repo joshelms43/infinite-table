@@ -1,5 +1,16 @@
 # Penalty Shootout — Changelog
 
+## v0.3.1 (door) + LAB v0.4.0 — 2026-07-15
+"Looks like a child did it" — correct, and here is the honest reason: the 3D was being authored blind. Not one rendered frame was ever seen before it shipped. The 2D build looked good because it was crafted with eyes on it; the 3D was trigonometry and hope.
+
+**Two structural fixes, not a polish pass:**
+
+**The door goes back to the 2D build** (v0.3.1 — same game, restamped). It looks good, it plays, and the platform stops being embarrassing today. The 3D moves to `/penalty/lab/`, off the door, still under the boot gate so it cannot rot.
+
+**The 3D gets eyes** — `tools/render-penalty.js` runs the lab page's real script with real Three.js and cannon.js against headless WebGL, and writes PNG frames of exactly what a phone would display. The scene is now iterated against actual renders, not guesses. First sighted pass, driven entirely by looking at frames: the "night stadium" was rendering as a cave — rebuilt with filmic tone mapping, a proper key/fill/backfill rig, floodlight towers with visibly glowing heads, floodlit turf, a crowd that glows under a lit rim, and a net you can read. The scarecrow keeper is gone: a human silhouette in a ready crouch — sphere head, hanging arms, soft knees — whose dive stretches a lead arm at the ball.
+
+The lab returns to the door only when its rendered frames earn it.
+
 ## v0.3.0 — 2026-07-15
 Two cameras for two jobs — the fix for "the goal is tiny and keeping feels wrong", which were the same bug.
 
