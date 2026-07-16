@@ -78,6 +78,7 @@ function fakeSDK(script) {
 function loadKit(globals) {
   const store = {};
   const sandbox = {
+    performance: performance,   // the game clocks itself; every sandbox must carry a watch
     console, setTimeout, clearTimeout, Math, JSON, Date, Promise, Object, Array, String, Number,
     localStorage: {
       getItem: k => (k in store ? store[k] : null),

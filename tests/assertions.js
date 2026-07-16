@@ -561,6 +561,34 @@ NET.tx = null; NET.mode='off';
 T('revive is a no-op with no line to revive', (NET.revive(), true));
 newGame();
 
+// ===== the empty-hand rule (Josh's live report: emptied his hand, got 2 not 5) =====
+newGame(); G.players.forEach(p=>p.isAI=false); G.over=false; G.turn=0;
+G.players[0].hand.splice(0).forEach(c=>G.deck.push(c));   // empty the hand, conservation-safe
+const _d5=G.deck.length;
+startTurn();
+T('an empty hand at turn start draws 5', G.players[0].hand.length===5 && G.deck.length===_d5-5);
+
+newGame(); G.players.forEach(p=>p.isAI=false); G.over=false; G.turn=0;
+const _h2=G.players[0].hand.length, _d2=G.deck.length;
+startTurn();
+T('a non-empty hand at turn start draws 2', G.players[0].hand.length===_h2+2 && G.deck.length===_d2-2);
+
+newGame(); G.players.forEach(p=>p.isAI=false); G.over=false; G.turn=0;
+G.players[0].hand.splice(0).forEach(c=>G.deck.push(c));
+while(G.deck.length>3) G.players[1].bank.push(G.deck.pop());   // only 3 drawable cards left anywhere
+G.discard.splice(0).forEach(c=>G.players[1].bank.push(c));
+startTurn();
+T('total exhaustion draws what exists without crashing', G.players[0].hand.length===3 && G.deck.length===0 && G.discard.length===0);
+T('conservation holds through exhaustion', allCards()===106);
+
+newGame(); G.players.forEach(p=>p.isAI=false); G.over=false; G.turn=0;
+const _t0=G.turn;
+finishEnd(true); const _t1=G.turn;
+G.turn=_t0;                                                     // simulate the race: a second end arrives for the SAME owner
+finishEnd(true);
+T('a racing double end for the same turn is swallowed', G.turn===_t0);
+G.turn=_t1; G._advForTurn=null;
+
 // ===== FULL-GAME soak (must run last: ends via interval watching G.over) =====
 newGame();
 G.players.forEach(p=>p.isAI=true);

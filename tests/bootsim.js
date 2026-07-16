@@ -40,6 +40,7 @@ function stubBrowser() {
   });
   const store = {};
   const sandbox = {
+    performance: performance,   // the game clocks itself; every sandbox must carry a watch
     console: { log() {}, warn() {}, error() {} },
     Math, JSON, Date, Object, Array, Set, Map, Number, String, Boolean, Promise,
     isNaN, parseInt, parseFloat, RegExp, Error, TypeError, URLSearchParams,

@@ -18,6 +18,7 @@ function makeContext(name) {
     set() { return true; }
   });
   const sandbox = {
+    performance: performance,   // the game clocks itself; every sandbox must carry a watch
     console, Math, JSON, Date, Object, Array, Set, Map, Number, String, Boolean, Promise, isNaN, parseInt, parseFloat, RegExp, Error, TypeError,
     document: { querySelector: () => el(), querySelectorAll: () => [], createElement: () => el(), getElementById: () => el(), addEventListener: () => {}, body: { appendChild() {} } },
     addEventListener: () => {},

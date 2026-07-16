@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.10.10 — 2026-07-15
+Live report from the table: "ran out of cards in my hand and only got given 2, not 5."
+
+The empty-hand rule itself is alive and correct — proven directly: an empty hand at turn start draws 5, on every turn-advance path (they all funnel through startTurn). So the live symptom means one of two things happened around the rule, and both are now closed:
+
+**A racing double-advance.** A clock flag-fall arriving alongside a normal end-turn could advance the turn twice — skipping a seat or starting the wrong one, with the next player drawing on the wrong state. finishEnd now swallows a second end of the SAME turn (ends of different turns stay legal — the first draft of this guard latched too broadly and deadlocked elimination flows; the engine tests caught it in one run), and the delayed turn-start aborts if the seat changed while it waited.
+
+**A lying log.** startTurn announced "drew 5 (empty hand)" regardless of how many cards were actually delivered — so a genuinely exhausted table (deck and discard both empty, everything in banks and props) reported itself as a rules bug. Draws are counted honestly now: "drew 2 of 5 — the draw and discard piles are exhausted; every other card is in play."
+
+Four regression pins, one mutation-proven: empty hand draws 5 (fails on a hardcoded 2), non-empty draws 2, total exhaustion draws what exists without crashing with conservation intact at 106, and a same-turn double end is swallowed.
+
+If it recurs, the log line now names exactly which case it was.
+
 ## v0.10.9 — 2026-07-15
 The gate went red on a push that never touched M Deal — and it was right, twice.
 

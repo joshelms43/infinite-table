@@ -22,6 +22,7 @@ function makeEl() {
 function makeContext(name) {
   const store = {};
   const sandbox = {
+    performance: performance,   // the game clocks itself; every sandbox must carry a watch
     console, setTimeout, clearTimeout, setInterval, clearInterval, Math, JSON, Date, Promise, Object, Array, String, Number,
     localStorage: { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
     window: {},

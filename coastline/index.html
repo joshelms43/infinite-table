@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.10.9
+  Version: 0.10.10
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -770,7 +770,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.10.9"></script>
+<script src="../shared/mdeal-rules.js?v=0.10.10"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -803,7 +803,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.10.9</span>
+    <span class="ver">v0.10.10</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -2297,10 +2297,15 @@ function playPayday(c,by){
 function startTurn(){
   if(G.over) return;
   const p = cur();
-  const n = p.hand.length===0 ? 5 : 2;
-  for(let i=0;i<n;i++){ const c=draw(); if(c){ p.hand.push(c); if(!p.isAI) NEWIDS.add(c.id); } }
+  const want = p.hand.length===0 ? 5 : 2;     // official: an empty hand at turn start draws 5
+  let got = 0;
+  for(let i=0;i<want;i++){ const c=draw(); if(!c) break; p.hand.push(c); if(!p.isAI) NEWIDS.add(c.id); got++; }
   G.playsLeft = 3;
-  log(p.name + (n===5?' drew 5 (empty hand).':' drew 2 cards.'));
+  if(got < want){                             // the log must never claim cards that were not delivered
+    log(p.name+' drew '+got+' of '+want+' — the draw and discard piles are exhausted; every other card is in play.');
+  } else {
+    log(p.name + (want===5?' drew 5 (empty hand).':' drew 2 cards.'));
+  }
   banner(G.turn===MYSEAT ? 'YOUR TURN' : p.name.toUpperCase()+"'S TURN", G.turn===MYSEAT ? 'var(--gold-money)' : null);
   if(!p.isAI){ sfx('tick'); haptic(8); }
   renderAll();
@@ -2400,6 +2405,9 @@ function endTurn(){
   } else finishEnd();
 }
 function finishEnd(skipInc){
+  const owner = G.turn;                         // a RACE is two ends of the SAME turn; ends of different turns are legal
+  if(G._advForTurn===owner && (performance.now()-(G._advAt||0))<800) return;
+  G._advForTurn = owner; G._advAt = performance.now();
   if(!skipInc && RULES.clock.mode==='on' && RULES.clock.incrementMs>0 && CLK.bank[G.turn]!=null && !G.players[G.turn].out){
     CLK.bank[G.turn] += RULES.clock.incrementMs;   // Fischer increment on the turn owner
   }
@@ -2411,7 +2419,8 @@ function finishEnd(skipInc){
   CLK.turnLeft = RULES.clock.turnMs || 0;
   CLK.active = null;
   renderAll();
-  setTimeout(startTurn, 600);
+  const seatAtSchedule = G.turn;                // if anything re-advances meanwhile, this stale start aborts
+  setTimeout(function(){ if(!G.over && G.turn===seatAtSchedule) startTurn(); }, 600);
 }
 function discardPrompt(){
   MODE.type='discard'; MODE.need = me().hand.length - 7; MODE.sel = new Set();
@@ -3075,9 +3084,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.10.9"></script>
-<script src="../shared/tablekit.js?v=0.10.9"></script>
-<script src="../shared/identity.js?v=0.10.9"></script>
+<script src="../shared/config.js?v=0.10.10"></script>
+<script src="../shared/tablekit.js?v=0.10.10"></script>
+<script src="../shared/identity.js?v=0.10.10"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

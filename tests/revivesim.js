@@ -61,6 +61,7 @@ function makeGame(script) {
   });
   const store = {};
   const sandbox = {
+    performance: performance,   // the game clocks itself; every sandbox must carry a watch
     console, Math, JSON, Date, Object, Array, Set, Map, Number, String, Boolean, Promise,
     isNaN, parseInt, parseFloat, RegExp, Error, TypeError,
     setTimeout, clearTimeout, setInterval, clearInterval, URLSearchParams,
