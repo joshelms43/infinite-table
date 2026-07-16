@@ -1,5 +1,17 @@
 # 8-Ball — Changelog
 
+## v0.1.1 — 2026-07-16
+**The table said NOT RIGHT NOW to everyone, forever.** Caught live on the first two-phone rack: `applyIntent` raised the host's `busy` flag before simulating a shot and nothing anywhere lowered it — the opening break locked every later intent out of the match, and the shot clock (which also defers to `busy`) went silent with it. The M Deal clock deadlocks (v0.9.9, v0.9.10) taught that any flag that can stop play needs a path back down that doesn't depend on the happy path; this one had no path at all.
+
+Three layers down, none trusting the others:
+- `busy` now carries `busyUntil` — the shot's actual flight time plus 600ms — and `applyIntent` self-heals a stale flag on entry. A shot holds the table for its flight, never forever.
+- The host's animation completing clears it on the spot (the happy path, now merely the fast path).
+- The 1-second clock interval clears it too, because a backgrounded host tab never steps its animation at all.
+
+Also fixed while in there: a `shot` broadcast arriving while a client was still animating the previous one used to be **dropped** — the client would freeze on stale state until the next push. Shots now queue (bounded at 4) and play in order; an authoritative `state` beyond the queue snaps past everything.
+
+The gate grew the repro: poolsim now boots the real page, replays that exact afternoon — break, then the next shot — and fails if the table ever holds itself hostage again. Mutation-checked: with the self-heal removed, the test goes red.
+
 ## v0.1.0 — 2026-07-16
 The first rack. Two-player online 8-ball, no spin, no called pockets.
 

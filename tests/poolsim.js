@@ -274,6 +274,61 @@ function checkTable(balls, label) {
   T('no game ever produced a NaN position', !nanSeen);
 }
 
+/* ---- the table frees itself: v0.1.0 shipped a busy flag nothing ever cleared ----
+   Caught live: the first shot of the match locked applyIntent forever — every later
+   intent, including the shooter's own next ball-in-hand, nacked NOT RIGHT NOW, and
+   the shot clock (which also defers to busy) went silent with it. This boots the
+   real page and replays that exact afternoon. */
+{
+  const vm = require('vm');
+  const { sourceFor } = require(path.join(__dirname, '_document'));
+  const code = sourceFor('pool');
+  const makeEl = () => new Proxy({ classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, style: {}, value: '' }, {
+    get(t, k) { if (k in t) return t[k]; return () => {}; }, set() { return true; },
+  });
+  const store = {};
+  const sandbox = {
+    console, Math, JSON, Date, Object, Array, Set, Map, Number, String, Boolean, Promise, RegExp,
+    isNaN, isFinite, parseInt, parseFloat, URLSearchParams,
+    setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
+    localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
+    document: { querySelector: () => makeEl(), querySelectorAll: () => [], createElement: makeEl, getElementById: makeEl, addEventListener() {}, visibilityState: 'visible', head: { appendChild() {} }, body: { appendChild() {}, classList: { add() {}, remove() {}, toggle() {} } } },
+    addEventListener() {}, location: { reload() {}, search: '', href: '' }, navigator: {}, devicePixelRatio: 1, innerWidth: 800, innerHeight: 500,
+  };
+  sandbox.window = sandbox; sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(code, sandbox, { filename: 'pool/index.html' });
+
+  const B = sandbox.__B, NET = B.NET;
+  const SENT = [];
+  NET.pkey = 'me'; NET.myName = 'Host'; NET.code = 'TEST';
+  NET.tx = {
+    presence: () => ({ me: [{ key: 'me', name: 'Host', host: true }], them: [{ key: 'them', name: 'Guest' }] }),
+    track() {}, alive: () => true, close() {},
+    send: (ev, p) => { SENT.push({ ev, p }); },
+  };
+  NET.mode = 'lobby-host';
+  NET.startGame();
+  const G = () => B.G;
+  T('deadlock repro — the match starts with the breaker in the kitchen', G().phase === 'play' && G().inHand && G().inHand.key === 'me');
+
+  const nacksTo = key => SENT.filter(s => s.ev === 'nack' && s.p.key === key).length;
+  NET.applyIntent({ key: 'me', k: 'shot', a: { angle: 0.2, power: 0.05 } });   // a whiffed break: a foul, but a legal intent
+  T('deadlock repro — the first shot is accepted', SENT.some(s => s.ev === 'shot') && NET.busy === true);
+  T('deadlock repro — busy carries a deadline, not a life sentence', isFinite(NET.busyUntil) && NET.busyUntil > Date.now());
+
+  NET.applyIntent({ key: 'them', k: 'shot', a: { angle: 1, power: 0.5 } });    // mid-flight: correctly held off
+  T('deadlock repro — mid-flight intents are held off', nacksTo('them') === 1);
+
+  const realNow = sandbox.Date.now.bind(sandbox.Date);
+  sandbox.Date.now = () => realNow() + 60000;                                  // the balls stopped long ago
+  const before = nacksTo('them');
+  NET.applyIntent({ key: 'them', k: 'shot', a: { angle: 1, power: 0.5 } });    // the shot that used to say NOT RIGHT NOW
+  sandbox.Date.now = realNow;
+  T('deadlock repro — the table frees itself for the next shot', nacksTo('them') === before && SENT.filter(s => s.ev === 'shot').length === 2);
+  T('deadlock repro — and play actually moved on', G().seq >= 2 && G().phase === 'play');
+}
+
 finished = true;
 console.log(fails === 0 ? 'POOLSIM: ALL PASS' : 'POOLSIM FAILURES: ' + fails);
 process.exit(fails ? 1 : 0);

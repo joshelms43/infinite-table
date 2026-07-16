@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.1.0
+<!-- Infinite Table — 8-Ball. Version: 0.1.1
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -61,7 +61,7 @@
 <div id="wrap">
 <header>
   <h1>8<span class="thin">-</span>BALL</h1>
-  <span class="ver">v0.1.0</span>
+  <span class="ver">v0.1.1</span>
 </header>
 
 <div id="home" class="screen on">
@@ -101,10 +101,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.1.0"></script>
-<script src="../shared/tablekit.js?v=0.1.0"></script>
-<script src="../shared/pool-rules.js?v=0.1.0"></script>
-<script src="../shared/pool-physics.js?v=0.1.0"></script>
+<script src="../shared/config.js?v=0.1.1"></script>
+<script src="../shared/tablekit.js?v=0.1.1"></script>
+<script src="../shared/pool-rules.js?v=0.1.1"></script>
+<script src="../shared/pool-physics.js?v=0.1.1"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -133,6 +133,7 @@ let G = {
   clockSecs:null,
 };
 let ANIM = null;           // {sim, endState, last} while a shot is flying
+let SHOTQ = [];            // shots that arrived while one was still flying — played, never dropped
 let CLOCKBASE = null;      // {secs, at} — the client's view of the host's clock
 let AIM = null;            // {x,y} pointer in table coords while dragging an aim
 let PLACING = false;       // dragging the cue for ball in hand
@@ -147,7 +148,7 @@ function onTableIds(balls){ return (balls||G.balls).filter(b=>!b.pocketed && b.i
 /* ---------- the network, mirrored from Mafia: host applies, clients intend ---------- */
 const NET = {
   mode:'off', code:null, pkey:null, myName:'', tx:null, sb:null, _ch:null, _meta:null,
-  seed:0, breakerKey:null, busy:false, clockAt:null,
+  seed:0, breakerKey:null, busy:false, busyUntil:0, clockAt:null,
   async ensure(){
     if(this.sb) return true;
     try{
@@ -262,12 +263,16 @@ const NET = {
       render();
     }
     if(type==='state'){
-      if(ANIM && m.seq > ANIM.endState.seq){ ANIM=null; applyState(m); }       // the host moved on without us
-      else if(!ANIM && m.seq >= G.seq) applyState(m);
+      const tail = SHOTQ.length ? SHOTQ[SHOTQ.length-1].seq : (ANIM ? ANIM.endState.seq : G.seq);
+      if(ANIM || SHOTQ.length){
+        if(m.seq > tail){ ANIM=null; SHOTQ=[]; applyState(m); }   // the host moved past everything we're holding
+      } else if(m.seq >= G.seq) applyState(m);
     }
     if(type==='shot'){
-      if(ANIM || m.seq < G.seq) return;
+      const tail = SHOTQ.length ? SHOTQ[SHOTQ.length-1].seq : (ANIM ? ANIM.endState.seq : G.seq);
+      if(m.seq <= tail) return;                                   // already have it, or already past it
       if(m.shooter===this.pkey) PENDING = false;
+      if(ANIM){ if(SHOTQ.length < 4) SHOTQ.push(m); return; }     // finish the flight in progress, then play this one
       playShot(m.before, m.shot, m.state);
     }
     if(type==='nack' && m.key===this.pkey){ PENDING=false; banner(m.why||'NOT RIGHT NOW'); render(); }
@@ -285,6 +290,7 @@ const NET = {
       this.newRack(); this.pushState(); render();
       return;
     }
+    if(this.busy && Date.now() > (this.busyUntil||0)) this.busy = false;   // a shot holds the table for its flight, never forever
     if(G.phase!=='play' || this.busy){ this.nack(m.key,'NOT RIGHT NOW'); return; }
     if(m.key!==G.turnKey){ this.nack(m.key,'NOT YOUR SHOT'); return; }
 
@@ -309,6 +315,8 @@ const NET = {
     const before = G.balls.map(b=>({ id:b.id, x:b.x, y:b.y, pocketed:b.pocketed }));
     const ballsBefore = onTableIds(G.balls);
     const sim = PP.simulate(G.balls, { angle, power });
+    const flightMs = Math.ceil(sim.ticks * PP.DT * 1000);
+    this.busyUntil = Date.now() + flightMs + 600;   // the animation's length plus a breath — then the table is free no matter what
     const res = PR.judge({
       breakShot:G.breakShot, open:G.open,
       myGroup:G.groups[shooter]||null,
@@ -356,7 +364,7 @@ const NET = {
         if(potted.length) G.log.unshift(sn+' pockets '+potted.join(', ')+(res.again?' and stays on.':'.'));
         else G.log.unshift(sn+' — dry. '+(names[next]||'?')+' to shoot.');
       }
-      const flight = Math.ceil(sim.ticks * PP.DT * 1000);
+      const flight = flightMs;
       this.armClock(flight);
     }
     G.seq++;
@@ -383,7 +391,9 @@ const NET = {
    a killed timeout never fires at all, and a stalled clock is a deadlock we've shipped
    before in another game. The interval just keeps asking. */
 setInterval(()=>{
-  if(NET.mode!=='host' || G.phase!=='play' || NET.busy || !NET.clockAt) return;
+  if(NET.mode!=='host') return;
+  if(NET.busy && Date.now() > (NET.busyUntil||0)) NET.busy = false;   // a backgrounded host never steps its animation; free the table anyway
+  if(G.phase!=='play' || NET.busy || !NET.clockAt) return;
   if(Date.now() < NET.clockAt) return;
   const slow = G.turnKey, next = opponentOf(slow);
   const names={}; G.roster.forEach(r=>names[r.key]=r.name);
@@ -423,9 +433,11 @@ function stepAnim(){
   ANIM.sim.step(ticks);
   if(ANIM.sim.done){
     const end = ANIM.endState; ANIM=null;
+    if(NET.mode==='host') NET.busy=false;   // the balls stopped; the table is free
     applyState(end, end.turnKey===me());
     if(G.phase==='over') banner((rosterName(G.winner)||'?').toUpperCase()+' WINS');
     else if(/^Foul|^Shot clock/.test(G.log[0]||'')) banner('FOUL');
+    if(SHOTQ.length){ const n=SHOTQ.shift(); playShot(n.before, n.shot, n.state); }
   }
 }
 function rosterName(key){ const r=G.roster.find(x=>x.key===key); return r&&r.name; }
@@ -718,6 +730,7 @@ fit(); render(); raf(loop);
 globalThis.__B = {
   get NET(){ return NET; }, get G(){ return G; }, set G(v){ G = v; },
   get ANIM(){ return ANIM; }, set ANIM(v){ ANIM = v; },
+  get SHOTQ(){ return SHOTQ; },
   applyState, playShot,
 };
 </script>
