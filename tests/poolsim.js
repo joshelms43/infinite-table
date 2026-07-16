@@ -384,7 +384,7 @@ function bootPool() {
   const { B, NET, run } = t;
   NET.mode = 'lobby-host';
   NET.startGame();
-  B.OPPAT = Date.now() - 20000;
+  B.OPPAT = Date.now() - 25000;   // past the 20s threshold — short quiets stay unmentioned
   run('netTick()');
   T('sleeping opponent — noted after three missed heartbeats', B.OPPQUIET === true);
   const shots = t.count('shot');

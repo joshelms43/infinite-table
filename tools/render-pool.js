@@ -87,7 +87,7 @@ const MIDGAME = `
   G.breakShot=false; G.inHand=null;
 `;
 
-still('pool-landscape.png', 1280, 1280, 800, MIDGAME + `
+still('pool-aim.png', 380, 380, 780, MIDGAME + `
   const cue = G.balls.find(b=>b.id===0);
   AIM = { x: cue.x + 0.5, y: cue.y - 0.18 };   // an aim line with the guide up
 `);
@@ -96,7 +96,7 @@ still('pool-portrait.png', 380, 380, 780, MIDGAME + `
   G.inHand = { key:'me', behindHead:false };   // ball in hand ring on a phone
 `);
 
-still('pool-break.png', 1280, 1280, 800, `
+still('pool-break.png', 380, 380, 780, `
   NET.pkey='me'; NET.mode='host';
   G.roster=[{key:'me',name:'Josh'},{key:'them',name:'Denny'}];
   const order = PoolRules.rackOrder(11);

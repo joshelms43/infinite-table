@@ -1,5 +1,10 @@
 # 8-Ball — Changelog
 
+## v0.2.1 — 2026-07-16
+**Blips heal in silence; the table stands up.** Sub-second radio drops were reconnecting instantly and announcing it every time — a room full of BACK AT THE TABLE for outages nobody would have noticed. Reconnection now happens quietly for the first ten seconds of an outage; only a real one gets RECONNECTING… and a welcome back, and the retry loop's COULD NOT CONNECT stays quiet too. A quiet opponent now takes twenty seconds to mention instead of twelve.
+
+And the table is portrait always — upright on every screen, phone-first like the rest of the platform, sized to fit the viewport height with the HUD, centered when the screen is wider than the table is tall. One orientation, one set of eyes-on renders, no aspect-dependent code paths left.
+
 ## v0.2.0 — 2026-07-16
 **No host. Authority follows the turn.** Three patch releases fought the same enemy — a phone-shaped host that sleeps — and v0.1.3's answer was still "notice, hold, wait." The real answer was hiding in the architecture from day one: the simulation is deterministic and the rules are pure, so the game state is a function of (seed + ordered shots). Nobody needs to compute anything centrally, and in a strictly turn-based game, ordering is nearly free.
 

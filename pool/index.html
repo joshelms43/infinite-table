@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.2.0
+<!-- Infinite Table — 8-Ball. Version: 0.2.1
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -61,7 +61,7 @@
 <div id="wrap">
 <header>
   <h1>8<span class="thin">-</span>BALL</h1>
-  <span class="ver">v0.2.0</span>
+  <span class="ver">v0.2.1</span>
 </header>
 
 <div id="home" class="screen on">
@@ -101,10 +101,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.2.0"></script>
-<script src="../shared/tablekit.js?v=0.2.0"></script>
-<script src="../shared/pool-rules.js?v=0.2.0"></script>
-<script src="../shared/pool-physics.js?v=0.2.0"></script>
+<script src="../shared/config.js?v=0.2.1"></script>
+<script src="../shared/tablekit.js?v=0.2.1"></script>
+<script src="../shared/pool-rules.js?v=0.2.1"></script>
+<script src="../shared/pool-physics.js?v=0.2.1"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -257,7 +257,7 @@ function timeoutFoul(claimer, isClaim){
    states at one seq can only come from a clock-claim race, which the 'to' flag
    settles in the rightful shooter's favour. Nobody waits for anybody to be awake. */
 const NET = {
-  mode:'off', code:null, pkey:null, myName:'', tx:null, sb:null, _ch:null, _meta:null, _rbAt:0, _hbn:0,
+  mode:'off', code:null, pkey:null, myName:'', tx:null, sb:null, _ch:null, _meta:null, _rbAt:0, _hbn:0, _downAt:0,
   async ensure(){
     if(this.sb) return true;
     try{
@@ -266,7 +266,7 @@ const NET = {
       return true;
     }catch(e){ banner('OFFLINE? '+(e&&e.message||e)); return false; }
   },
-  async connect(code, hosting){
+  async connect(code, hosting, quiet){
     if(!(await this.ensure())) return false;
     this.code = code;
     try{
@@ -277,7 +277,7 @@ const NET = {
         onPresence:()=>{ render(); },
         meta:{ key:this.pkey, name:this.myName, host:!!hosting },
       });
-    }catch(e){ banner('COULD NOT CONNECT — CHECK SIGNAL'); return false; }
+    }catch(e){ if(!quiet) banner('COULD NOT CONNECT — CHECK SIGNAL'); return false; }
     this._ch = this.tx._ch;
     this._meta = { key:this.pkey, name:this.myName, host:!!hosting };
     return true;
@@ -285,6 +285,7 @@ const NET = {
   async revive(fromWake){
     if(!this.code || this.mode==='off') return;
     if(this.tx && this.tx.alive()){
+      this._downAt = 0;
       if(this._meta){ try{ this.tx.track(this._meta); }catch(e){} }
       if(fromWake && this.mode==='peer'){
         settle();                                        // land any flight frozen by the nap before talking
@@ -294,9 +295,12 @@ const NET = {
       if(G.phase==='lobby') render();
       return;
     }
-    if(Date.now() - (this._rbAt||0) > 15000){ this._rbAt = Date.now(); banner('RECONNECTING…'); }   // once, not once per heartbeat
-    if(await this.connect(this.code, this.mode==='lobby-host')){
-      banner('BACK AT THE TABLE');
+    if(!this._downAt) this._downAt = Date.now();
+    const blip = Date.now() - this._downAt < 10000;   // short drops reconnect in silence; only a real outage gets words
+    if(!blip && Date.now() - (this._rbAt||0) > 15000){ this._rbAt = Date.now(); banner('RECONNECTING…'); }
+    if(await this.connect(this.code, this.mode==='lobby-host', blip)){
+      if(!blip) banner('BACK AT THE TABLE');
+      this._downAt = 0;
       if(this.mode==='peer'){ this.tx.send('hello',{ key:this.pkey }); if(G.phase==='play'||G.phase==='over') this.sendState(); }
       else if(this.mode==='joining'){ this.tx.send('hello',{ key:this.pkey }); }
       render();
@@ -439,7 +443,7 @@ function netTick(){
     if(G.turnKey===me() && Date.now() > DEADLINE) timeoutFoul(me(), false);              // my clock, my foul — called on myself
     else if(G.turnKey!==me() && Date.now() > DEADLINE + 8000) timeoutFoul(me(), true);   // theirs, long gone — the waiter claims the table
   }
-  if((G.phase==='play' || G.phase==='over') && OPPAT && !OPPQUIET && Date.now()-OPPAT > 12000){
+  if((G.phase==='play' || G.phase==='over') && OPPAT && !OPPQUIET && Date.now()-OPPAT > 20000){
     OPPQUIET = true; render();                          // noted on the plate — the game does not stop
   }
 }
@@ -491,16 +495,17 @@ function fit(){
   if(!ctx || !cv.getBoundingClientRect) return;
   const r = cv.getBoundingClientRect(); if(!r || !r.width) return;
   const dpr = (window.devicePixelRatio||1);
-  const rot = (window.innerHeight||1) > (window.innerWidth||2);   // portrait: stand the table up
   const tw = PP.W + RAILPAD*2, th = PP.H + RAILPAD*2;
-  const aspect = rot ? th/tw : tw/th;    // css aspect: width/height
-  const cssW = r.width, cssH = cssW / aspect;
+  const aspect = th/tw;                                            // width over height — the table always stands upright
+  const maxH = Math.max(320, (window.innerHeight||800) - 195);     // leave room for the plates, the hint and the log
+  const cssH = Math.min(r.width/aspect, maxH);
+  const cssW = cssH*aspect;
+  cv.style.width = cssW+'px';
   cv.style.height = cssH+'px';
+  cv.style.margin = '0 auto';
   cv.width = Math.round(cssW*dpr); cv.height = Math.round(cssH*dpr);
-  const s = cv.width / (rot ? th : tw);
-  VIEW = { s, rot, pxw:cv.width, pxh:cv.height,
-    ox: rot ? RAILPAD*s : RAILPAD*s,
-    oy: RAILPAD*s };
+  const s = cv.width / th;
+  VIEW = { s, rot:true, pxw:cv.width, pxh:cv.height, ox: RAILPAD*s, oy: RAILPAD*s };
 }
 function X(tx,ty){ return VIEW.rot ? (PP.H-ty)*VIEW.s + VIEW.ox : tx*VIEW.s + VIEW.ox; }
 function Y(tx,ty){ return VIEW.rot ? tx*VIEW.s + VIEW.oy : ty*VIEW.s + VIEW.oy; }
