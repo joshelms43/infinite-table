@@ -354,6 +354,19 @@ function checkTable(balls, label) {
     SENT.filter(s => s.ev === 'shot').length === shotsAfter &&
     SENT.filter(s => s.ev === 'state').length === statesBefore + 1 &&
     nacksTo(who) === nacksBefore);
+
+  /* the host is a phone. Phones sleep. Everyone else deserves to know. */
+  const hbBefore = SENT.filter(s => s.ev === 'hb').length;
+  for (let k = 0; k < 5; k++) vm.runInContext('netTick()', sandbox);
+  T('sleeping host — the host heartbeats every five ticks', SENT.filter(s => s.ev === 'hb').length > hbBefore);
+
+  NET.clockAt = Date.now() - 5000;                               // the clock "expired" during the nap
+  const statesBeforeWake = SENT.filter(s => s.ev === 'state').length;
+  NET.revive(true);                                              // eyes open
+  T('sleeping host — waking re-arms the clock instead of fouling the waiter',
+    NET.clockAt > Date.now());
+  T('sleeping host — and re-pushes the truth to the room',
+    SENT.filter(s => s.ev === 'state').length === statesBeforeWake + 1);
 }
 
 /* ---- the shooter's watchdog: ON ITS WAY must mean it arrives, or it says so ---- */
@@ -399,6 +412,15 @@ function checkTable(balls, label) {
   T('watchdog — three re-sends, then honesty: the shooter is unlocked', B.PENDING === false && intents() === 4);
   T('watchdog — every copy is the same nonce, so the host plays at most one',
     SENT.filter(s => s.ev === 'intent').every(s => s.p.n === 1));
+
+  /* and the client's side of a sleeping host: notice, hold, recover on the first word */
+  B.HOSTAT = Date.now() - 20000;
+  vm.runInContext('netTick()', sandbox);
+  T('sleeping host — three missed heartbeats and the client knows', B.HOSTDOWN === true);
+  const hellosBefore = SENT.filter(s => s.ev === 'hello').length;
+  NET.onMessage('hb', { t: Date.now() });
+  T('sleeping host — the first word back clears it and asks for the state',
+    B.HOSTDOWN === false && SENT.filter(s => s.ev === 'hello').length === hellosBefore + 1);
 }
 
 finished = true;

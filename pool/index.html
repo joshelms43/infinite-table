@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.1.2
+<!-- Infinite Table — 8-Ball. Version: 0.1.3
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -61,7 +61,7 @@
 <div id="wrap">
 <header>
   <h1>8<span class="thin">-</span>BALL</h1>
-  <span class="ver">v0.1.2</span>
+  <span class="ver">v0.1.3</span>
 </header>
 
 <div id="home" class="screen on">
@@ -101,10 +101,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.1.2"></script>
-<script src="../shared/tablekit.js?v=0.1.2"></script>
-<script src="../shared/pool-rules.js?v=0.1.2"></script>
-<script src="../shared/pool-physics.js?v=0.1.2"></script>
+<script src="../shared/config.js?v=0.1.3"></script>
+<script src="../shared/tablekit.js?v=0.1.3"></script>
+<script src="../shared/pool-rules.js?v=0.1.3"></script>
+<script src="../shared/pool-physics.js?v=0.1.3"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -139,9 +139,11 @@ let AIM = null;            // {x,y} pointer in table coords while dragging an ai
 let PLACING = false;       // dragging the cue for ball in hand
 let PENDING = false;       // my shot is with the host, waiting for the echo
 let RESEND = null;         // the un-acknowledged intent — re-sent, not mourned
+let HOSTAT = 0;            // when the host was last heard from
+let HOSTDOWN = false;      // the host's phone is asleep — hold shots, say so, wait
 
 function me(){ return NET.pkey; }
-function myTurn(){ return G.phase==='play' && G.turnKey===me() && !ANIM && !PENDING; }
+function myTurn(){ return G.phase==='play' && G.turnKey===me() && !ANIM && !PENDING && !HOSTDOWN; }
 function opponentOf(key){ const o = G.roster.find(r=>r.key!==key); return o ? o.key : null; }
 function cueBall(balls){ return (balls||G.balls).find(b=>b.id===0); }
 function onTableIds(balls){ return (balls||G.balls).filter(b=>!b.pocketed && b.id!==0).map(b=>b.id); }
@@ -164,9 +166,9 @@ const NET = {
     try{
       this.tx = await TableKit.join({
         prefix:'pool', code,
-        events:['start','state','shot','hello','intent','nack'],
+        events:['start','state','shot','hello','intent','nack','hb'],
         onMessage:(ev,p)=>this.onMessage(ev,p),
-        onPresence:()=>{ if(G.phase==='lobby') render(); },
+        onPresence:()=>{ render(); },
         meta:{ key:this.pkey, name:this.myName, host:!!hosting },
       });
     }catch(e){ banner('COULD NOT CONNECT — CHECK SIGNAL'); return false; }
@@ -175,17 +177,27 @@ const NET = {
     this._meta = { key:this.pkey, name:this.myName, host:!!hosting };
     return true;
   },
-  async revive(){
+  async revive(fromWake){
     if(!this.code || this.mode==='off') return;
     if(this.tx && this.tx.alive()){
       if(this._meta){ try{ this.tx.track(this._meta); }catch(e){} }
+      if(fromWake && this.mode==='host' && G.phase==='play'){
+        this.armClock(0);      // nobody gets clock-fouled for the host's nap
+        this.pushState();      // and the room re-syncs the moment the host's eyes open
+      }
+      if(fromWake && this.mode==='client') this.tx.send('hello',{ key:this.pkey });
       if(G.phase==='lobby') render();
       return;
     }
-    banner('RECONNECTING…');
+    if(Date.now() - (this._rbAt||0) > 15000){ this._rbAt = Date.now(); banner('RECONNECTING…'); }   // once, not once per heartbeat
     const hosting = this.mode==='lobby-host' || this.mode==='host';
     if(await this.connect(this.code, hosting)){
-      if(this.mode==='host'){ this.tx.send('start',{ roster:G.roster }); this.pushState(); }
+      banner('BACK AT THE TABLE');
+      if(this.mode==='host'){
+        this.tx.send('start',{ roster:G.roster });
+        if(G.phase==='play') this.armClock(0);
+        this.pushState();
+      }
       else if(this.mode==='client' || this.mode==='joining'){ this.tx.send('hello',{ key:this.pkey }); }
       render();
     }
@@ -248,6 +260,11 @@ const NET = {
   },
   pushState(){ if(this.mode==='host'){ const s=this.serialize(); this.tx.send('state', s); applyState(s, true); } },
   onMessage(type, m){
+    if(this.mode!=='host' && type!=='intent'){   // everything but intents comes from the host
+      HOSTAT = Date.now();
+      if(HOSTDOWN){ HOSTDOWN=false; banner('THE HOST IS BACK'); this.tx.send('hello',{ key:this.pkey }); render(); }
+    }
+    if(type==='hb') return;
     if(this.mode==='lobby-host'){
       if(type==='hello') render();   // presence carries the lobby
       return;
@@ -409,6 +426,8 @@ function settle(){
 }
 function netTick(){
   if(NET.mode==='host'){
+    NET._hbn = (NET._hbn|0) + 1;
+    if(NET._hbn % 5 === 0 && (G.phase==='play' || G.phase==='over') && NET.tx) NET.tx.send('hb',{ t:Date.now() });   // proof of life, every five seconds
     if(NET.busy && Date.now() > (NET.busyUntil||0)){ settle(); NET.busy = false; }
     if(G.phase==='play' && !NET.busy && NET.clockAt && Date.now() >= NET.clockAt){
       const slow = G.turnKey, next = opponentOf(slow);
@@ -422,6 +441,11 @@ function netTick(){
       NET.armClock(0);
       NET.pushState(); render();
     }
+  }
+  if(NET.mode==='client' && (G.phase==='play' || G.phase==='over') && HOSTAT && !HOSTDOWN && Date.now()-HOSTAT > 12000){
+    HOSTDOWN = true;                                   // three missed heartbeats: the host's phone is asleep
+    banner('THE HOST WENT QUIET — WAITING FOR THEIR TABLE');
+    render();
   }
   if(!PENDING){ RESEND = null; }
   else if(RESEND && Date.now() - RESEND.at > 2200){
@@ -710,7 +734,8 @@ function render(){
     const el=$(sel); if(!el) return;
     el.classList.toggle('turn', G.phase==='play' && G.turnKey===pl.key);
     const nm=el.querySelector('.pname'), gr=el.querySelector('.pgroup');
-    if(nm) nm.textContent=(pl.name||'—')+(pl.key===me()?' (you)':'');
+    const here = NET.tx ? TableKit.seatsFrom(NET.tx.presence(), 8).some(m=>m.key===pl.key) : true;
+    if(nm) nm.textContent=(pl.name||'—')+(pl.key===me()?' (you)':'')+(here?'':' · away');
     if(gr) gr.innerHTML=groupBadge(pl.key);
   });
   const hint=$('#hint');
@@ -718,6 +743,7 @@ function render(){
     let t='';
     if(G.phase==='over') t='';
     else if(ANIM) t='';
+    else if(HOSTDOWN) t="The host's phone went quiet — the table resumes when it comes back.";
     else if(PENDING) t='On its way…';
     else if(myTurn()){
       if(G.inHand && G.inHand.key===me()) t=G.breakShot ? 'Drag the cue to place it behind the line, then drag anywhere to aim — release to break.' : 'Ball in hand — drag the cue anywhere'+(G.inHand.behindHead?' behind the line':'')+', then aim and release.';
@@ -746,8 +772,8 @@ setInterval(()=>{   // the clock face; enforcement lives with the host
 
 /* ---------- wiring ---------- */
 if(typeof TableKit!=='undefined') TableKit.watchErrors({ game:'pool', version:'0.1.0', onError:(msg)=>banner('BROKE — '+String(msg).slice(0,40)) });
-document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') NET.revive(); });
-setInterval(()=>{ if(NET.tx && (G.phase==='lobby' || G.phase==='play')) NET.revive(); }, 5000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') NET.revive(true); });
+setInterval(()=>{ if(NET.tx && (G.phase==='lobby' || G.phase==='play' || G.phase==='over')) NET.revive(false); }, 5000);
 
 fit(); render(); raf(loop);
 
@@ -757,6 +783,8 @@ globalThis.__B = {
   get SHOTQ(){ return SHOTQ; },
   get PENDING(){ return PENDING; }, set PENDING(v){ PENDING = v; },
   get RESEND(){ return RESEND; },
+  get HOSTAT(){ return HOSTAT; }, set HOSTAT(v){ HOSTAT = v; },
+  get HOSTDOWN(){ return HOSTDOWN; }, set HOSTDOWN(v){ HOSTDOWN = v; },
   applyState, playShot,
 };
 </script>

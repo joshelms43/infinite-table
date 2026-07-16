@@ -1,5 +1,17 @@
 # 8-Ball — Changelog
 
+## v0.1.3 — 2026-07-16
+**The host is a phone, and phones sleep.** The remaining vanishing shots weren't lost messages — they were sent into a host whose app was backgrounded, JavaScript suspended, processing nothing. The watchdog re-sent three times into the void and gave up. And the RECONNECTING… banner fired on every 5-second heartbeat while a radio flapped, which is how "a lot of disconnected popups" happens.
+
+Now the room knows when the host's table is asleep:
+- The host heartbeats every five seconds during play. Three missed beats and the other phone stops accepting aim input, says plainly that the host went quiet, and waits — a held shot instead of a vanished one.
+- The first word back from the host clears the hold, banners THE HOST IS BACK, and asks for the current state.
+- A waking host (visibilitychange) re-arms the shot clock before its heartbeat can fire the timeout — nobody gets clock-fouled for the host's nap — and immediately re-pushes the truth to the room.
+- Connection banners fire on transitions only: RECONNECTING… at most once per 15 seconds, BACK AT THE TABLE on success, nothing on the routine heartbeat.
+- The player plates show " · away" from live presence when a seat's phone drops off the channel.
+
+Six new poolsim assertions: the heartbeat goes out, the client notices three missed beats, the first word back recovers with a state request, and the waking host re-arms rather than fouls and re-pushes rather than assumes.
+
 ## v0.1.2 — 2026-07-16
 **Two sides of one gap, both caught on the phones.**
 
