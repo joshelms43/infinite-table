@@ -163,6 +163,14 @@ for (let f = 0; f < frames; f++) {
   }
   if (WHICH === 'save' && f === 9) { D.getK().dragging = false; }   // gravity takes over: the landing
   tick();
+  if (f === 2) {
+    let red = 0;
+    for (let i = 0; i < small.length; i += 4) {
+      if (small[i] > 170 && small[i+1] < 110 && small[i+2] < 130) red++;
+    }
+    console.log('MARKER: tell.visible=' + D.tell.visible + ', red marker pixels in keep-cam frame=' + red + ', net opacity=' + D.netMat.opacity);
+    if (red < 40) { console.error('MARKER REGRESSION: the tell is not visibly rendering from the keeper seat'); process.exitCode = 1; }
+  }
   const CP = D.getCloth().P;
   let mx = 0;
   for (let i = 0; i < CP.length; i++) {

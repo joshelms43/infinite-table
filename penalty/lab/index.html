@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — Penalty Shootout LAB (3D, not on the door). Version: 0.6.0 -->
+<!-- Infinite Table — Penalty Shootout LAB (3D, not on the door). Version: 0.7.0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -194,6 +194,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     CAM.mode=mode;   // always re-apply: the flight follow displaces the camera, and the next kick must start home
     if(mode==='keep'){ CAM.home.set(0,1.8,-5.3); CAM.look.set(0,1.30,7); camera.fov=50; }
     else { CAM.home.set(0,1.35,SPOT+5.2); CAM.look.set(0,1.15,0); camera.fov=28; }
+    if(typeof netMat!=='undefined') netMat.opacity = mode==='keep' ? 0.22 : 0.7;   // the net never veils YOUR keeper
     camera.position.copy(CAM.home); camera.lookAt(CAM.look); camera.updateProjectionMatrix();
     measureGoalPx();
   }
@@ -212,7 +213,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
 
   /* light rig — a floodlit night is BRIGHT: lit turf, glowing crowd, warm heads on tall masts */
   scene.add(new THREE.AmbientLight(0x2e3c55,0.4));
-  scene.add(new THREE.HemisphereLight(0xa2b6d6,0x1d4a26,0.68));
+  scene.add(new THREE.HemisphereLight(0xa2b6d6,0x143721,0.68));
   var key=new THREE.DirectionalLight(0xfff2d9,1.15);
   key.position.set(-11,17,13); key.target.position.set(0,0,3);
   key.castShadow=true; key.shadow.mapSize.set(1024,1024); key.shadow.bias=-0.0012;
@@ -237,7 +238,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   // pitch: striped mow bands via canvas texture
   function pitchTexture(){
     var c=document.createElement('canvas'); c.width=512; c.height=512; var g=c.getContext('2d');
-    g.fillStyle='#2f8a44'; g.fillRect(0,0,512,512);
+    g.fillStyle='#226636'; g.fillRect(0,0,512,512);
     for(var i=0;i<8;i++){ if(i%2===0){ g.fillStyle='rgba(255,255,255,0.16)'; g.fillRect(0,i*64,512,64); } }
     var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(4,4); t.encoding=THREE.sRGBEncoding; return t;
   }
@@ -332,31 +333,48 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   // stands: a dark ring with crowd-speckle texture
   function crowdTexture(){
     var c=document.createElement('canvas'); c.width=512; c.height=128; var g=c.getContext('2d');
-    g.fillStyle='#2a4470'; g.fillRect(0,0,512,128);
-    g.fillStyle='rgba(255,240,200,0.85)'; g.fillRect(0,0,512,5);
-    for(var i=0;i<2400;i++){ g.fillStyle='rgba('+(175+Math.random()*80|0)+','+(185+Math.random()*70|0)+','+(210+Math.random()*45|0)+','+(0.14+Math.random()*0.30)+')'; g.fillRect(Math.random()*512|0,6+Math.random()*120|0,2,2); }
+    g.fillStyle='#16243c'; g.fillRect(0,0,512,128);
+    g.fillStyle='rgba(255,238,200,0.5)'; g.fillRect(0,0,512,4);
+    for(var i=0;i<1100;i++){ g.fillStyle='rgba('+(150+Math.random()*70|0)+','+(160+Math.random()*60|0)+','+(185+Math.random()*45|0)+','+(0.04+Math.random()*0.10)+')'; g.fillRect(Math.random()*512|0,5+Math.random()*121|0,2,2); }
     var t=new THREE.CanvasTexture(c); t.wrapS=THREE.RepeatWrapping; t.repeat.set(6,1); return t;
   }
   var standMat=new THREE.MeshBasicMaterial({map:crowdTexture(),fog:true});
+  /* advertising hoardings behind the goal — the thing that instantly reads 'football at night' */
+  (function hoardings(){
+    var bm=new THREE.MeshStandardMaterial({color:0x0d2b3a,roughness:0.85});
+    var lm=new THREE.MeshBasicMaterial({color:0x9fd8e8});
+    function board(w,x,z,ry){ var b=new THREE.Mesh(new THREE.BoxGeometry(w,0.95,0.1),bm); b.position.set(x,0.48,z); b.rotation.y=ry; b.castShadow=true; scene.add(b);
+      var t=new THREE.Mesh(new THREE.BoxGeometry(w,0.05,0.12),lm); t.position.set(x,0.98,z); t.rotation.y=ry; scene.add(t); }
+    board(24,0,-3.4,0); board(9,-15.5,-1.4,0.42); board(9,15.5,-1.4,-0.42);
+  })();
   var stands=new THREE.Mesh(new THREE.CylinderGeometry(34,38,9,40,1,true),standMat);
   stands.position.set(0,4.4,0); standMat.side=THREE.BackSide; scene.add(stands);
 
   /* ---- aim widgets: reticle ring, spray disc, guides, keeper tell — all on the goal plane ---- */
   var reticle=new THREE.Group();
-  reticle.add(new THREE.Mesh(new THREE.RingGeometry(0.20,0.27,28), new THREE.MeshBasicMaterial({color:0x4ea1ff,transparent:true,opacity:0.95})));
-  reticle.add(new THREE.Mesh(new THREE.CircleGeometry(0.055,14), new THREE.MeshBasicMaterial({color:0x4ea1ff})));
+  reticle.add(new THREE.Mesh(new THREE.RingGeometry(0.28,0.40,30), uiMat(0x1fa4ff,1.0)));
+  reticle.add(new THREE.Mesh(new THREE.CircleGeometry(0.07,14), uiMat(0xffffff,1.0)));
   reticle.position.z=0.02; reticle.visible=false; scene.add(reticle);
-  var sprayMat=new THREE.MeshBasicMaterial({color:0x78dc8c,transparent:true,opacity:0.22,side:THREE.DoubleSide});
-  var sprayRingMat=new THREE.MeshBasicMaterial({color:0x78dc8c,transparent:true,opacity:0.85});
+  var sprayMat=uiMat(0x78dc8c,0.22);
+  var sprayRingMat=uiMat(0x78dc8c,0.9);
   var sprayDisc=new THREE.Mesh(new THREE.CircleGeometry(1,36),sprayMat);
   var sprayRing=new THREE.Mesh(new THREE.RingGeometry(0.97,1,40),sprayRingMat);
   var sprayG=new THREE.Group(); sprayG.add(sprayDisc); sprayG.add(sprayRing); sprayG.position.z=0.015; sprayG.visible=false; scene.add(sprayG);
-  var guideV=new THREE.Mesh(new THREE.PlaneGeometry(0.03,GOAL_H+0.8), new THREE.MeshBasicMaterial({color:0x4ea1ff,transparent:true,opacity:0.5}));
-  guideV.position.z=0.01; guideV.visible=false; scene.add(guideV);
-  var guideH=new THREE.Mesh(new THREE.PlaneGeometry(GOAL_W+2.6,0.03), new THREE.MeshBasicMaterial({color:0x4ea1ff,transparent:true,opacity:0.5}));
-  guideH.position.z=0.01; guideH.visible=false; scene.add(guideH);
-  var tell=new THREE.Mesh(new THREE.RingGeometry(0.22,0.32,26), new THREE.MeshBasicMaterial({color:0xff5d6c,transparent:true,opacity:0.95}));
-  tell.position.z=0.03; tell.visible=false; scene.add(tell);
+  var guideV=new THREE.Mesh(new THREE.PlaneGeometry(0.04,GOAL_H+0.8), uiMat(0x1fa4ff,0.85));
+  guideV.material.opacity=0.78; guideV.position.z=0.01; guideV.visible=false; scene.add(guideV);
+  var guideH=new THREE.Mesh(new THREE.PlaneGeometry(GOAL_W+2.6,0.04), uiMat(0x1fa4ff,0.85));
+  guideH.material.opacity=0.78; guideH.position.z=0.01; guideH.visible=false; scene.add(guideH);
+  /* the tell: DOUBLE-SIDED (the keep cam is behind the goal plane — a front-face-only
+     ring is backface-culled from exactly the seat that needs it), filled, and pulsing */
+  /* UI opts OUT of tone mapping: ACES was bleaching the pure red to pastel pink —
+     the marker was rendering and still nearly invisible. Widgets keep full saturation. */
+  function uiMat(color,opacity){ var m=new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:opacity,side:THREE.DoubleSide,depthWrite:false}); m.toneMapped=false; return m; }
+  var tell=new THREE.Group();
+  tell.add(new THREE.Mesh(new THREE.RingGeometry(0.40,0.50,30), uiMat(0x66060f,0.9)));   // dark outline for contrast on bright turf
+  tell.add(new THREE.Mesh(new THREE.RingGeometry(0.26,0.40,30), uiMat(0xff2438,1.0)));
+  tell.add(new THREE.Mesh(new THREE.CircleGeometry(0.24,24), uiMat(0xff4053,0.42)));
+  tell.add(new THREE.Mesh(new THREE.CircleGeometry(0.06,14), uiMat(0xffffff,1.0)));
+  tell.position.z=0.03; tell.visible=false; tell.renderOrder=5; scene.add(tell);
 
   /* ---- the ball ---- */
   function ballTexture(){
@@ -468,9 +486,9 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
 
   var ballBody=new CANNON.Body({mass:BALL_M,material:matBall,shape:new CANNON.Sphere(BALL_R)});
   ballBody.linearDamping=0.12; ballBody.angularDamping=0.2; world.addBody(ballBody);
-  var gkBody=new CANNON.Body({mass:0,type:CANNON.Body.KINEMATIC,material:matGK,shape:new CANNON.Box(new CANNON.Vec3(0.34,0.85,0.22))});
+  var gkBody=new CANNON.Body({mass:0,type:CANNON.Body.KINEMATIC,material:matGK,shape:new CANNON.Box(new CANNON.Vec3(0.44,0.95,0.30))});
   gkBody.position.set(0,0.95,0.05); world.addBody(gkBody);
-  var gloveBody=new CANNON.Body({mass:0,type:CANNON.Body.KINEMATIC,material:matGK,shape:new CANNON.Sphere(0.26)});
+  var gloveBody=new CANNON.Body({mass:0,type:CANNON.Body.KINEMATIC,material:matGK,shape:new CANNON.Sphere(0.36)});
   gloveBody.position.set(0,1.4,0.05); world.addBody(gloveBody);
   for(var _cs=0;_cs<50;_cs++) clothStep(1/120);                 // settle the net before anyone sees it
   clothToMesh();
@@ -480,7 +498,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     var other=ev.body;
     if(other===postL||other===postR||other===barB){ K.wood=(other===barB)?'bar':'post'; sfxPost();
       RATTLE.t=0.28; }
-    else if((other===gkBody||other===gloveBody)&&!K.outcome&&ballBody.position.z>-(BALL_R+0.05)){
+    else if((other===gkBody||other===gloveBody)&&!K.outcome&&ballBody.position.z>-BALL_R){   // a save is legal until the WHOLE ball is over
       K.outcome='save'; K.outcomeTime=performance.now(); sfxSave();
       var bv=ballBody.velocity;                                    // the hit travels through him
       limbKick(armL,'z',clamp(bv.x*0.9,-8,8)); limbKick(armR,'z',clamp(bv.x*0.9,-8,8));
@@ -663,9 +681,9 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     }
     // Magnus curl: side force proportional to spin x forward speed
     ballBody.applyForce(new CANNON.Vec3(K.launch.spin*Math.abs(ballBody.velocity.z)*MAGNUS,0,0), ballBody.position);
-    var pz=ballBody.position.z;
-    if(!K.outcome && K._pz!==undefined && K._pz>0 && pz<=0){                 // crossing the goal plane
-      var f=(K._pz)/((K._pz-pz)||1);
+    var pz=ballBody.position.z, PLANE=-BALL_R;   // a goal is the WHOLE ball over the line — not the first touch of it
+    if(!K.outcome && K._pz!==undefined && K._pz>PLANE && pz<=PLANE){
+      var f=(K._pz-PLANE)/((K._pz-pz)||1);
       var cx=K._px+(ballBody.position.x-K._px)*f, cy=K._py+(ballBody.position.y-K._py)*f;
       var inside=Math.abs(cx)<HALF_W-BALL_R*0.4 && cy<GOAL_H-BALL_R*0.4;
       if(inside){ K.outcome='goal'; K.outcomeTime=performance.now(); }
@@ -713,6 +731,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     if(K){
       if(K.phase==='aimX'||K.phase==='aimY'||K.phase==='power') updateAimWidgets(now);
       if(K.phase==='save'||K.phase==='flight') updateKeeper(fdt);
+      if(tell.visible){ var _pu=1+0.16*Math.sin(now*0.012); tell.scale.set(_pu,_pu,1); }
       GK.userData.stepLimbs && GK.userData.stepLimbs(fdt);
       if(RATTLE.t>0){ RATTLE.t-=fdt; bar.position.y=GOAL_H+Math.sin(RATTLE.t*90)*RATTLE.t*0.035; if(RATTLE.t<=0)bar.position.y=GOAL_H; }
       if(K.phase==='flight'){
@@ -768,7 +787,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   function emitInput(role,params){try{if(window.Penalty.hooks.onInput)window.Penalty.hooks.onInput(K?K.id:kickId,role==='shot'?S.attacker:S.defender,role,params);}catch(e){}}
 
   window.PenaltyDebug={scene:scene,camera:camera,renderer:renderer,setCam:setCam,poseKeeper:poseKeeper,measureGoalPx:measureGoalPx,ballMesh:ballMesh,GK:GK,THREE_OK:true,
-    getK:function(){return K;}, getCloth:function(){return CLOTH;},
+    getK:function(){return K;}, getCloth:function(){return CLOTH;}, tell:tell, netMat:netMat,
     /* a scripted kick through the REAL pipeline — no UI, no timers, for the headless eye */
     testKick:function(shot,seed,camMode){
       S={mode:'watch',diff:'normal',goals:[0,0],results:[[],[]],names:['A','B'],ctrl:['bot','human'],soloRole:null,suddenDeath:false,over:false,attacker:0};

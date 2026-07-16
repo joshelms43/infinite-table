@@ -1,5 +1,24 @@
 # Penalty Shootout — Changelog
 
+## LAB v0.7.0 — 2026-07-15
+The keeper's aim marker, found dead twice — plus the rest of the list.
+
+**"There is no aim marker" — correct, two causes stacked.** First: the tell was a flat ring whose material rendered only its front face, and the keeper camera sits BEHIND the goal plane — backface-culled from exactly the seat that needs it. Invisible, literally. Second, once double-sided: ACES film tone mapping was bleaching its pure red to pastel pink (measured: the reddest rendered pixel was 239,164,175). In-world UI now opts out of tone mapping entirely; the tell is rebuilt bigger with a dark outline ring, a filled core, a white dot, and a pulse. Proven headless: 0 visible marker pixels before, ~2,700 after, from the keeper camera at real scale — and the clip tool now FAILS if that count ever drops again. It appears right after the countdown, exactly as specced; fast shots you read or you guess.
+
+**Aim tracer nearly invisible** — same tone-mapping wash; the reticle, guides, and spray circle all keep full saturation now, drawn thicker and brighter.
+
+**Background** — the speckle-static stands calm into a dark tiered silhouette, and advertising hoardings run behind the goal with a lit top edge: the thing that instantly reads "football at night".
+
+**Grass darker** — deeper base green, darker ground bounce.
+
+**Bigger keeper hitbox** — torso collider grown to 0.88 × 1.9 × 0.6m, glove sphere to 0.72m diameter.
+
+**Goals by the goal line, properly** — a goal now requires the WHOLE ball over the line (crossing plane at −ball-radius), and a save stays legal until that same instant. One consistent boundary, no more first-touch goals.
+
+**Keeper opaque when he is yours** — the net cloth sits between the keep camera and the keeper; it now dims to 0.22 opacity in keeper mode so he reads solid, and returns to 0.7 for the shooter.
+
+Headless viewer still down this round, so the stills ship for Josh's eyes; every mechanical claim above is probe-verified.
+
 ## LAB v0.6.0 — 2026-07-15
 The punch list, item by item.
 
