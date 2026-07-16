@@ -1,5 +1,14 @@
 # 8-Ball — Changelog
 
+## v0.2.2 — 2026-07-16
+**Aim with one hand, power with the other.** The slingshot — direction and power in a single drag — made every shot a compromise: fine aim wanted a short careful drag, real power wanted a long one, and the two fought. Now they're separate, GamePigeon-style:
+
+- **Aim is sticky.** Drag anywhere on the cloth and the cue line follows your finger; let go and the line stays put. A fresh turn opens already aimed at the nearest ball, never a blank stare. Adjust as many times as you like.
+- **Power is the bar.** A vertical track on the right edge, thumb-sized hit target. Pull the handle down — the fill runs green through gold into red, and the cue stick draws back off the ball on the table as you pull. Let go to fire with whatever aim you've set; ride it back to the top to change your mind.
+- Ball in hand is unchanged: the cue itself is still the thing you drag.
+
+The guide (cue path, ghost ball, object line) now lives on the persistent aim, so you can study a shot with your thumb nowhere near the screen. Input state is exposed to the harnesses (AIMDIR, POWERDRAG) and the headless renderer draws the new bar and pull-back stick, pixel-verified.
+
 ## v0.2.1 — 2026-07-16
 **Blips heal in silence; the table stands up.** Sub-second radio drops were reconnecting instantly and announcing it every time — a room full of BACK AT THE TABLE for outages nobody would have noticed. Reconnection now happens quietly for the first ten seconds of an outage; only a real one gets RECONNECTING… and a welcome back, and the retry loop's COULD NOT CONNECT stays quiet too. A quiet opponent now takes twenty seconds to mention instead of twelve.
 

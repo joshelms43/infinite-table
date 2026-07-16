@@ -89,7 +89,8 @@ const MIDGAME = `
 
 still('pool-aim.png', 380, 380, 780, MIDGAME + `
   const cue = G.balls.find(b=>b.id===0);
-  AIM = { x: cue.x + 0.5, y: cue.y - 0.18 };   // an aim line with the guide up
+  AIMDIR = { angle: Math.atan2(-0.18, 0.5) };      // a sticky aim with the guide up
+  POWERDRAG = { p: 0.62 };                          // the bar pulled well down, stick drawn back
 `);
 
 still('pool-portrait.png', 380, 380, 780, MIDGAME + `

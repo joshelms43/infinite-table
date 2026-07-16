@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.2.1
+<!-- Infinite Table — 8-Ball. Version: 0.2.2
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -61,7 +61,7 @@
 <div id="wrap">
 <header>
   <h1>8<span class="thin">-</span>BALL</h1>
-  <span class="ver">v0.2.1</span>
+  <span class="ver">v0.2.2</span>
 </header>
 
 <div id="home" class="screen on">
@@ -101,10 +101,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.2.1"></script>
-<script src="../shared/tablekit.js?v=0.2.1"></script>
-<script src="../shared/pool-rules.js?v=0.2.1"></script>
-<script src="../shared/pool-physics.js?v=0.2.1"></script>
+<script src="../shared/config.js?v=0.2.2"></script>
+<script src="../shared/tablekit.js?v=0.2.2"></script>
+<script src="../shared/pool-rules.js?v=0.2.2"></script>
+<script src="../shared/pool-physics.js?v=0.2.2"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -141,7 +141,8 @@ let ANIM = null;           // {sim, endState, last} while a shot is flying
 let SHOTQ = [];            // shots that arrived while one was still flying — played, never dropped
 let CLOCKBASE = null;      // {secs, at} — this phone's view of the running clock
 let DEADLINE = null;       // the same clock as a local timestamp — whoever's job it is, enforces from this
-let AIM = null;            // {x,y} pointer in table coords while dragging an aim
+let AIMDIR = null;         // {angle} — sticky aim, set by dragging the table, kept until the turn passes
+let POWERDRAG = null;      // {p} while the side bar is being pulled — release fires
 let PLACING = false;       // dragging the cue for ball in hand
 let OPPAT = 0;             // when the other side was last heard from
 let OPPQUIET = false;      // their phone went quiet — informational, never blocking: this is the whole point
@@ -458,13 +459,14 @@ function applyState(s, localEcho){
   G.winner=s.winner; G.winBy=s.winBy||'';
   G.nextSeed=s.nextSeed||0; G.nextBreaker=s.nextBreaker||null;
   G.roster=s.roster||G.roster; G.log=s.log||G.log;
+  if(G.phase==='play' && G.turnKey===me()){ if(!AIMDIR) defaultAim(); } else AIMDIR = null;
   CLOCKBASE = (s.clockSecs!=null) ? { secs:s.clockSecs, at:Date.now() } : null;
   DEADLINE = (s.clockSecs!=null && s.phase==='play') ? Date.now() + s.clockSecs*1000 : null;
   if(G.phase==='play' && G.clockFullAt < Date.now()) G.clockFullAt = DEADLINE || 0;   // keep the authority-local clock in step when adopting a state
   render();
 }
 function playShot(before, shot, endState){
-  AIM=null; PLACING=false;
+  POWERDRAG=null; PLACING=false;
   ANIM = { sim: PP.stepper(before, shot), endState, last: Date.now() };
   CLOCKBASE = null;
   render();
@@ -581,13 +583,29 @@ function raycast(cue, dx, dy, balls){
   }
   return { t:bestT, hit };
 }
+function defaultAim(){   // a fresh turn opens aimed at the nearest ball — never a blank stare
+  const cue = cueBall(); if(!cue) return;
+  let best=null, bd=Infinity;
+  G.balls.forEach(b=>{
+    if(b.pocketed || b.id===0) return;
+    const d=(b.x-cue.x)*(b.x-cue.x)+(b.y-cue.y)*(b.y-cue.y);
+    if(d<bd){ bd=d; best=b; }
+  });
+  AIMDIR = best ? { angle: Math.atan2(best.y-cue.y, best.x-cue.x) } : { angle: 0 };
+}
+function barRect(){
+  const w = 0.10*VIEW.s, h = VIEW.pxh*0.55;
+  return { x: VIEW.pxw - w - 0.035*VIEW.s, y: (VIEW.pxh - h)/2, w, h };
+}
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
 function drawAim(){
-  const cue = cueBall(); if(!cue || cue.pocketed || !AIM) return;
+  const cue = cueBall(); if(!cue || cue.pocketed || !AIMDIR) return;
   const S=VIEW.s;
-  let dx=AIM.x-cue.x, dy=AIM.y-cue.y;
-  const dist=Math.sqrt(dx*dx+dy*dy); if(dist<0.001) return;
-  dx/=dist; dy/=dist;
-  const power=Math.min(1,dist/0.85);
+  const dx=Math.cos(AIMDIR.angle), dy=Math.sin(AIMDIR.angle);
   const rc=raycast(cue,dx,dy,G.balls);
   const gx=cue.x+dx*rc.t, gy=cue.y+dy*rc.t;
   ctx.setLineDash([S*0.02,S*0.018]);
@@ -602,11 +620,33 @@ function drawAim(){
     ctx.beginPath(); ctx.moveTo(X(rc.hit.x,rc.hit.y),Y(rc.hit.x,rc.hit.y));
     ctx.lineTo(X(rc.hit.x+nx*0.28,rc.hit.y+ny*0.28),Y(rc.hit.x+nx*0.28,rc.hit.y+ny*0.28)); ctx.stroke();
   }
-  // the power meter rides the aim line's tail
-  const bx=X(cue.x,cue.y), by=Y(cue.x,cue.y);
-  ctx.fillStyle='#0d1a12cc'; ctx.fillRect(bx-S*0.09, by+S*0.05, S*0.18, S*0.028);
-  ctx.fillStyle= power>0.85 ? '#ff5d6c' : '#3fce6f';
-  ctx.fillRect(bx-S*0.09, by+S*0.05, S*0.18*power, S*0.028);
+  if(POWERDRAG && POWERDRAG.p > 0.01){   // the stick pulls back off the ball as the bar comes down
+    const pull = 0.055 + POWERDRAG.p*0.30, len = 0.46;
+    const bx=cue.x-dx*pull, by=cue.y-dy*pull, ex=cue.x-dx*(pull+len), ey=cue.y-dy*(pull+len);
+    ctx.lineCap='round';
+    ctx.strokeStyle='#8a5a30'; ctx.lineWidth=S*0.016;
+    ctx.beginPath(); ctx.moveTo(X(bx,by),Y(bx,by)); ctx.lineTo(X(ex,ey),Y(ex,ey)); ctx.stroke();
+    ctx.strokeStyle='#e8dcc8'; ctx.lineWidth=S*0.016;
+    ctx.beginPath(); ctx.moveTo(X(bx,by),Y(bx,by)); ctx.lineTo(X(bx-dx*0.05,by-dy*0.05),Y(bx-dx*0.05,by-dy*0.05)); ctx.stroke();
+    ctx.lineCap='butt';
+  }
+}
+function drawBar(){
+  if(!myTurn() || (G.inHand && G.inHand.key===me() && PLACING)) return;
+  const b=barRect(), p=POWERDRAG?POWERDRAG.p:0, S=VIEW.s;
+  ctx.fillStyle='#0d1a12cc'; rr(b.x,b.y,b.w,b.h,b.w/2); ctx.fill();
+  ctx.strokeStyle='#e8c63b55'; ctx.lineWidth=Math.max(1,S*0.004); rr(b.x,b.y,b.w,b.h,b.w/2); ctx.stroke();
+  if(p>0.01){
+    const fh=b.h*p;
+    const g=ctx.createLinearGradient(0,b.y,0,b.y+b.h);
+    g.addColorStop(0,'#3fce6f'); g.addColorStop(0.65,'#e8c63b'); g.addColorStop(1,'#ff5d6c');
+    ctx.save(); rr(b.x+2,b.y+2,b.w-4,b.h-4,(b.w-4)/2); ctx.clip();
+    ctx.fillStyle=g; ctx.fillRect(b.x, b.y, b.w, fh);
+    ctx.restore();
+  }
+  const hy=b.y+p*b.h;   // the handle: a cue butt riding the track
+  ctx.fillStyle='#e8dcc8'; rr(b.x-b.w*0.28, hy-b.w*0.42, b.w*1.56, b.w*0.84, b.w*0.35); ctx.fill();
+  ctx.strokeStyle='#00000055'; ctx.lineWidth=1; rr(b.x-b.w*0.28, hy-b.w*0.42, b.w*1.56, b.w*0.84, b.w*0.35); ctx.stroke();
 }
 function drawInHand(){
   if(!G.inHand || G.inHand.key!==me() || ANIM) return;
@@ -627,7 +667,7 @@ function draw(){
   drawTable();
   const balls = ANIM ? ANIM.sim.balls : G.balls;
   balls.forEach(drawBall);
-  if(myTurn()) { drawInHand(); drawAim(); }
+  if(myTurn()) { drawInHand(); drawAim(); drawBar(); }
 }
 function loop(){
   stepAnim();
@@ -637,59 +677,78 @@ function loop(){
 const raf = (typeof requestAnimationFrame!=='undefined') ? requestAnimationFrame : (fn)=>0;
 
 /* ---------- touch: place the cue, or aim through the finger and let go ---------- */
-let DRAGID=null;
-function pointerPos(e){
+let DRAGID=null, DRAGKIND=null;   // 'power' | 'aim' | 'place'
+function rawPx(e){
   const r=cv.getBoundingClientRect(); if(!r) return null;
   const dpr=(window.devicePixelRatio||1);
-  return toTable((e.clientX-r.left)*dpr, (e.clientY-r.top)*dpr);
+  return { x:(e.clientX-r.left)*dpr, y:(e.clientY-r.top)*dpr };
 }
 function onDown(e){
   if(!myTurn()) return;
-  const p=pointerPos(e); if(!p) return;
+  const px=rawPx(e); if(!px) return;
+  const p=toTable(px.x,px.y);
   DRAGID=e.pointerId;
   try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+  const bar=barRect();
+  if(px.x >= bar.x - bar.w*1.2 && px.x <= bar.x + bar.w*2.2 && px.y >= bar.y - bar.w && px.y <= bar.y + bar.h + bar.w){   // a thumb-sized welcome
+    if(!AIMDIR) defaultAim();
+    DRAGKIND='power';
+    POWERDRAG={ p: Math.max(0, Math.min(1, (px.y-bar.y)/bar.h)) };
+    if(e.preventDefault) e.preventDefault();
+    return;
+  }
   const cue=cueBall();
   if(G.inHand && G.inHand.key===me() && cue){
     const d=Math.hypot(p.x-cue.x,p.y-cue.y);
-    if(d < PP.R*3.2){ PLACING=true; return; }
+    if(d < PP.R*3.2){ DRAGKIND='place'; PLACING=true; return; }
   }
-  AIM=p;
+  DRAGKIND='aim';
+  if(cue && !cue.pocketed) AIMDIR={ angle: Math.atan2(p.y-cue.y, p.x-cue.x) };
   if(e.preventDefault) e.preventDefault();
 }
 function onMove(e){
   if(e.pointerId!==DRAGID) return;
-  const p=pointerPos(e); if(!p) return;
-  if(PLACING){
+  const px=rawPx(e); if(!px) return;
+  const p=toTable(px.x,px.y);
+  if(DRAGKIND==='power' && POWERDRAG){
+    const bar=barRect();
+    POWERDRAG.p = Math.max(0, Math.min(1, (px.y-bar.y)/bar.h));
+    return;
+  }
+  if(DRAGKIND==='place' && PLACING){
     const cue=cueBall(); if(!cue) return;
     cue.x=Math.max(PP.R,Math.min(PP.W-PP.R,p.x));
     cue.y=Math.max(PP.R,Math.min(PP.H-PP.R,p.y));
     if(G.inHand.behindHead) cue.x=Math.min(cue.x,PP.HEADSTRING);
     return;
   }
-  if(AIM) AIM=p;
+  if(DRAGKIND==='aim'){
+    const cue=cueBall();
+    if(cue && !cue.pocketed) AIMDIR={ angle: Math.atan2(p.y-cue.y, p.x-cue.x) };
+  }
 }
 function onUp(e){
   if(e.pointerId!==DRAGID) return;
   DRAGID=null;
-  if(PLACING){
+  const kind=DRAGKIND; DRAGKIND=null;
+  if(kind==='place'){
     PLACING=false;
     const cue=cueBall();
     if(cue) NET.place(+cue.x.toFixed(4), +cue.y.toFixed(4));
     return;
   }
-  if(!AIM) return;
-  const cue=cueBall(); const p=AIM; AIM=null;
-  if(!cue || cue.pocketed) return;
-  const dx=p.x-cue.x, dy=p.y-cue.y, dist=Math.hypot(dx,dy);
-  if(dist < 0.07) return;                       // a tap is a thought, not a shot
-  const power=Math.min(1,dist/0.85);
-  NET.shoot({ angle:+Math.atan2(dy,dx).toFixed(5), power:+power.toFixed(3) });
+  if(kind==='power' && POWERDRAG){
+    const p=POWERDRAG.p; POWERDRAG=null;
+    if(p > 0.04 && AIMDIR) NET.shoot({ angle:+AIMDIR.angle.toFixed(5), power:+p.toFixed(3) });   // a nudge back up is a change of heart
+    return;
+  }
+  /* an aim drag just ends — the line stays where you left it */
 }
 if(cv && cv.addEventListener){
   cv.addEventListener('pointerdown',onDown);
   cv.addEventListener('pointermove',onMove);
   cv.addEventListener('pointerup',onUp);
-  cv.addEventListener('pointercancel',()=>{ DRAGID=null; AIM=null; PLACING=false; });
+  cv.addEventListener('pointercancel',()=>{ DRAGID=null; DRAGKIND=null; POWERDRAG=null; PLACING=false; });
 }
 if(typeof window!=='undefined' && window.addEventListener){
   window.addEventListener('resize',()=>{ fit(); });
@@ -737,8 +796,8 @@ function render(){
     if(G.phase==='over') t='';
     else if(ANIM) t='';
     else if(myTurn()){
-      if(G.inHand && G.inHand.key===me()) t=G.breakShot ? 'Drag the cue to place it behind the line, then drag anywhere to aim — release to break.' : 'Ball in hand — drag the cue anywhere'+(G.inHand.behindHead?' behind the line':'')+', then aim and release.';
-      else t='Drag to aim through your finger — further is harder. Release to shoot.';
+      if(G.inHand && G.inHand.key===me()) t=G.breakShot ? 'Drag the cue to place it behind the line. Aim on the table, then pull the side bar down and let go.' : 'Ball in hand — drag the cue'+(G.inHand.behindHead?' behind the line':' anywhere')+'. Aim on the table, power on the bar.';
+      else t='Drag on the table to aim. Pull the bar down for power — let go to shoot.';
     } else t=(rosterName(G.turnKey)||'They')+' is at the table.'+(OPPQUIET?' Their phone went quiet — the clock still runs.':'');
     hint.textContent=t;
   }
@@ -773,6 +832,8 @@ globalThis.__B = {
   get ANIM(){ return ANIM; }, set ANIM(v){ ANIM = v; },
   get SHOTQ(){ return SHOTQ; },
   get DEADLINE(){ return DEADLINE; }, set DEADLINE(v){ DEADLINE = v; },
+  get AIMDIR(){ return AIMDIR; }, set AIMDIR(v){ AIMDIR = v; },
+  get POWERDRAG(){ return POWERDRAG; }, set POWERDRAG(v){ POWERDRAG = v; },
   get OPPAT(){ return OPPAT; }, set OPPAT(v){ OPPAT = v; },
   get OPPQUIET(){ return OPPQUIET; },
   applyState, playShot,
