@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.2.2
+<!-- Infinite Table — 8-Ball. Version: 0.2.3
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -61,7 +61,7 @@
 <div id="wrap">
 <header>
   <h1>8<span class="thin">-</span>BALL</h1>
-  <span class="ver">v0.2.2</span>
+  <span class="ver">v0.2.3</span>
 </header>
 
 <div id="home" class="screen on">
@@ -101,10 +101,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.2.2"></script>
-<script src="../shared/tablekit.js?v=0.2.2"></script>
-<script src="../shared/pool-rules.js?v=0.2.2"></script>
-<script src="../shared/pool-physics.js?v=0.2.2"></script>
+<script src="../shared/config.js?v=0.2.3"></script>
+<script src="../shared/tablekit.js?v=0.2.3"></script>
+<script src="../shared/pool-rules.js?v=0.2.3"></script>
+<script src="../shared/pool-physics.js?v=0.2.3"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -493,12 +493,13 @@ const ctx = cv && cv.getContext ? (cv.getContext('2d')||null) : null;
 let VIEW = { s:1, ox:0, oy:0, rot:false, pxw:0, pxh:0 };
 const RAILPAD = 0.075;   // wooden rail width in table metres
 
+const GUTTER = 0.24;   // metres-equivalent of wood beside the table, where the power bar lives — never over the cloth
 function fit(){
   if(!ctx || !cv.getBoundingClientRect) return;
   const r = cv.getBoundingClientRect(); if(!r || !r.width) return;
   const dpr = (window.devicePixelRatio||1);
   const tw = PP.W + RAILPAD*2, th = PP.H + RAILPAD*2;
-  const aspect = th/tw;                                            // width over height — the table always stands upright
+  const aspect = (th + GUTTER)/tw;                                 // upright table plus the bar's gutter
   const maxH = Math.max(320, (window.innerHeight||800) - 195);     // leave room for the plates, the hint and the log
   const cssH = Math.min(r.width/aspect, maxH);
   const cssW = cssH*aspect;
@@ -506,8 +507,8 @@ function fit(){
   cv.style.height = cssH+'px';
   cv.style.margin = '0 auto';
   cv.width = Math.round(cssW*dpr); cv.height = Math.round(cssH*dpr);
-  const s = cv.width / th;
-  VIEW = { s, rot:true, pxw:cv.width, pxh:cv.height, ox: RAILPAD*s, oy: RAILPAD*s };
+  const s = cv.width / (th + GUTTER);
+  VIEW = { s, rot:true, pxw:cv.width, pxh:cv.height, ox: RAILPAD*s, oy: RAILPAD*s, gutX: th*s };
 }
 function X(tx,ty){ return VIEW.rot ? (PP.H-ty)*VIEW.s + VIEW.ox : tx*VIEW.s + VIEW.ox; }
 function Y(tx,ty){ return VIEW.rot ? tx*VIEW.s + VIEW.oy : ty*VIEW.s + VIEW.oy; }
@@ -594,8 +595,9 @@ function defaultAim(){   // a fresh turn opens aimed at the nearest ball — nev
   AIMDIR = best ? { angle: Math.atan2(best.y-cue.y, best.x-cue.x) } : { angle: 0 };
 }
 function barRect(){
-  const w = 0.10*VIEW.s, h = VIEW.pxh*0.55;
-  return { x: VIEW.pxw - w - 0.035*VIEW.s, y: (VIEW.pxh - h)/2, w, h };
+  const w = 0.115*VIEW.s, h = VIEW.pxh*0.62;
+  const gutW = VIEW.pxw - VIEW.gutX;
+  return { x: VIEW.gutX + (gutW - w)/2, y: (VIEW.pxh - h)/2, w, h };
 }
 function rr(x,y,w,h,r){
   ctx.beginPath();
@@ -620,33 +622,54 @@ function drawAim(){
     ctx.beginPath(); ctx.moveTo(X(rc.hit.x,rc.hit.y),Y(rc.hit.x,rc.hit.y));
     ctx.lineTo(X(rc.hit.x+nx*0.28,rc.hit.y+ny*0.28),Y(rc.hit.x+nx*0.28,rc.hit.y+ny*0.28)); ctx.stroke();
   }
-  if(POWERDRAG && POWERDRAG.p > 0.01){   // the stick pulls back off the ball as the bar comes down
-    const pull = 0.055 + POWERDRAG.p*0.30, len = 0.46;
-    const bx=cue.x-dx*pull, by=cue.y-dy*pull, ex=cue.x-dx*(pull+len), ey=cue.y-dy*(pull+len);
-    ctx.lineCap='round';
-    ctx.strokeStyle='#8a5a30'; ctx.lineWidth=S*0.016;
-    ctx.beginPath(); ctx.moveTo(X(bx,by),Y(bx,by)); ctx.lineTo(X(ex,ey),Y(ex,ey)); ctx.stroke();
-    ctx.strokeStyle='#e8dcc8'; ctx.lineWidth=S*0.016;
-    ctx.beginPath(); ctx.moveTo(X(bx,by),Y(bx,by)); ctx.lineTo(X(bx-dx*0.05,by-dy*0.05),Y(bx-dx*0.05,by-dy*0.05)); ctx.stroke();
-    ctx.lineCap='butt';
-  }
+  /* the cue stick sits behind the ball the whole time you aim, and draws back as the bar comes down */
+  const p = POWERDRAG ? POWERDRAG.p : 0;
+  const pull = 0.05 + p*0.30, len = 0.48;
+  const tx0=cue.x-dx*pull, ty0=cue.y-dy*pull, ex=cue.x-dx*(pull+len), ey=cue.y-dy*(pull+len);
+  const mx=cue.x-dx*(pull+len*0.42), my=cue.y-dy*(pull+len*0.42);
+  ctx.lineCap='round';
+  ctx.strokeStyle='#6e4522'; ctx.lineWidth=S*0.019;                 // butt half, darker and thicker
+  ctx.beginPath(); ctx.moveTo(X(mx,my),Y(mx,my)); ctx.lineTo(X(ex,ey),Y(ex,ey)); ctx.stroke();
+  ctx.strokeStyle='#c99a5e'; ctx.lineWidth=S*0.013;                 // shaft half, lighter and slimmer
+  ctx.beginPath(); ctx.moveTo(X(tx0,ty0),Y(tx0,ty0)); ctx.lineTo(X(mx,my),Y(mx,my)); ctx.stroke();
+  ctx.strokeStyle='#f4efe5'; ctx.lineWidth=S*0.013;                 // ferrule
+  ctx.beginPath(); ctx.moveTo(X(tx0,ty0),Y(tx0,ty0)); ctx.lineTo(X(tx0-dx*0.014,ty0-dy*0.014),Y(tx0-dx*0.014,ty0-dy*0.014)); ctx.stroke();
+  ctx.fillStyle='#7fb6d9';                                          // chalk
+  ctx.beginPath(); ctx.arc(X(tx0,ty0),Y(tx0,ty0),S*0.0075,0,7); ctx.fill();
+  ctx.lineCap='butt';
 }
 function drawBar(){
-  if(!myTurn() || (G.inHand && G.inHand.key===me() && PLACING)) return;
+  if(!myTurn() || PLACING) return;
   const b=barRect(), p=POWERDRAG?POWERDRAG.p:0, S=VIEW.s;
-  ctx.fillStyle='#0d1a12cc'; rr(b.x,b.y,b.w,b.h,b.w/2); ctx.fill();
-  ctx.strokeStyle='#e8c63b55'; ctx.lineWidth=Math.max(1,S*0.004); rr(b.x,b.y,b.w,b.h,b.w/2); ctx.stroke();
-  if(p>0.01){
-    const fh=b.h*p;
-    const g=ctx.createLinearGradient(0,b.y,0,b.y+b.h);
-    g.addColorStop(0,'#3fce6f'); g.addColorStop(0.65,'#e8c63b'); g.addColorStop(1,'#ff5d6c');
-    ctx.save(); rr(b.x+2,b.y+2,b.w-4,b.h-4,(b.w-4)/2); ctx.clip();
-    ctx.fillStyle=g; ctx.fillRect(b.x, b.y, b.w, fh);
-    ctx.restore();
-  }
-  const hy=b.y+p*b.h;   // the handle: a cue butt riding the track
-  ctx.fillStyle='#e8dcc8'; rr(b.x-b.w*0.28, hy-b.w*0.42, b.w*1.56, b.w*0.84, b.w*0.35); ctx.fill();
-  ctx.strokeStyle='#00000055'; ctx.lineWidth=1; rr(b.x-b.w*0.28, hy-b.w*0.42, b.w*1.56, b.w*0.84, b.w*0.35); ctx.stroke();
+  /* the recessed slot */
+  ctx.fillStyle='#2a180c'; rr(b.x,b.y,b.w,b.h,b.w/2); ctx.fill();
+  ctx.strokeStyle='#00000088'; ctx.lineWidth=Math.max(1,S*0.004);
+  rr(b.x+1,b.y+1,b.w-2,b.h-2,(b.w-2)/2); ctx.stroke();
+  ctx.strokeStyle='#f4efe522'; ctx.lineWidth=Math.max(1,S*0.003);
+  rr(b.x,b.y,b.w,b.h,b.w/2); ctx.stroke();
+  ctx.strokeStyle='#f4efe51c';                                      // quarter ticks
+  [0.25,0.5,0.75].forEach(f=>{
+    const ty=b.y+f*b.h;
+    ctx.beginPath(); ctx.moveTo(b.x+b.w*0.2,ty); ctx.lineTo(b.x+b.w*0.8,ty); ctx.stroke();
+  });
+  /* the cue, standing in the slot, tip up — pull it down for power */
+  const cx=b.x+b.w/2;
+  const stickLen=b.h*0.56, pad=b.w*0.5;
+  const travel=b.h - stickLen - pad*2;
+  const tipY=b.y + pad + p*travel;
+  const midY=tipY + stickLen*0.42, buttY=tipY + stickLen;
+  ctx.lineCap='round';
+  ctx.strokeStyle='#171717'; ctx.lineWidth=b.w*0.5;                 // bumper
+  ctx.beginPath(); ctx.moveTo(cx,buttY-b.w*0.12); ctx.lineTo(cx,buttY); ctx.stroke();
+  ctx.strokeStyle='#6e4522'; ctx.lineWidth=b.w*0.5;                 // butt
+  ctx.beginPath(); ctx.moveTo(cx,midY); ctx.lineTo(cx,buttY-b.w*0.14); ctx.stroke();
+  ctx.strokeStyle='#c99a5e'; ctx.lineWidth=b.w*0.36;                // shaft
+  ctx.beginPath(); ctx.moveTo(cx,tipY+b.w*0.24); ctx.lineTo(cx,midY); ctx.stroke();
+  ctx.strokeStyle='#f4efe5'; ctx.lineWidth=b.w*0.36;                // ferrule
+  ctx.beginPath(); ctx.moveTo(cx,tipY+b.w*0.1); ctx.lineTo(cx,tipY+b.w*0.24); ctx.stroke();
+  ctx.fillStyle='#7fb6d9';                                          // chalk tip
+  ctx.beginPath(); ctx.arc(cx,tipY+b.w*0.06,b.w*0.17,0,7); ctx.fill();
+  ctx.lineCap='butt';
 }
 function drawInHand(){
   if(!G.inHand || G.inHand.key!==me() || ANIM) return;
@@ -690,7 +713,7 @@ function onDown(e){
   DRAGID=e.pointerId;
   try{ cv.setPointerCapture(e.pointerId); }catch(err){}
   const bar=barRect();
-  if(px.x >= bar.x - bar.w*1.2 && px.x <= bar.x + bar.w*2.2 && px.y >= bar.y - bar.w && px.y <= bar.y + bar.h + bar.w){   // a thumb-sized welcome
+  if(px.x >= VIEW.gutX - bar.w*0.4){   // the whole gutter is the bar's — thumbs are not precise instruments
     if(!AIMDIR) defaultAim();
     DRAGKIND='power';
     POWERDRAG={ p: Math.max(0, Math.min(1, (px.y-bar.y)/bar.h)) };

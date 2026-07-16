@@ -1,5 +1,12 @@
 # 8-Ball — Changelog
 
+## v0.2.3 — 2026-07-16
+**The bar gets off the cloth; the cue never leaves the table.** The power bar was drawn over the playing surface — functional, but it hid balls and read as an overlay, not equipment. The canvas now reserves a wooden gutter beside the table and the bar lives there, restyled the GamePigeon way: a recessed slot with quarter ticks and an actual cue stick standing in it, tip up — chalk, ferrule, shaft, butt, bumper — that you pull down the slot. The whole gutter is the bar's touch target; thumbs are not precise instruments.
+
+And the cue stick on the table is no longer a charging effect: it sits behind the ball the entire time an aim exists, swinging as you adjust the line, drawing back off the ball as the slot cue comes down. Same two-tone taper, ferrule and chalk tip as its sibling in the slot.
+
+One for the tooling ledger: this change briefly deleted `drawInHand` — a region replacement between two function anchors swallowed the function living between them. Lint and bootsim were structurally blind to it (nothing calls `draw()` headlessly at boot); **the pixel renderer caught it on the first frame**. The dev eye earns its keep.
+
 ## v0.2.2 — 2026-07-16
 **Aim with one hand, power with the other.** The slingshot — direction and power in a single drag — made every shot a compromise: fine aim wanted a short careful drag, real power wanted a long one, and the two fought. Now they're separate, GamePigeon-style:
 
