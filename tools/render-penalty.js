@@ -153,4 +153,14 @@ D.setCam('shoot');
 D.poseKeeper(0, 0, false, 0);
 D.ballMesh.position.set(0.8, 1.2, 4.5);
 snap('cam-shoot-flight.png');
+
+/* keeper portraits — the model must survive a close-up */
+function settle(n) { for (let i = 0; i < n; i++) D.GK.userData.stepLimbs && D.GK.userData.stepLimbs(1/60); }
+D.camera.position.set(1.5, 1.35, 2.7); D.camera.lookAt(-0.1, 1.05, 0.05);
+D.camera.fov = 38; D.camera.updateProjectionMatrix();
+D.poseKeeper(0, 0, false, 0); settle(90);
+snap('portrait-idle.png');
+D.poseKeeper(0.9, 1.5, true, 1); settle(16);
+D.camera.position.set(1.2, 1.5, 3.1); D.camera.lookAt(0.7, 0.9, 0.05); D.camera.updateProjectionMatrix();
+snap('portrait-dive.png');
 console.log('done');

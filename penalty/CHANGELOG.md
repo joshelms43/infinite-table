@@ -1,5 +1,26 @@
 # Penalty Shootout — Changelog
 
+## LAB v0.6.0 — 2026-07-15
+The punch list, item by item.
+
+**Camera never reset between kicks** — real bug, found in code: setCam early-returned when the mode had not changed, so the flight-follow displacement survived into the next kick. It always re-homes now.
+
+**No marker for where the ball is going** — the tell ring now appears at the ball's TRUE destination (spray included) the moment any shot launches, for shooter and keeper alike.
+
+**Side aimer starts on the floor** — the side sweep rides the grass (was mid-air at 1.2m); the height tap lifts from there.
+
+**Spray, meaner** — slightly worse below the red zone and severe inside it, measured: 0.6 power → 0.62m radius; 0.78 → 0.98m; 0.9 → 1.93m; full power → 3.27m. Blasting it can genuinely miss the stadium.
+
+**Line markings** — the penalty arc (the D) drawn properly outside the box, all lines thickened.
+
+**The goal** — sturdier rendered frame (physics stays honest at the real 6cm), finer net cells on the cloth.
+
+**The look** — exposure pulled back so the ACES wash stops bleaching the greens; richer turf with stronger mow stripes.
+
+**The keeper, third rebuild** — bent elbows with gloves ready at the waist, shoulder caps and collar, waistband stripe, sock-and-boot legs, a real crouch; dive poses stretch the lead arm with the trail tucked. Honest note: the headless viewer died mid-round, so this build's portraits ship for Josh's eyes rather than mine — the render pipeline wrote them, and the physics probes confirm the new rig springs correctly (whip to 3.05, impact dip to 2.70, settle 2.85), but the aesthetic call on the close-up belongs to whoever can currently see.
+
+Both proof clips re-rendered on this build: the goal still catches in the cloth on arrival; the save still lands dive, contact, tumble.
+
 ## LAB v0.5.0 — 2026-07-15
 "Still feels like it needs a full physics engine" — correct again, and for two reasons: half the scene was not simulated, and the half that was had a bug that made it feel random.
 

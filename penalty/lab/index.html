@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — Penalty Shootout LAB (3D, not on the door). Version: 0.5.0 -->
+<!-- Infinite Table — Penalty Shootout LAB (3D, not on the door). Version: 0.6.0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -116,7 +116,11 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a
 function newSeed(){return (Math.random()*4294967296)>>>0;}
 var RED_START=0.78, ERR_MAX=1.35, SPD_MIN=13, SPD_RNG=19, MAGNUS=0.055, BALL_M=0.43;   // metres & m/s — real units
 function qaFromPower(p){var qa;if(p<=RED_START){qa=1-0.15*(p/RED_START);}else{var t=(p-RED_START)/(1-RED_START);qa=0.85-0.42*t-0.45*Math.pow(t,2.4);}return{qa:Math.max(0.04,Math.min(1,qa)),over:0};}
-function sprayRadius(p){return (0.04+p*p)*ERR_MAX;}
+function sprayRadius(p){
+  var base=(0.06+1.1*p*p)*ERR_MAX;                       // slightly worse everywhere
+  if(p>RED_START){ var t=(p-RED_START)/(1-RED_START); base+=1.7*Math.pow(t,1.6); }  // the red zone truly sprays
+  return base;
+}
 /* shot {aim:[x,y] metres on the goal plane, power 0..1} + seed -> a deterministic launch */
 function computeLaunch(shot,seed){
   var rng=mulberry32(seed>>>0);
@@ -146,7 +150,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   /* ================= constants (metres, seconds, kilograms) ================= */
   var GOAL_W=7.32, GOAL_H=2.44, POST_R=0.06, SPOT=11, BALL_R=0.11;   // BALL_M lives with the pure core
   var HALF_W=GOAL_W/2;
-  var AIMX=HALF_W+1.35, AIMY_HI=3.05, AIMY_LO=0.14, AIM_ROW=1.2;   // aimer sweep bounds
+  var AIMX=HALF_W+1.35, AIMY_HI=3.05, AIMY_LO=0.14, AIM_ROW=0.16;   // side aimer rides the floor; height lifts from there
   var SWEEP_X=0.90, SWEEP_Y=0.86, SWEEP_P=0.98;
   var LEAD_MS=160, SHUFFLE_V=4.2, DIVE_SPEED=6.4, DIVE_THRESH=0.95, DRAG_SENS=1.3, KGRAV=13;
   var DT=1/120;                                                       // MAGNUS lives with the pure core
@@ -176,7 +180,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true});
   renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
-  renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.22;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.06;
   var scene=new THREE.Scene();
   scene.background=new THREE.Color(0x0e1c33);
   scene.fog=new THREE.Fog(0x0e1c33,48,120);
@@ -187,7 +191,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
      you can actually see. One camera for both was why keeping felt wrong. */
   var CAM={mode:null,home:new THREE.Vector3(),look:new THREE.Vector3()};
   function setCam(mode){
-    if(CAM.mode===mode)return; CAM.mode=mode;
+    CAM.mode=mode;   // always re-apply: the flight follow displaces the camera, and the next kick must start home
     if(mode==='keep'){ CAM.home.set(0,1.8,-5.3); CAM.look.set(0,1.30,7); camera.fov=50; }
     else { CAM.home.set(0,1.35,SPOT+5.2); CAM.look.set(0,1.15,0); camera.fov=28; }
     camera.position.copy(CAM.home); camera.lookAt(CAM.look); camera.updateProjectionMatrix();
@@ -207,8 +211,8 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   setCam('shoot');
 
   /* light rig — a floodlit night is BRIGHT: lit turf, glowing crowd, warm heads on tall masts */
-  scene.add(new THREE.AmbientLight(0x33415c,0.5));
-  scene.add(new THREE.HemisphereLight(0xaebfdd,0x1d4a26,0.85));
+  scene.add(new THREE.AmbientLight(0x2e3c55,0.4));
+  scene.add(new THREE.HemisphereLight(0xa2b6d6,0x1d4a26,0.68));
   var key=new THREE.DirectionalLight(0xfff2d9,1.15);
   key.position.set(-11,17,13); key.target.position.set(0,0,3);
   key.castShadow=true; key.shadow.mapSize.set(1024,1024); key.shadow.bias=-0.0012;
@@ -233,8 +237,8 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
   // pitch: striped mow bands via canvas texture
   function pitchTexture(){
     var c=document.createElement('canvas'); c.width=512; c.height=512; var g=c.getContext('2d');
-    g.fillStyle='#3d9a50'; g.fillRect(0,0,512,512);
-    for(var i=0;i<8;i++){ if(i%2===0){ g.fillStyle='rgba(255,255,255,0.10)'; g.fillRect(0,i*64,512,64); } }
+    g.fillStyle='#2f8a44'; g.fillRect(0,0,512,512);
+    for(var i=0;i<8;i++){ if(i%2===0){ g.fillStyle='rgba(255,255,255,0.16)'; g.fillRect(0,i*64,512,64); } }
     var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(4,4); t.encoding=THREE.sRGBEncoding; return t;
   }
   var pitch=new THREE.Mesh(new THREE.PlaneGeometry(90,90), new THREE.MeshStandardMaterial({map:pitchTexture(),roughness:1}));
@@ -242,19 +246,29 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
 
   // white lines: goal line, box, arc, spot
   var lineMat=new THREE.MeshBasicMaterial({color:0xf2faf3});
-  function lineStrip(w,d,x,z){ var m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),lineMat); m.rotation.x=-Math.PI/2; m.position.set(x,0.012,z); scene.add(m); return m; }
+  function lineStrip(w,d,x,z){ var m=new THREE.Mesh(new THREE.PlaneGeometry(w,Math.max(d,0.14)),lineMat); m.rotation.x=-Math.PI/2; m.position.set(x,0.012,z); scene.add(m); return m; }
   lineStrip(24,0.12,0,0);                       // goal line
   lineStrip(0.12,16.5,-9.16,8.25); lineStrip(0.12,16.5,9.16,8.25); lineStrip(18.44,0.12,0,16.5);   // 18-yard box
   lineStrip(0.12,5.5,-5.03,2.75); lineStrip(0.12,5.5,5.03,2.75); lineStrip(10.18,0.12,0,5.5);      // 6-yard box
   var spot=new THREE.Mesh(new THREE.CircleGeometry(0.14,20),lineMat); spot.rotation.x=-Math.PI/2; spot.position.set(0,0.013,SPOT); scene.add(spot);
-  (function arc(){ var pts=[]; for(var a=0.4;a<=Math.PI-0.4;a+=0.06){ pts.push(new THREE.Vector3(Math.cos(a)*9.15,0.012,16.5+ -Math.sin(a)*0+0)); } })();
+  (function theD(){   // the penalty arc: r=9.15 from the spot, only the part outside the box
+    var half=Math.acos((16.5-SPOT)/9.15);
+    for(var a=-half;a<=half;a+=0.05){
+      var px=Math.sin(a)*9.15, pz=SPOT+Math.cos(a)*9.15;
+      if(pz<16.5)continue;
+      var seg=new THREE.Mesh(new THREE.PlaneGeometry(0.16,0.32),lineMat);
+      seg.rotation.x=-Math.PI/2; seg.rotation.z=-a;
+      seg.position.set(px,0.012,pz); scene.add(seg);
+    }
+  })();
 
   // goal frame: white cylinders
   var postMat=new THREE.MeshStandardMaterial({color:0xf4f7f9,roughness:0.35,metalness:0.1});
-  function post(x){ var m=new THREE.Mesh(new THREE.CylinderGeometry(POST_R,POST_R,GOAL_H+POST_R,14),postMat); m.position.set(x,(GOAL_H+POST_R)/2,0); m.castShadow=true; scene.add(m); return m; }
+  var POST_VIS=0.085;   // physics stays honest at POST_R; the eye gets a sturdier frame
+  function post(x){ var m=new THREE.Mesh(new THREE.CylinderGeometry(POST_VIS,POST_VIS,GOAL_H+POST_VIS,14),postMat); m.position.set(x,(GOAL_H+POST_VIS)/2,0); m.castShadow=true; scene.add(m); return m; }
   post(-HALF_W); post(HALF_W);
   var RATTLE={t:0};
-  var bar=new THREE.Mesh(new THREE.CylinderGeometry(POST_R,POST_R,GOAL_W+POST_R*2,14),postMat);
+  var bar=new THREE.Mesh(new THREE.CylinderGeometry(POST_VIS,POST_VIS,GOAL_W+POST_VIS*2,14),postMat);
   bar.rotation.z=Math.PI/2; bar.position.set(0,GOAL_H,0); bar.castShadow=true; scene.add(bar);
 
   // net: grid texture on back / sides / roof, gently sagged back panel
@@ -262,14 +276,14 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     var c=document.createElement('canvas'); c.width=256; c.height=256; var g=c.getContext('2d');
     g.clearRect(0,0,256,256); g.strokeStyle='rgba(240,248,244,0.85)'; g.lineWidth=1.5;
     for(var i=0;i<=256;i+=16){ g.beginPath(); g.moveTo(i,0); g.lineTo(i,256); g.stroke(); g.beginPath(); g.moveTo(0,i); g.lineTo(256,i); g.stroke(); }
-    var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+    var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(3,1.6); return t;
   }
   var netMat=new THREE.MeshBasicMaterial({map:netTexture(),transparent:true,opacity:0.7,side:THREE.DoubleSide,depthWrite:false});
   var NET_D=1.1;
   /* the net is CLOTH now — a Verlet particle grid pinned along the bar and pegged at the
      ground, with structural constraints. The ball pushes particles aside as it arrives;
      the mesh you see IS the simulation. A dead net was most of why "physics" felt absent. */
-  var CLOTH={NX:20,NY:10,P:[],pin:[]};
+  var CLOTH={NX:26,NY:13,P:[],pin:[]};
   (function(){
     for(var iy=0;iy<CLOTH.NY;iy++)for(var ix=0;ix<CLOTH.NX;ix++){
       var u=ix/(CLOTH.NX-1), v=iy/(CLOTH.NY-1);
@@ -356,43 +370,49 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
 
   /* ---- the keeper: articulated low-poly, dive-posable ---- */
   var GK=new THREE.Group();
-  var jersey=new THREE.MeshStandardMaterial({color:0x1fd0ac,roughness:0.62});
-  var shorts=new THREE.MeshStandardMaterial({color:0x10314a,roughness:0.8});
-  var skin=new THREE.MeshStandardMaterial({color:0xe9bd90,roughness:0.75});
-  var glove=new THREE.MeshStandardMaterial({color:0xf5f7f9,roughness:0.45});
-  var sock=new THREE.MeshStandardMaterial({color:0x0d2438,roughness:0.85});
-  function cyl(r,h,mat,x,y,z,parent){ var m=new THREE.Mesh(new THREE.CylinderGeometry(r,r*0.9,h,10),mat); m.position.set(x,y,z); m.castShadow=true; (parent||GK).add(m); return m; }
-  function sph(r,mat,x,y,z,parent){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,14,12),mat); m.position.set(x,y,z); m.castShadow=true; (parent||GK).add(m); return m; }
-  // legs: a keeper's ready crouch, knees soft, feet apart
+  /* keeper v3 — built to survive a close-up: bent elbows, gloves ready at the waist,
+     shoulders, socks and boots, a real crouch. Iterated against rendered portraits. */
+  var jersey=new THREE.MeshStandardMaterial({color:0x1cc9a6,roughness:0.6});
+  var jerseyD=new THREE.MeshStandardMaterial({color:0x14a487,roughness:0.65});
+  var shorts=new THREE.MeshStandardMaterial({color:0x0f3a56,roughness:0.8});
+  var skin=new THREE.MeshStandardMaterial({color:0xe7bb8e,roughness:0.7});
+  var glove=new THREE.MeshStandardMaterial({color:0xf6f8fa,roughness:0.4});
+  var sockM=new THREE.MeshStandardMaterial({color:0x17b394,roughness:0.75});
+  var bootM=new THREE.MeshStandardMaterial({color:0x101c2a,roughness:0.5});
+  var hairM=new THREE.MeshStandardMaterial({color:0x38251a,roughness:0.9});
+  function cylP(rTop,rBot,h,mat,x,y,z,parent){ var m=new THREE.Mesh(new THREE.CylinderGeometry(rTop,rBot,h,12),mat); m.position.set(x,y,z); m.castShadow=true; (parent||GK).add(m); return m; }
+  function sphP(r,mat,x,y,z,parent){ var m=new THREE.Mesh(new THREE.SphereGeometry(r,14,12),mat); m.position.set(x,y,z); m.castShadow=true; (parent||GK).add(m); return m; }
+  // legs: hip-anchored groups, shorts thigh, teal sock shin, boot pointing at the shooter
   var legL=new THREE.Group(), legR=new THREE.Group();
-  legL.position.set(-0.15,0.94,0); legR.position.set(0.15,0.94,0); GK.add(legL); GK.add(legR);
-  cyl(0.075,0.44,shorts,0,-0.22,0.02,legL); cyl(0.062,0.42,sock,0,-0.64,0.06,legL);
-  cyl(0.075,0.44,shorts,0,-0.22,0.02,legR); cyl(0.062,0.42,sock,0,-0.64,0.06,legR);
-  var bootM=new THREE.MeshStandardMaterial({color:0x0b1a28,roughness:0.6});
-  sph(0.085,bootM,0,-0.87,0.12,legL); sph(0.085,bootM,0,-0.87,0.12,legR);
-  legL.rotation.x=0.16; legR.rotation.x=0.16;
-  // hips + torso, leaning into the game
-  var hips=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.2,0.22),shorts); hips.position.set(0,0.98,0); hips.castShadow=true; GK.add(hips);
-  var torso=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.21,0.52,12),jersey); torso.position.set(0,1.34,0.05); torso.rotation.x=0.2; torso.castShadow=true; GK.add(torso);
-  var chestNo=new THREE.Mesh(new THREE.PlaneGeometry(0.16,0.2),new THREE.MeshBasicMaterial({color:0x0d3b31,transparent:true,opacity:0.9}));
-  chestNo.position.set(0,1.38,0.245); chestNo.rotation.x=0.2; GK.add(chestNo);
-  // arms hang forward from the shoulders — ready, not scarecrow
+  legL.position.set(-0.15,0.90,0); legR.position.set(0.15,0.90,0); GK.add(legL); GK.add(legR);
+  cylP(0.082,0.072,0.36,shorts,0,-0.18,0.01,legL); cylP(0.082,0.072,0.36,shorts,0,-0.18,0.01,legR);
+  cylP(0.062,0.055,0.38,sockM,0,-0.53,0.05,legL);  cylP(0.062,0.055,0.38,sockM,0,-0.53,0.05,legR);
+  (function boots(){ var bL=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.09,0.24),bootM); bL.position.set(0,-0.755,0.12); bL.castShadow=true; legL.add(bL);
+    var bR=bL.clone(); legR.add(bR); })();
+  // pelvis + torso: shorts, tapered jersey, shoulder caps, collar
+  var pelvis=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.22,0.24),shorts); pelvis.position.set(0,0.98,0); pelvis.castShadow=true; GK.add(pelvis);
+  var torso=new THREE.Mesh(new THREE.CylinderGeometry(0.185,0.225,0.52,14),jersey); torso.position.set(0,1.33,0.03); torso.rotation.x=0.14; torso.castShadow=true; GK.add(torso);
+  sphP(0.095,jersey,-0.21,1.55,0.05); sphP(0.095,jersey,0.21,1.55,0.05);          // shoulders
+  cylP(0.075,0.085,0.07,jerseyD,0,1.61,0.06);                                      // collar
+  var band=new THREE.Mesh(new THREE.CylinderGeometry(0.226,0.228,0.09,14),jerseyD); band.position.set(0,1.13,0.055); band.rotation.x=0.14; GK.add(band);   // waistband stripe
+  // arms: shoulder groups; elbow bend is baked so the gloves sit ready at the waist
   var armL=new THREE.Group(), armR=new THREE.Group();
-  armL.position.set(-0.24,1.55,0.08); armR.position.set(0.24,1.55,0.08); GK.add(armL); GK.add(armR);
-  cyl(0.052,0.42,jersey,0,-0.21,0,armL); cyl(0.052,0.42,jersey,0,-0.21,0,armR);
-  var gloveL=sph(0.09,glove,0,-0.46,0,armL), gloveR=sph(0.09,glove,0,-0.46,0,armR);
-  // head + hair
-  sph(0.135,skin,0,1.78,0.06);
-  var hair=new THREE.Mesh(new THREE.SphereGeometry(0.138,14,10,0,Math.PI*2,0,Math.PI*0.55),new THREE.MeshStandardMaterial({color:0x3a2416,roughness:0.9}));
-  hair.position.set(0,1.80,0.045); hair.castShadow=true; GK.add(hair);
+  armL.position.set(-0.26,1.53,0.05); armR.position.set(0.26,1.53,0.05); GK.add(armL); GK.add(armR);
+  function buildArm(g,side){
+    cylP(0.055,0.05,0.26,jersey,0,-0.13,0,g);
+    var fore=new THREE.Group(); fore.position.set(0,-0.26,0); fore.rotation.x=-0.85; g.add(fore);
+    cylP(0.048,0.042,0.24,skin,0,-0.12,0,fore);
+    sphP(0.092,glove,0,-0.27,0,fore);
+  }
+  buildArm(armL,-1); buildArm(armR,1);
+  // head
+  sphP(0.135,skin,0,1.76,0.07);
+  var hair=new THREE.Mesh(new THREE.SphereGeometry(0.14,14,10,0,Math.PI*2,0,Math.PI*0.52),hairM); hair.position.set(0,1.78,0.055); hair.rotation.x=-0.15; hair.castShadow=true; GK.add(hair);
   GK.position.set(0,0,0.05); scene.add(GK);
-  /* limbs are SPRINGS now: poses are targets, and mass chases them with lag and
-     overshoot. Sudden dives whip the arms; an impact makes them flail. Hand-set
-     rotations were the other half of why the keeper read as animation, not physics. */
   var LIMBS=[
-    {n:armL,ax:'z',v:0,t:0.42},{n:armR,ax:'z',v:0,t:-0.42},
-    {n:armL,ax:'x',v:0,t:0.35},{n:armR,ax:'x',v:0,t:0.35},
-    {n:legL,ax:'x',v:0,t:0.16},{n:legR,ax:'x',v:0,t:0.16}
+    {n:armL,ax:'z',v:0,t:0.30},{n:armR,ax:'z',v:0,t:-0.30},
+    {n:armL,ax:'x',v:0,t:0.42},{n:armR,ax:'x',v:0,t:0.42},
+    {n:legL,ax:'x',v:0,t:0.20},{n:legR,ax:'x',v:0,t:0.20}
   ];
   var BODY={rz:{v:0,t:0,c:0}};
   function limbTarget(node,ax,t){ for(var i=0;i<LIMBS.length;i++) if(LIMBS[i].n===node&&LIMBS[i].ax===ax) LIMBS[i].t=t; }
@@ -410,13 +430,14 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     BODY.rz.t=diving?clamp(-dirX*1.35,-1.6,1.6):clamp(-kx*0.12,-0.22,0.22);
     if(diving){
       var lead = dirX>0?armR:armL, trail = dirX>0?armL:armR;
-      limbTarget(lead,'z', dirX>0?-2.95:2.95);
-      limbTarget(trail,'z', dirX>0?0.9:-0.9);
+      limbTarget(lead,'z', dirX>0?-2.85:2.85);
+      limbTarget(trail,'z', dirX>0?0.75:-0.75);
+      limbTarget(lead,'x',-0.2); limbTarget(trail,'x',0.2);
       limbTarget(legL,'x',0.55); limbTarget(legR,'x',0.35);
     } else {
-      limbTarget(armL,'z',0.42); limbTarget(armR,'z',-0.42);
-      limbTarget(armL,'x',0.35); limbTarget(armR,'x',0.35);
-      limbTarget(legL,'x',0.16); limbTarget(legR,'x',0.16);
+      limbTarget(armL,'z',0.30); limbTarget(armR,'z',-0.30);
+      limbTarget(armL,'x',0.42); limbTarget(armR,'x',0.42);
+      limbTarget(legL,'x',0.20); limbTarget(legR,'x',0.20);
     }
   }
   poseKeeper(0,0,false,0);
@@ -626,6 +647,7 @@ window.Penalty={ computeLaunch:computeLaunch, qaFromPower:qaFromPower, sprayRadi
     ballBody.position.set(0,BALL_R,SPOT); ballBody.velocity.set(L.vx,L.vy,L.vz);
     ballBody.angularVelocity.set(-L.vz*3,L.spin*2,0);
     K.phase='flight'; K.simT=0; K.flightStart=performance.now();
+    revealTell();                                           // where it is REALLY going — spray included — for everyone
     if(S.ctrl[K.defender]==='bot'){
       var z=botDive(S.diff,K.shot.aim); emitInput('dive',{zone:z});
       K.botTarget=[ZC[z][0]*1.02, Math.max(0.5,ZC[z][1])]; K.botReactAt=performance.now()+CFG[S.diff].react;
