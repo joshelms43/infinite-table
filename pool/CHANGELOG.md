@@ -1,5 +1,18 @@
 # 8-Ball — Changelog
 
+## v0.2.0 — 2026-07-16
+**No host. Authority follows the turn.** Three patch releases fought the same enemy — a phone-shaped host that sleeps — and v0.1.3's answer was still "notice, hold, wait." The real answer was hiding in the architecture from day one: the simulation is deterministic and the rules are pure, so the game state is a function of (seed + ordered shots). Nobody needs to compute anything centrally, and in a strictly turn-based game, ordering is nearly free.
+
+Now the shooter's phone is the authority for its own stroke: simulate, judge, fold, broadcast `{input + resulting state}`; the other phone replays the identical deterministic animation and lands on the identical state. Highest seq wins. What that removes: the ON ITS WAY wait, the intent watchdog, nonces, dedupe, the busy flag and its three-layer heal — the shooter answers to nobody. What that keeps: the no-spoiler wind-back (your own table still learns the result when the balls stop) and the never-dropped shot queue, both re-pinned in their new shape.
+
+The clock is enforced by whoever's job it is: the turn player calls the timeout on themselves first; a waiter only claims a shooter who is eight seconds past dead, the claim carries a flag, and a rightful shot arriving at the claimed seq wins the tie — mutation-checked. A sleeping opponent is a note on their plate and a line in the hint; the game never stops for them. Healing is two rules: heartbeats carry seq, and anyone behind asks; a hello is answered with the state, by anyone who has one.
+
+Rerack needed no referee either: the final stroke stamps `nextSeed` and `nextBreaker` into the game-over state, so either player's tap builds the identical rack — a two-tap race is idempotent by construction, and breaks alternate.
+
+The lobby keeps its one privilege: assemble the roster, build the first rack, hand the game to the table. After that there is no host to be dependent on, because there is no host.
+
+poolsim's page fixtures rewritten for the new shape: nineteen assertions across authority, healing, both clock jobs, the sleeping opponent, and the deterministic rerack.
+
 ## v0.1.3 — 2026-07-16
 **The host is a phone, and phones sleep.** The remaining vanishing shots weren't lost messages — they were sent into a host whose app was backgrounded, JavaScript suspended, processing nothing. The watchdog re-sent three times into the void and gave up. And the RECONNECTING… banner fired on every 5-second heartbeat while a radio flapped, which is how "a lot of disconnected popups" happens.
 

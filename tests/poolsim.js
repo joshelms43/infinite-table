@@ -274,112 +274,22 @@ function checkTable(balls, label) {
   T('no game ever produced a NaN position', !nanSeen);
 }
 
-/* ---- the table frees itself: v0.1.0 shipped a busy flag nothing ever cleared ----
-   Caught live: the first shot of the match locked applyIntent forever — every later
-   intent, including the shooter's own next ball-in-hand, nacked NOT RIGHT NOW, and
-   the shot clock (which also defers to busy) went silent with it. This boots the
-   real page and replays that exact afternoon. */
-{
+/* ---- shooter authority: nobody waits for anybody to be awake ----
+   v0.2.0 removed the host. The shooter's phone simulates, judges, folds and
+   broadcasts its own stroke; authority follows the turn; highest seq wins; the
+   clock is enforced by whoever's job it is. Every lesson from the host era is
+   re-pinned here in its new shape: the no-spoiler wind-back, the never-dropped
+   shot queue, the claim-versus-rightful-shot tie-break, and the deterministic
+   rerack that makes a two-tap race idempotent by construction. */
+function bootPool() {
   const vm = require('vm');
   const { sourceFor } = require(path.join(__dirname, '_document'));
-  const code = sourceFor('pool');
-  const makeEl = () => new Proxy({ classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, style: {}, value: '' }, {
-    get(t, k) { if (k in t) return t[k]; return () => {}; }, set() { return true; },
-  });
-  const store = {};
-  const sandbox = {
-    console, Math, JSON, Date, Object, Array, Set, Map, Number, String, Boolean, Promise, RegExp,
-    isNaN, isFinite, parseInt, parseFloat, URLSearchParams,
-    setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
-    localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
-    document: { querySelector: () => makeEl(), querySelectorAll: () => [], createElement: makeEl, getElementById: makeEl, addEventListener() {}, visibilityState: 'visible', head: { appendChild() {} }, body: { appendChild() {}, classList: { add() {}, remove() {}, toggle() {} } } },
-    addEventListener() {}, location: { reload() {}, search: '', href: '' }, navigator: {}, devicePixelRatio: 1, innerWidth: 800, innerHeight: 500,
-  };
-  sandbox.window = sandbox; sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(code, sandbox, { filename: 'pool/index.html' });
-
-  const B = sandbox.__B, NET = B.NET;
-  const SENT = [];
-  NET.pkey = 'me'; NET.myName = 'Host'; NET.code = 'TEST';
-  NET.tx = {
-    presence: () => ({ me: [{ key: 'me', name: 'Host', host: true }], them: [{ key: 'them', name: 'Guest' }] }),
-    track() {}, alive: () => true, close() {},
-    send: (ev, p) => { SENT.push({ ev, p }); },
-  };
-  NET.mode = 'lobby-host';
-  NET.startGame();
-  const G = () => B.G;
-  T('deadlock repro — the match starts with the breaker in the kitchen', G().phase === 'play' && G().inHand && G().inHand.key === 'me');
-
-  const nacksTo = key => SENT.filter(s => s.ev === 'nack' && s.p.key === key).length;
-  NET.applyIntent({ key: 'me', k: 'shot', a: { angle: 0.2, power: 0.05 } });   // a whiffed break: a foul, but a legal intent
-  T('deadlock repro — the first shot is accepted', SENT.some(s => s.ev === 'shot') && NET.busy === true);
-  T('deadlock repro — busy carries a deadline, not a life sentence', isFinite(NET.busyUntil) && NET.busyUntil > Date.now());
-
-  NET.applyIntent({ key: 'them', k: 'shot', a: { angle: 1, power: 0.5 } });    // mid-flight: correctly held off
-  T('deadlock repro — mid-flight intents are held off', nacksTo('them') === 1);
-
-  const realNow = sandbox.Date.now.bind(sandbox.Date);
-  sandbox.Date.now = () => realNow() + 60000;                                  // the balls stopped long ago
-  const before = nacksTo('them');
-  NET.applyIntent({ key: 'them', k: 'shot', a: { angle: 1, power: 0.5 } });    // the shot that used to say NOT RIGHT NOW
-  sandbox.Date.now = realNow;
-  T('deadlock repro — the table frees itself for the next shot', nacksTo('them') === before && SENT.filter(s => s.ev === 'shot').length === 2);
-  T('deadlock repro — and play actually moved on', G().seq >= 2 && G().phase === 'play');
-
-  /* v0.1.1 caught live, part two: the host's HUD spoiled every shot — G held the
-     final state while the balls were still rolling, so the log, the group dots,
-     even the WINS overlay arrived before the 8 did. The host now winds the visible
-     table back after broadcasting and learns the result when the animation lands. */
-  T('no spoilers — the host holds the pre-shot state while the balls roll',
-    B.ANIM !== null && G().seq === 2 && G().turnKey === 'them',
-    'seq=' + G().seq + ' turn=' + G().turnKey);
-  T('no spoilers — the truth waits inside the animation', B.ANIM.endState.seq === 3);
-  T('no spoilers — freeing a stale busy settles the flight first, never forks the table',
-    SENT.filter(s => s.ev === 'shot').length === 2);   // shot 2 simulated from shot 1's true end, not from the pre-state
-
-  /* lost intents: phones drop websocket messages quietly. A re-sent intent the host
-     already played must be answered with the state — never simulated twice. */
-  sandbox.Date.now = () => realNow() + 120000;
-  vm.runInContext('settle()', sandbox);                                        // land the flight, then ask whose table it is
-  const who = G().turnKey;
-  const nacksBefore = nacksTo(who);
-  NET.applyIntent({ key: who, k: 'shot', a: { angle: 2, power: 0.4 }, n: 7 });
-  const shotsAfter = SENT.filter(s => s.ev === 'shot').length;
-  const statesBefore = SENT.filter(s => s.ev === 'state').length;
-  NET.applyIntent({ key: who, k: 'shot', a: { angle: 2, power: 0.4 }, n: 7 });   // the watchdog's duplicate
-  sandbox.Date.now = realNow;
-  T('dedupe — a re-sent intent is answered with the state, not a second shot',
-    SENT.filter(s => s.ev === 'shot').length === shotsAfter &&
-    SENT.filter(s => s.ev === 'state').length === statesBefore + 1 &&
-    nacksTo(who) === nacksBefore);
-
-  /* the host is a phone. Phones sleep. Everyone else deserves to know. */
-  const hbBefore = SENT.filter(s => s.ev === 'hb').length;
-  for (let k = 0; k < 5; k++) vm.runInContext('netTick()', sandbox);
-  T('sleeping host — the host heartbeats every five ticks', SENT.filter(s => s.ev === 'hb').length > hbBefore);
-
-  NET.clockAt = Date.now() - 5000;                               // the clock "expired" during the nap
-  const statesBeforeWake = SENT.filter(s => s.ev === 'state').length;
-  NET.revive(true);                                              // eyes open
-  T('sleeping host — waking re-arms the clock instead of fouling the waiter',
-    NET.clockAt > Date.now());
-  T('sleeping host — and re-pushes the truth to the room',
-    SENT.filter(s => s.ev === 'state').length === statesBeforeWake + 1);
-}
-
-/* ---- the shooter's watchdog: ON ITS WAY must mean it arrives, or it says so ---- */
-{
-  const vm = require('vm');
-  const { sourceFor } = require(path.join(__dirname, '_document'));
-  const code = sourceFor('pool');
   const makeEl = () => new Proxy({ classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, style: {}, value: '' }, {
     get(t, k) { if (k in t) return t[k]; return () => {}; }, set() { return true; },
   });
   const sandbox = {
     console, Math, JSON, Date, Object, Array, Set, Map, Number, String, Boolean, Promise, RegExp,
-    isNaN, isFinite, parseInt, parseFloat, URLSearchParams,
+    isNaN, isFinite, parseInt, parseFloat, URLSearchParams, performance,
     setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     document: { querySelector: () => makeEl(), querySelectorAll: () => [], createElement: makeEl, getElementById: makeEl, addEventListener() {}, visibilityState: 'visible', head: { appendChild() {} }, body: { appendChild() {}, classList: { add() {}, remove() {}, toggle() {} } } },
@@ -387,40 +297,121 @@ function checkTable(balls, label) {
   };
   sandbox.window = sandbox; sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(code, sandbox, { filename: 'pool/index.html' });
-  const B = sandbox.__B, NET = B.NET;
+  vm.runInContext(sourceFor('pool'), sandbox, { filename: 'pool/index.html' });
   const SENT = [];
-  NET.pkey = 'c'; NET.mode = 'client';
-  NET.tx = { send: (ev, p) => SENT.push({ ev, p }), presence: () => ({}), track() {}, alive: () => true, close() {} };
-  B.G.phase = 'play'; B.G.turnKey = 'c'; B.G.roster = [{ key: 'c', name: 'C' }, { key: 'h', name: 'H' }];
+  const B = sandbox.__B, NET = B.NET;
+  NET.pkey = 'me'; NET.myName = 'Me'; NET.code = 'TEST';
+  NET.tx = {
+    presence: () => ({ me: [{ key: 'me', name: 'Me', host: true }], them: [{ key: 'them', name: 'Them' }] }),
+    track() {}, alive: () => true, close() {},
+    send: (ev, p) => { SENT.push({ ev, p }); },
+  };
+  const run = (js) => vm.runInContext(js, sandbox);
+  return { sandbox, B, NET, SENT, run, count: ev => SENT.filter(x => x.ev === ev).length };
+}
 
-  const intents = () => SENT.filter(s => s.ev === 'intent').length;
-  NET.sendIntent('shot', { angle: 1, power: 0.5 });
-  T('watchdog — the shot goes out once, carrying a nonce', intents() === 1 && SENT[0].p.n === 1 && B.PENDING === true);
+{
+  const t = bootPool();
+  const { B, NET, SENT, run } = t;
+  const G = () => B.G;
+  NET.mode = 'lobby-host';
+  NET.startGame();
+  T('authority — the lobby hands the game straight to the table', G().phase === 'play' && NET.mode === 'peer' && t.count('start') === 1);
+  T('authority — the breaker starts in the kitchen', G().inHand && G().inHand.key === 'me' && G().inHand.behindHead === true);
 
-  const realNow = sandbox.Date.now.bind(sandbox.Date);
-  let off = 0;
-  sandbox.Date.now = () => realNow() + off;
-  for (let k = 1; k <= 3; k++) {
-    off += 3000;
-    vm.runInContext('netTick()', sandbox);
-    T('watchdog — unacknowledged after ' + (off / 1000) + 's, sent again', intents() === 1 + k && B.PENDING === true);
-  }
-  off += 3000;
-  vm.runInContext('netTick()', sandbox);
-  sandbox.Date.now = realNow;
-  T('watchdog — three re-sends, then honesty: the shooter is unlocked', B.PENDING === false && intents() === 4);
-  T('watchdog — every copy is the same nonce, so the host plays at most one',
-    SENT.filter(s => s.ev === 'intent').every(s => s.p.n === 1));
+  NET.shoot({ angle: 0.2, power: 0.05 });   // a whiffed break: a foul, but my stroke, applied here
+  T('authority — my shot needs nobody: applied and broadcast immediately', t.count('shot') === 1 && B.ANIM !== null);
+  T('no spoilers — the visible table still shows the pre-shot state', G().seq === 1 && G().turnKey === 'me');
+  T('no spoilers — the truth waits inside the animation', B.ANIM.endState.seq === 2);
 
-  /* and the client's side of a sleeping host: notice, hold, recover on the first word */
-  B.HOSTAT = Date.now() - 20000;
-  vm.runInContext('netTick()', sandbox);
-  T('sleeping host — three missed heartbeats and the client knows', B.HOSTDOWN === true);
-  const hellosBefore = SENT.filter(s => s.ev === 'hello').length;
-  NET.onMessage('hb', { t: Date.now() });
-  T('sleeping host — the first word back clears it and asks for the state',
-    B.HOSTDOWN === false && SENT.filter(s => s.ev === 'hello').length === hellosBefore + 1);
+  NET.shoot({ angle: 1, power: 0.5 });      // mid-flight: my own animation blocks me, silently
+  T('authority — a second stroke mid-flight goes nowhere', t.count('shot') === 1);
+
+  run('settle()');                          // the balls land
+  T('authority — the foul passed the table', G().seq === 2 && G().turnKey === 'them' && G().inHand.key === 'them');
+
+  /* their stroke arrives as a broadcast — replayed here, snapped to their truth */
+  const theirState = run('JSON.parse(JSON.stringify(snapshot()))');
+  theirState.seq = 3; theirState.by = 'them'; theirState.turnKey = 'me'; theirState.inHand = null;
+  const beforeBalls = G().balls.map(b => ({ id: b.id, x: b.x, y: b.y, pocketed: b.pocketed }));
+  NET.onMessage('shot', { seq: 3, shooter: 'them', before: beforeBalls, shot: { angle: 2, power: 0.1 }, state: theirState });
+  T('authority — their broadcast stroke animates here', B.ANIM !== null && B.ANIM.endState.seq === 3);
+
+  /* a second shot while the first still flies: queued, never dropped */
+  const s4 = JSON.parse(JSON.stringify(theirState)); s4.seq = 4; s4.turnKey = 'me';
+  NET.onMessage('shot', { seq: 4, shooter: 'them', before: beforeBalls, shot: { angle: 2.5, power: 0.1 }, state: s4 });
+  T('authority — a shot arriving mid-flight queues', B.SHOTQ.length === 1);
+  run('settle()');
+  T('authority — settle plays the whole queue to the last truth', G().seq === 4 && B.SHOTQ.length === 0 && B.ANIM === null);
+
+  /* the wire hiccuped and they are ahead: their heartbeat says so, we ask */
+  const hellosBefore = t.count('hello');
+  NET.onMessage('hb', { seq: 9 });
+  T('healing — a heartbeat from ahead triggers a state request', t.count('hello') === hellosBefore + 1);
+  const statesBefore = t.count('state');
+  NET.onMessage('hello', { key: 'them' });
+  T('healing — a hello is answered with the state', t.count('state') === statesBefore + 1);
+}
+
+{ /* the clock, both jobs */
+  const t = bootPool();
+  const { B, NET, run } = t;
+  const G = () => B.G;
+  NET.mode = 'lobby-host';
+  NET.startGame();
+
+  /* my clock, my foul */
+  B.DEADLINE = Date.now() - 1000;
+  run('netTick()');
+  T('clock — the turn player calls the timeout on themselves', G().turnKey === 'them' && G().to === false && G().inHand.key === 'them');
+
+  /* their clock, long gone: the waiter claims */
+  B.DEADLINE = Date.now() - 9000;
+  run('netTick()');
+  T('clock — the waiter claims a long-gone shooter, flagged as a claim', G().turnKey === 'me' && G().to === true);
+
+  /* ...but a rightful shot at the same seq beats the claim */
+  const claimSeq = G().seq;
+  const st = run('JSON.parse(JSON.stringify(snapshot()))');
+  st.seq = claimSeq; st.by = 'them'; st.to = false; st.turnKey = 'me';
+  const beforeBalls = G().balls.map(b => ({ id: b.id, x: b.x, y: b.y, pocketed: b.pocketed }));
+  NET.onMessage('shot', { seq: claimSeq, shooter: 'them', before: beforeBalls, shot: { angle: 2, power: 0.1 }, state: st });
+  T('clock — a rightful shot at the claimed seq wins the tie', B.ANIM !== null && B.ANIM.endState.by === 'them');
+}
+
+{ /* the sleeping opponent — the entire reason for v0.2.0 */
+  const t = bootPool();
+  const { B, NET, run } = t;
+  NET.mode = 'lobby-host';
+  NET.startGame();
+  B.OPPAT = Date.now() - 20000;
+  run('netTick()');
+  T('sleeping opponent — noted after three missed heartbeats', B.OPPQUIET === true);
+  const shots = t.count('shot');
+  NET.shoot({ angle: 0.3, power: 0.06 });
+  T('sleeping opponent — and I keep playing anyway', t.count('shot') === shots + 1 && B.ANIM !== null);
+  NET.onMessage('hb', { seq: 0 });
+  T('sleeping opponent — the first word back clears the note', B.OPPQUIET === false);
+}
+
+{ /* rerack: a pure function of the stamped seed — a two-tap race is idempotent */
+  const t = bootPool();
+  const { B, NET, run } = t;
+  const G = () => B.G;
+  NET.mode = 'lobby-host';
+  NET.startGame();
+  run('settle()');
+  B.G.phase = 'over'; B.G.seq = 10; B.G.nextSeed = 424242; B.G.nextBreaker = 'them'; B.G.winner = 'them';
+  const a = run('JSON.stringify(buildRack({ seq:11, seed:G.nextSeed, breakerKey:G.nextBreaker, roster:G.roster, by:"me" }))');
+  const b = run('JSON.stringify(buildRack({ seq:11, seed:G.nextSeed, breakerKey:G.nextBreaker, roster:G.roster, by:"them" }))');
+  T('rerack — both taps build the identical rack, author aside',
+    JSON.parse(a).balls.length === 16 && a.replace('"by":"me"', '"by":"them"') === b);
+  NET.rerack();
+  T('rerack — one tap starts the next game with breaks alternated',
+    G().phase === 'play' && G().seq === 11 && G().turnKey === 'them' && t.count('start') === 2);
+  const seqNow = G().seq;
+  NET.rerack();
+  T('rerack — a duplicate tap after the rack is a no-op', G().seq === seqNow);
 }
 
 finished = true;

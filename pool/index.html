@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.1.3
+<!-- Infinite Table — 8-Ball. Version: 0.2.0
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -61,7 +61,7 @@
 <div id="wrap">
 <header>
   <h1>8<span class="thin">-</span>BALL</h1>
-  <span class="ver">v0.1.3</span>
+  <span class="ver">v0.2.0</span>
 </header>
 
 <div id="home" class="screen on">
@@ -101,10 +101,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.1.3"></script>
-<script src="../shared/tablekit.js?v=0.1.3"></script>
-<script src="../shared/pool-rules.js?v=0.1.3"></script>
-<script src="../shared/pool-physics.js?v=0.1.3"></script>
+<script src="../shared/config.js?v=0.2.0"></script>
+<script src="../shared/tablekit.js?v=0.2.0"></script>
+<script src="../shared/pool-rules.js?v=0.2.0"></script>
+<script src="../shared/pool-physics.js?v=0.2.0"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -122,36 +122,142 @@ const CLOCK_MS = 75000;   // generous — pool is a thinking game; expiry is an 
 let G = {
   phase:'home',            // home | lobby | play | over
   seq:0,
+  by:null,                 // who authored this state
+  to:false,                // this state is a clock-claim by the waiting player — a rightful shot at the same seq beats it
   balls:[],                // [{id, x, y, pocketed}] — velocities never live in state
   turnKey:null,
   open:true, groups:{},    // groups[key] = 'solid' | 'stripe'
   breakShot:true,
+  breakerKey:null,         // who racked this game — breaks alternate
   inHand:null,             // {key, behindHead} | null — that player may drag the cue
   winner:null, winBy:'',
+  nextSeed:0, nextBreaker:null,   // stamped into the game-over state so either player can build the identical next rack
   roster:[],               // [{key, name}]
   log:[],
   clockSecs:null,
+  clockFullAt:0,           // authority-local deadline; snapshot() turns it into clockSecs for the wire
 };
 let ANIM = null;           // {sim, endState, last} while a shot is flying
 let SHOTQ = [];            // shots that arrived while one was still flying — played, never dropped
-let CLOCKBASE = null;      // {secs, at} — the client's view of the host's clock
+let CLOCKBASE = null;      // {secs, at} — this phone's view of the running clock
+let DEADLINE = null;       // the same clock as a local timestamp — whoever's job it is, enforces from this
 let AIM = null;            // {x,y} pointer in table coords while dragging an aim
 let PLACING = false;       // dragging the cue for ball in hand
-let PENDING = false;       // my shot is with the host, waiting for the echo
-let RESEND = null;         // the un-acknowledged intent — re-sent, not mourned
-let HOSTAT = 0;            // when the host was last heard from
-let HOSTDOWN = false;      // the host's phone is asleep — hold shots, say so, wait
+let OPPAT = 0;             // when the other side was last heard from
+let OPPQUIET = false;      // their phone went quiet — informational, never blocking: this is the whole point
 
 function me(){ return NET.pkey; }
-function myTurn(){ return G.phase==='play' && G.turnKey===me() && !ANIM && !PENDING && !HOSTDOWN; }
+function myTurn(){ return G.phase==='play' && G.turnKey===me() && !ANIM && !SHOTQ.length; }
 function opponentOf(key){ const o = G.roster.find(r=>r.key!==key); return o ? o.key : null; }
 function cueBall(balls){ return (balls||G.balls).find(b=>b.id===0); }
 function onTableIds(balls){ return (balls||G.balls).filter(b=>!b.pocketed && b.id!==0).map(b=>b.id); }
 
-/* ---------- the network, mirrored from Mafia: host applies, clients intend ---------- */
+/* ---------- the state, as data ---------- */
+function snapshot(){
+  return {
+    phase:G.phase, seq:G.seq, by:G.by, to:!!G.to,
+    balls:G.balls.map(b=>({ id:b.id, x:+b.x.toFixed(4), y:+b.y.toFixed(4), pocketed:!!b.pocketed })),
+    turnKey:G.turnKey, open:G.open, groups:G.groups, breakShot:G.breakShot, breakerKey:G.breakerKey,
+    inHand:G.inHand, winner:G.winner, winBy:G.winBy,
+    nextSeed:G.nextSeed, nextBreaker:G.nextBreaker,
+    roster:G.roster, log:G.log.slice(0,4),
+    clockSecs: (G.phase==='play' && G.clockFullAt) ? Math.max(0, Math.ceil((G.clockFullAt-Date.now())/1000)) : null,
+  };
+}
+
+/* A rack is a pure function of (seed, breaker, roster) — that is the whole trick.
+   Both players can build the next game independently and broadcast identical states;
+   the race between two rerack taps is idempotent by construction. */
+function buildRack(p){
+  const order = PR.rackOrder(p.seed);
+  const pos = PP.rackPositions();
+  const cs = PP.cueStart();
+  const bn = (p.roster.find(r=>r.key===p.breakerKey)||{}).name||'?';
+  return {
+    phase:'play', seq:p.seq, by:p.by, to:false,
+    balls:[{ id:0, x:+cs.x.toFixed(4), y:+cs.y.toFixed(4), pocketed:false }]
+      .concat(order.map((id,i)=>({ id, x:+pos[i].x.toFixed(4), y:+pos[i].y.toFixed(4), pocketed:false }))),
+    turnKey:p.breakerKey, open:true, groups:{}, breakShot:true, breakerKey:p.breakerKey,
+    inHand:{ key:p.breakerKey, behindHead:true },
+    winner:null, winBy:'', nextSeed:0, nextBreaker:null,
+    roster:p.roster, log:[bn+' breaks. Place the cue behind the line.'],
+    clockSecs: Math.ceil(CLOCK_MS/1000),
+  };
+}
+
+/* Fold a simulated shot and its verdict into G. The shooter is the authority for
+   their own stroke — this runs exactly once, on the shooter's phone. */
+function foldShot(shooter, sim, res, flightMs){
+  G.balls = sim.balls.map(b=>({ id:b.id, x:b.x, y:b.y, pocketed:b.pocketed }));
+  if(res.respotEight){
+    const eight = G.balls.find(b=>b.id===8);
+    const spot = PP.respotPosition(G.balls);
+    eight.pocketed=false; eight.x=spot.x; eight.y=spot.y;
+  }
+  const names = {}; G.roster.forEach(r=>names[r.key]=r.name);
+  const sn = names[shooter]||'?';
+  if(sim.events.firstHit!=null || sim.events.pocketed.length) G.breakShot = false;
+  if(res.assignShooter){
+    const opp = opponentOf(shooter);
+    G.groups[shooter] = res.assignShooter;
+    G.groups[opp] = res.assignShooter==='solid' ? 'stripe' : 'solid';
+  }
+  G.open = res.nowOpen;
+  if(res.win || res.lose){
+    G.phase='over';
+    G.winner = res.win ? shooter : opponentOf(shooter);
+    G.winBy = res.win ? 'the 8, clean' : (res.foul || 'the 8, thrown away');
+    G.inHand = null; G.clockFullAt = 0;
+    G.nextSeed = (Math.random()*0x7fffffff)|0;           // the loser of THIS coin flip is determinism: stamped once, used by either tap
+    G.nextBreaker = opponentOf(G.breakerKey) || shooter; // breaks alternate
+    G.log.unshift((names[G.winner]||'?')+' wins — '+G.winBy+'.');
+  } else {
+    const next = (res.again && !res.foul) ? shooter : opponentOf(shooter);
+    G.turnKey = next;
+    if(res.foul){
+      G.inHand = { key:next, behindHead:!!res.behindHead };
+      const cb = cueBall();
+      if(cb.pocketed || (res.behindHead && cb.x > PP.HEADSTRING)){
+        const spot = NET.freeSpot(res.behindHead);
+        cb.pocketed=false; cb.x=spot.x; cb.y=spot.y;
+      }
+      G.log.unshift('Foul on '+sn+' — '+res.foul+'. '+(names[next]||'?')+' has ball in hand'+(res.behindHead?' behind the line':'')+'.');
+    } else {
+      G.inHand = null;
+      const potted = sim.events.pocketed.filter(id=>id!==0);
+      if(potted.length) G.log.unshift(sn+' pockets '+potted.join(', ')+(res.again?' and stays on.':'.'));
+      else G.log.unshift(sn+' — dry. '+(names[next]||'?')+' to shoot.');
+    }
+    G.clockFullAt = Date.now() + (flightMs||0) + CLOCK_MS;
+  }
+  G.seq++; G.by = shooter; G.to = false;
+}
+
+/* The clock, enforced by whoever's job it is. The turn player calls it on themselves
+   first; only a long-gone shooter gets claimed by the waiter — and even then, a
+   rightful shot arriving at the same seq wins the tie. */
+function timeoutFoul(claimer, isClaim){
+  const slow = G.turnKey, next = opponentOf(slow);
+  const names={}; G.roster.forEach(r=>names[r.key]=r.name);
+  G.turnKey = next;
+  G.inHand = { key:next, behindHead:!!G.breakShot };
+  const cb = cueBall();
+  if(cb && G.breakShot && cb.x > PP.HEADSTRING){ const sp=NET.freeSpot(true); cb.x=sp.x; cb.y=sp.y; }
+  G.log.unshift('Shot clock on '+(names[slow]||'?')+'. '+(names[next]||'?')+' has ball in hand.');
+  G.clockFullAt = Date.now() + CLOCK_MS;
+  G.seq++; G.by = claimer; G.to = !!isClaim;
+  NET.sendState();
+  applyState(snapshot(), true);
+}
+
+/* ---------- the network: no host. Authority follows the turn. ----------
+   A shot is applied on the shooter's phone and broadcast as input + resulting
+   state; the other phone replays the identical deterministic animation and lands
+   on the identical state. Highest seq wins; turn exclusivity means competing
+   states at one seq can only come from a clock-claim race, which the 'to' flag
+   settles in the rightful shooter's favour. Nobody waits for anybody to be awake. */
 const NET = {
-  mode:'off', code:null, pkey:null, myName:'', tx:null, sb:null, _ch:null, _meta:null,
-  seed:0, breakerKey:null, busy:false, busyUntil:0, clockAt:null, nonce:0, seen:{},
+  mode:'off', code:null, pkey:null, myName:'', tx:null, sb:null, _ch:null, _meta:null, _rbAt:0, _hbn:0,
   async ensure(){
     if(this.sb) return true;
     try{
@@ -166,14 +272,13 @@ const NET = {
     try{
       this.tx = await TableKit.join({
         prefix:'pool', code,
-        events:['start','state','shot','hello','intent','nack','hb'],
+        events:['start','state','shot','hello','hb'],
         onMessage:(ev,p)=>this.onMessage(ev,p),
         onPresence:()=>{ render(); },
         meta:{ key:this.pkey, name:this.myName, host:!!hosting },
       });
     }catch(e){ banner('COULD NOT CONNECT — CHECK SIGNAL'); return false; }
     this._ch = this.tx._ch;
-    this._hosting = !!hosting;
     this._meta = { key:this.pkey, name:this.myName, host:!!hosting };
     return true;
   },
@@ -181,24 +286,19 @@ const NET = {
     if(!this.code || this.mode==='off') return;
     if(this.tx && this.tx.alive()){
       if(this._meta){ try{ this.tx.track(this._meta); }catch(e){} }
-      if(fromWake && this.mode==='host' && G.phase==='play'){
-        this.armClock(0);      // nobody gets clock-fouled for the host's nap
-        this.pushState();      // and the room re-syncs the moment the host's eyes open
+      if(fromWake && this.mode==='peer'){
+        settle();                                        // land any flight frozen by the nap before talking
+        this.tx.send('hello',{ key:this.pkey });         // who moved while I slept?
+        if(G.phase==='play' || G.phase==='over') this.sendState();   // and here is where I left off
       }
-      if(fromWake && this.mode==='client') this.tx.send('hello',{ key:this.pkey });
       if(G.phase==='lobby') render();
       return;
     }
     if(Date.now() - (this._rbAt||0) > 15000){ this._rbAt = Date.now(); banner('RECONNECTING…'); }   // once, not once per heartbeat
-    const hosting = this.mode==='lobby-host' || this.mode==='host';
-    if(await this.connect(this.code, hosting)){
+    if(await this.connect(this.code, this.mode==='lobby-host')){
       banner('BACK AT THE TABLE');
-      if(this.mode==='host'){
-        this.tx.send('start',{ roster:G.roster });
-        if(G.phase==='play') this.armClock(0);
-        this.pushState();
-      }
-      else if(this.mode==='client' || this.mode==='joining'){ this.tx.send('hello',{ key:this.pkey }); }
+      if(this.mode==='peer'){ this.tx.send('hello',{ key:this.pkey }); if(G.phase==='play'||G.phase==='over') this.sendState(); }
+      else if(this.mode==='joining'){ this.tx.send('hello',{ key:this.pkey }); }
       render();
     }
   },
@@ -220,186 +320,96 @@ const NET = {
       this.tx.send('hello',{ key:this.pkey });
     }catch(e){ banner('JOIN FAILED: '+(e&&e.message||e)); }
   },
-  startGame(){
+  startGame(){   // the lobby's only privilege: assemble the roster and hand the game to the table
     const seats = this.lobbySeats();
     if(seats.length < 2){ banner('NEED TWO PLAYERS'); return; }
     if(seats.length > 2){ banner('POOL SEATS TWO — FIRST TWO PLAY'); }
-    this.mode='host';
-    G.roster = seats.slice(0,2).map(s=>({ key:s.key, name:s.name }));
-    this.breakerKey = this.pkey;
-    this.newRack();
-    this.tx.send('start',{ roster:G.roster });
-    this.pushState(); render();
+    const roster = seats.slice(0,2).map(s=>({ key:s.key, name:s.name }));
+    const st = buildRack({ seq:1, seed:(Math.random()*0x7fffffff)|0, breakerKey:this.pkey, roster, by:this.pkey });
+    this.mode='peer';
+    OPPAT = Date.now();
+    this.tx.send('start',{ roster, state:st });
+    applyState(st, true);
   },
-  newRack(){
-    this.seed = (Math.random()*0x7fffffff)|0;
-    const order = PR.rackOrder(this.seed);
-    const pos = PP.rackPositions();
-    const cs = PP.cueStart();
-    G.balls = [{ id:0, x:cs.x, y:cs.y, pocketed:false }]
-      .concat(order.map((id,i)=>({ id, x:pos[i].x, y:pos[i].y, pocketed:false })));
-    G.phase='play'; G.seq++;
-    G.open=true; G.groups={}; G.breakShot=true;
-    G.turnKey=this.breakerKey;
-    G.inHand={ key:this.breakerKey, behindHead:true };
-    G.winner=null; G.winBy='';
-    const bn = (G.roster.find(r=>r.key===this.breakerKey)||{}).name||'?';
-    G.log.unshift(bn+' breaks. Place the cue behind the line.');
-    this.armClock(0);
-  },
-  armClock(extraMs){ this.clockAt = Date.now() + CLOCK_MS + (extraMs||0); },
-  serialize(){
-    return {
-      phase:G.phase, seq:G.seq,
-      balls:G.balls.map(b=>({ id:b.id, x:+b.x.toFixed(4), y:+b.y.toFixed(4), pocketed:!!b.pocketed })),
-      turnKey:G.turnKey, open:G.open, groups:G.groups, breakShot:G.breakShot,
-      inHand:G.inHand, winner:G.winner, winBy:G.winBy,
-      roster:G.roster, log:G.log.slice(0,4),
-      clockSecs: (G.phase==='play' && this.clockAt) ? Math.max(0, Math.ceil((this.clockAt-Date.now())/1000)) : null,
-    };
-  },
-  pushState(){ if(this.mode==='host'){ const s=this.serialize(); this.tx.send('state', s); applyState(s, true); } },
+  sendState(){ if(this.tx && this.mode==='peer') this.tx.send('state', snapshot()); },
   onMessage(type, m){
-    if(this.mode!=='host' && type!=='intent'){   // everything but intents comes from the host
-      HOSTAT = Date.now();
-      if(HOSTDOWN){ HOSTDOWN=false; banner('THE HOST IS BACK'); this.tx.send('hello',{ key:this.pkey }); render(); }
-    }
-    if(type==='hb') return;
     if(this.mode==='lobby-host'){
-      if(type==='hello') render();   // presence carries the lobby
+      if(type==='hello') render();   // presence carries the lobby until the rack is built
       return;
     }
-    if(this.mode==='host'){
-      if(type==='hello'){ this.tx.send('start',{ roster:G.roster }); this.pushState(); }
-      if(type==='intent') this.applyIntent(m);
-      return;
-    }
+    OPPAT = Date.now();
+    if(OPPQUIET){ OPPQUIET=false; render(); }
     if(type==='start'){
-      G.roster = m.roster||[];
-      if(this.mode==='joining') this.mode='client';
-      if(G.phase==='home') G.phase='lobby';
-      render();
+      if(this.mode!=='peer') this.mode='peer';
+      G.roster = m.roster||G.roster;
+      const tail = SHOTQ.length ? SHOTQ[SHOTQ.length-1].seq : (ANIM ? ANIM.endState.seq : G.seq);
+      if(m.state && m.state.seq > tail){ ANIM=null; SHOTQ=[]; applyState(m.state); }
+      else render();
+      return;
+    }
+    if(this.mode==='joining' && (type==='state' || type==='shot')) this.mode='peer';   // missed the start; the game found us anyway
+    if(this.mode!=='peer') return;
+    if(type==='hb'){
+      if((m.seq|0) > G.seq && !ANIM && !SHOTQ.length) this.tx.send('hello',{ key:this.pkey });   // they're ahead of us; ask for the state
+      return;
+    }
+    if(type==='hello'){
+      if(G.phase==='play' || G.phase==='over') this.sendState();
+      return;
     }
     if(type==='state'){
       const tail = SHOTQ.length ? SHOTQ[SHOTQ.length-1].seq : (ANIM ? ANIM.endState.seq : G.seq);
-      if(ANIM || SHOTQ.length){
-        if(m.seq > tail){ ANIM=null; SHOTQ=[]; applyState(m); }   // the host moved past everything we're holding
-      } else if(m.seq >= G.seq) applyState(m);
+      if(m.seq > tail){ ANIM=null; SHOTQ=[]; applyState(m); }
+      else if(!ANIM && !SHOTQ.length){
+        if(m.seq > G.seq) applyState(m);
+        else if(m.seq === G.seq && G.to && !m.to) applyState(m);   // my clock-claim loses to the rightful authority
+      }
+      return;
     }
     if(type==='shot'){
       const tail = SHOTQ.length ? SHOTQ[SHOTQ.length-1].seq : (ANIM ? ANIM.endState.seq : G.seq);
-      if(m.seq <= tail) return;                                   // already have it, or already past it
-      if(m.shooter===this.pkey) PENDING = false;
-      if(ANIM){ if(SHOTQ.length < 4) SHOTQ.push(m); return; }     // finish the flight in progress, then play this one
+      if(m.seq === G.seq && G.to && !m.to && !ANIM && !SHOTQ.length){ playShot(m.before, m.shot, m.state); return; }   // their shot was in flight when I claimed; theirs stands
+      if(m.seq <= tail) return;
+      if(ANIM){ if(SHOTQ.length < 4) SHOTQ.push(m); return; }      // finish the flight in progress, then play this one
       playShot(m.before, m.shot, m.state);
-    }
-    if(type==='nack' && m.key===this.pkey){ PENDING=false; banner(m.why||'NOT RIGHT NOW'); render(); }
-  },
-  sendIntent(k, a){
-    if(k==='shot'){ PENDING = true; render(); }
-    if(this.mode==='host'){ this.applyIntent({ key:this.pkey, k, a }); return; }
-    const p = { key:this.pkey, k, a, n:++this.nonce };
-    if(k==='shot') RESEND = { p, at:Date.now(), tries:0 };
-    this.tx.send('intent', p);
-  },
-  nack(key, why){ if(key===this.pkey){ PENDING=false; banner(why); } else this.tx.send('nack',{ key, why }); },
-  applyIntent(m){
-    if(m.n && (this.seen[m.key]|0) >= m.n){ this.pushState(); return; }   // a re-send of something already played: answer with the state, not a second shot
-    if(m.k==='rerack'){
-      if(G.phase!=='over'){ this.nack(m.key,'THE RACK IS LIVE'); return; }
-      if(!G.roster.some(r=>r.key===m.key)) return;
-      if(m.n) this.seen[m.key] = m.n;
-      this.breakerKey = opponentOf(this.breakerKey) || this.pkey;   // alternate breaks
-      this.newRack(); this.pushState(); render();
       return;
     }
-    if(this.busy && Date.now() > (this.busyUntil||0)){ settle(); this.busy = false; }   // a shot holds the table for its flight, never forever — and the truth lands before the lock lifts
-    if(G.phase!=='play' || this.busy){ this.nack(m.key,'NOT RIGHT NOW'); return; }
-    if(m.key!==G.turnKey){ this.nack(m.key,'NOT YOUR SHOT'); return; }
-
-    if(m.k==='place'){
-      if(!G.inHand || G.inHand.key!==m.key){ this.nack(m.key,'THE CUE LIES WHERE IT LIES'); return; }
-      const a = m.a||{};
-      if(!PP.placeOK(G.balls, +a.x, +a.y, G.inHand.behindHead)){ this.nack(m.key,'IT WON\'T SIT THERE'); return; }
-      if(m.n) this.seen[m.key] = m.n;
-      const cue = cueBall(); cue.x=+a.x; cue.y=+a.y; cue.pocketed=false;
-      G.seq++; this.pushState();
-      return;
-    }
-    if(m.k!=='shot') { this.nack(m.key,'NOT RIGHT NOW'); return; }
-
-    const a = m.a||{};
+  },
+  /* my table, my stroke — simulated here, judged here, broadcast from here */
+  shoot(a){
+    if(!myTurn()) return;
     const angle = +a.angle, power = Math.max(0, Math.min(1, +a.power));
-    if(!isFinite(angle) || !isFinite(power)){ this.nack(m.key,'BAD SHOT'); return; }
+    if(!isFinite(angle) || !isFinite(power)) return;
     const cue = cueBall();
-    if(!cue || cue.pocketed){ this.nack(m.key,'NO CUE BALL'); return; }
-
-    if(m.n) this.seen[m.key] = m.n;
-    const pre = this.serialize();   // the table as everyone still sees it
-    this.busy = true;
-    const shooter = m.key;
+    if(!cue || cue.pocketed) return;
+    const pre = snapshot();
     const before = G.balls.map(b=>({ id:b.id, x:b.x, y:b.y, pocketed:b.pocketed }));
     const ballsBefore = onTableIds(G.balls);
     const sim = PP.simulate(G.balls, { angle, power });
-    const flightMs = Math.ceil(sim.ticks * PP.DT * 1000);
-    this.busyUntil = Date.now() + flightMs + 600;   // the animation's length plus a breath — then the table is free no matter what
     const res = PR.judge({
       breakShot:G.breakShot, open:G.open,
-      myGroup:G.groups[shooter]||null,
+      myGroup:G.groups[this.pkey]||null,
       ballsBefore, events:sim.events,
     });
-
-    /* fold the verdict into the next state */
-    G.balls = sim.balls.map(b=>({ id:b.id, x:b.x, y:b.y, pocketed:b.pocketed }));
-    if(res.respotEight){
-      const eight = G.balls.find(b=>b.id===8);
-      const spot = PP.respotPosition(G.balls);
-      eight.pocketed=false; eight.x=spot.x; eight.y=spot.y;
-    }
-    const names = {}; G.roster.forEach(r=>names[r.key]=r.name);
-    const sn = names[shooter]||'?';
-
-    if(sim.events.firstHit!=null || sim.events.pocketed.length) G.breakShot = false;
-    if(res.assignShooter){
-      const opp = opponentOf(shooter);
-      G.groups[shooter] = res.assignShooter;
-      G.groups[opp] = res.assignShooter==='solid' ? 'stripe' : 'solid';
-    }
-    G.open = res.nowOpen;
-
-    if(res.win || res.lose){
-      G.phase='over';
-      G.winner = res.win ? shooter : opponentOf(shooter);
-      G.winBy = res.win ? 'the 8, clean' : (res.foul || 'the 8, thrown away');
-      G.inHand = null; this.clockAt = null;
-      G.log.unshift((names[G.winner]||'?')+' wins — '+G.winBy+'.');
-    } else {
-      const next = (res.again && !res.foul) ? shooter : opponentOf(shooter);
-      G.turnKey = next;
-      if(res.foul){
-        G.inHand = { key:next, behindHead:!!res.behindHead };
-        const cb = cueBall();
-        if(cb.pocketed || (res.behindHead && cb.x > PP.HEADSTRING)){
-          const spot = this.freeSpot(res.behindHead);
-          cb.pocketed=false; cb.x=spot.x; cb.y=spot.y;
-        }
-        G.log.unshift('Foul on '+sn+' — '+res.foul+'. '+(names[next]||'?')+' has ball in hand'+(res.behindHead?' behind the line':'')+'.');
-      } else {
-        G.inHand = null;
-        const potted = sim.events.pocketed.filter(id=>id!==0);
-        if(potted.length) G.log.unshift(sn+' pockets '+potted.join(', ')+(res.again?' and stays on.':'.'));
-        else G.log.unshift(sn+' — dry. '+(names[next]||'?')+' to shoot.');
-      }
-      const flight = flightMs;
-      this.armClock(flight);
-    }
-    G.seq++;
-
-    const state = this.serialize();
-    this.tx.send('shot', { seq:state.seq, shooter, before, shot:{ angle, power }, state });
-    if(shooter===this.pkey) PENDING=false;
+    foldShot(this.pkey, sim, res, Math.ceil(sim.ticks * PP.DT * 1000));
+    const state = snapshot();
+    this.tx.send('shot', { seq:state.seq, shooter:this.pkey, before, shot:{ angle, power }, state });
     applyState(pre, true);                       // wind the visible table back to before the stroke —
-    playShot(before, { angle, power }, state);   // the host learns the result when the balls stop, like everyone else
+    playShot(before, { angle, power }, state);   // the result arrives when the balls stop, same as for them
+  },
+  place(x, y){
+    if(!myTurn() || !G.inHand || G.inHand.key!==this.pkey) return;
+    if(!PP.placeOK(G.balls, x, y, G.inHand.behindHead)){ banner("IT WON'T SIT THERE"); return; }
+    const cue = cueBall(); cue.x=x; cue.y=y; cue.pocketed=false;
+    G.seq++; G.by=this.pkey; G.to=false;
+    this.sendState();
+    applyState(snapshot(), true);
+  },
+  rerack(){   // either tap builds the identical rack — the seed and breaker were stamped when the 8 fell
+    if(G.phase!=='over' || !G.nextSeed || !G.nextBreaker) return;
+    const st = buildRack({ seq:G.seq+1, seed:G.nextSeed, breakerKey:G.nextBreaker, roster:G.roster, by:this.pkey });
+    this.tx.send('start',{ roster:G.roster, state:st });
+    applyState(st, true);
   },
   /* somewhere legal to put a returned cue ball */
   freeSpot(behindHead){
@@ -414,57 +424,39 @@ const NET = {
   },
 };
 
-/* one heartbeat for everything that must not depend on the happy path.
-   The host's clock lives here, not in a timeout — throttled tabs fire timeouts
-   late and killed tabs never fire them at all. The stale-busy heal settles any
-   frozen animation FIRST, so the visible table can never fork from the truth.
-   And the shooter's watchdog re-sends an unacknowledged intent, because phone
-   websockets die quietly and a lost shot used to mean ON ITS WAY forever. */
+/* one heartbeat for everything that must not depend on the happy path — or on
+   the other phone being awake. Proof of life goes out; the clock is enforced by
+   whoever's job it is; a quiet opponent is noted, never waited on. */
 function settle(){
   if(ANIM){ const e=ANIM.endState; ANIM=null; applyState(e, e.turnKey===me()); }
   while(SHOTQ.length){ const n=SHOTQ.shift(); applyState(n.state, true); }
 }
 function netTick(){
-  if(NET.mode==='host'){
-    NET._hbn = (NET._hbn|0) + 1;
-    if(NET._hbn % 5 === 0 && (G.phase==='play' || G.phase==='over') && NET.tx) NET.tx.send('hb',{ t:Date.now() });   // proof of life, every five seconds
-    if(NET.busy && Date.now() > (NET.busyUntil||0)){ settle(); NET.busy = false; }
-    if(G.phase==='play' && !NET.busy && NET.clockAt && Date.now() >= NET.clockAt){
-      const slow = G.turnKey, next = opponentOf(slow);
-      const names={}; G.roster.forEach(r=>names[r.key]=r.name);
-      G.turnKey = next;
-      G.inHand = { key:next, behindHead:!!G.breakShot };
-      const cb = cueBall();
-      if(cb && G.breakShot && cb.x > PP.HEADSTRING){ const s=NET.freeSpot(true); cb.x=s.x; cb.y=s.y; }
-      G.log.unshift('Shot clock on '+(names[slow]||'?')+'. '+(names[next]||'?')+' has ball in hand.');
-      G.seq++;
-      NET.armClock(0);
-      NET.pushState(); render();
-    }
+  if(NET.mode!=='peer') return;
+  NET._hbn = (NET._hbn|0) + 1;
+  if(NET._hbn % 5 === 0 && (G.phase==='play' || G.phase==='over') && NET.tx) NET.tx.send('hb',{ seq:G.seq });
+  if(G.phase==='play' && !ANIM && !SHOTQ.length && DEADLINE){
+    if(G.turnKey===me() && Date.now() > DEADLINE) timeoutFoul(me(), false);              // my clock, my foul — called on myself
+    else if(G.turnKey!==me() && Date.now() > DEADLINE + 8000) timeoutFoul(me(), true);   // theirs, long gone — the waiter claims the table
   }
-  if(NET.mode==='client' && (G.phase==='play' || G.phase==='over') && HOSTAT && !HOSTDOWN && Date.now()-HOSTAT > 12000){
-    HOSTDOWN = true;                                   // three missed heartbeats: the host's phone is asleep
-    banner('THE HOST WENT QUIET — WAITING FOR THEIR TABLE');
-    render();
-  }
-  if(!PENDING){ RESEND = null; }
-  else if(RESEND && Date.now() - RESEND.at > 2200){
-    if(RESEND.tries >= 3){ RESEND=null; PENDING=false; banner("THE TABLE DIDN'T HEAR THAT — GO AGAIN"); render(); }
-    else { RESEND.tries++; RESEND.at = Date.now(); if(NET.tx) NET.tx.send('intent', RESEND.p); }
+  if((G.phase==='play' || G.phase==='over') && OPPAT && !OPPQUIET && Date.now()-OPPAT > 12000){
+    OPPQUIET = true; render();                          // noted on the plate — the game does not stop
   }
 }
 setInterval(netTick, 1000);
 
 /* ---------- applying state, animating shots ---------- */
 function applyState(s, localEcho){
-  G.phase=s.phase; G.seq=s.seq;
+  G.phase=s.phase; G.seq=s.seq; G.by=s.by||null; G.to=!!s.to;
   G.balls=(s.balls||[]).map(b=>({ id:b.id, x:b.x, y:b.y, pocketed:!!b.pocketed }));
   G.turnKey=s.turnKey; G.open=s.open; G.groups=s.groups||{};
-  G.breakShot=s.breakShot; G.inHand=s.inHand||null;
+  G.breakShot=s.breakShot; G.breakerKey=s.breakerKey||G.breakerKey; G.inHand=s.inHand||null;
   G.winner=s.winner; G.winBy=s.winBy||'';
+  G.nextSeed=s.nextSeed||0; G.nextBreaker=s.nextBreaker||null;
   G.roster=s.roster||G.roster; G.log=s.log||G.log;
   CLOCKBASE = (s.clockSecs!=null) ? { secs:s.clockSecs, at:Date.now() } : null;
-  if(!localEcho) PENDING=false;
+  DEADLINE = (s.clockSecs!=null && s.phase==='play') ? Date.now() + s.clockSecs*1000 : null;
+  if(G.phase==='play' && G.clockFullAt < Date.now()) G.clockFullAt = DEADLINE || 0;   // keep the authority-local clock in step when adopting a state
   render();
 }
 function playShot(before, shot, endState){
@@ -481,9 +473,7 @@ function stepAnim(){
   ANIM.sim.step(ticks);
   if(ANIM.sim.done){
     const end = ANIM.endState; ANIM=null;
-    if(NET.mode==='host') NET.busy=false;   // the balls stopped; the table is free
     applyState(end, end.turnKey===me());
-    if(NET.mode==='host') NET.pushState();  // and the truth goes out again — any phone that missed the shot broadcast heals here
     if(G.phase==='over') banner((rosterName(G.winner)||'?').toUpperCase()+' WINS');
     else if(/^Foul|^Shot clock/.test(G.log[0]||'')) banner('FOUL');
     if(SHOTQ.length){ const n=SHOTQ.shift(); playShot(n.before, n.shot, n.state); }
@@ -679,9 +669,7 @@ function onUp(e){
   if(PLACING){
     PLACING=false;
     const cue=cueBall();
-    if(cue && PP.placeOK(G.balls, cue.x, cue.y, G.inHand&&G.inHand.behindHead)){
-      NET.sendIntent('place',{ x:+cue.x.toFixed(4), y:+cue.y.toFixed(4) });
-    } else banner("IT WON'T SIT THERE");
+    if(cue) NET.place(+cue.x.toFixed(4), +cue.y.toFixed(4));
     return;
   }
   if(!AIM) return;
@@ -690,7 +678,7 @@ function onUp(e){
   const dx=p.x-cue.x, dy=p.y-cue.y, dist=Math.hypot(dx,dy);
   if(dist < 0.07) return;                       // a tap is a thought, not a shot
   const power=Math.min(1,dist/0.85);
-  NET.sendIntent('shot',{ angle:+Math.atan2(dy,dx).toFixed(5), power:+power.toFixed(3) });
+  NET.shoot({ angle:+Math.atan2(dy,dx).toFixed(5), power:+power.toFixed(3) });
 }
 if(cv && cv.addEventListener){
   cv.addEventListener('pointerdown',onDown);
@@ -743,12 +731,10 @@ function render(){
     let t='';
     if(G.phase==='over') t='';
     else if(ANIM) t='';
-    else if(HOSTDOWN) t="The host's phone went quiet — the table resumes when it comes back.";
-    else if(PENDING) t='On its way…';
     else if(myTurn()){
       if(G.inHand && G.inHand.key===me()) t=G.breakShot ? 'Drag the cue to place it behind the line, then drag anywhere to aim — release to break.' : 'Ball in hand — drag the cue anywhere'+(G.inHand.behindHead?' behind the line':'')+', then aim and release.';
       else t='Drag to aim through your finger — further is harder. Release to shoot.';
-    } else t=(rosterName(G.turnKey)||'They')+' is at the table.';
+    } else t=(rosterName(G.turnKey)||'They')+' is at the table.'+(OPPQUIET?' Their phone went quiet — the clock still runs.':'');
     hint.textContent=t;
   }
   const log=$('#log'); if(log) log.textContent=G.log[0]||'';
@@ -759,7 +745,7 @@ function render(){
       const big=over.querySelector('.big'), why=over.querySelector('.why'), ctl=$('#overctl');
       if(big) big.textContent=(rosterName(G.winner)||'?').toUpperCase()+' WINS';
       if(why) why.textContent=G.winBy;
-      if(ctl) ctl.innerHTML='<button class="btn primary" onclick="NET.sendIntent(\'rerack\',{})">Rerack — loser watches, winner sweats</button>';
+      if(ctl) ctl.innerHTML='<button class="btn primary" onclick="NET.rerack()">Rerack — '+esc(rosterName(G.nextBreaker)||'?')+' breaks</button>';
     }
   }
 }
@@ -781,10 +767,9 @@ globalThis.__B = {
   get NET(){ return NET; }, get G(){ return G; }, set G(v){ G = v; },
   get ANIM(){ return ANIM; }, set ANIM(v){ ANIM = v; },
   get SHOTQ(){ return SHOTQ; },
-  get PENDING(){ return PENDING; }, set PENDING(v){ PENDING = v; },
-  get RESEND(){ return RESEND; },
-  get HOSTAT(){ return HOSTAT; }, set HOSTAT(v){ HOSTAT = v; },
-  get HOSTDOWN(){ return HOSTDOWN; }, set HOSTDOWN(v){ HOSTDOWN = v; },
+  get DEADLINE(){ return DEADLINE; }, set DEADLINE(v){ DEADLINE = v; },
+  get OPPAT(){ return OPPAT; }, set OPPAT(v){ OPPAT = v; },
+  get OPPQUIET(){ return OPPQUIET; },
   applyState, playShot,
 };
 </script>
