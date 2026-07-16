@@ -1,5 +1,14 @@
 # 8-Ball — Changelog
 
+## v0.3.2 — 2026-07-16
+**The balls roll.** Every ball now carries a render-side orientation — a unit vector to its number pole — and when it moves, the vector rolls the honest way: Rodrigues rotation about the axis perpendicular to travel, angle = distance over radius. Numbers slide across the crown, foreshorten toward the limb, vanish around the far side and come back; a stripe's band is the true great-circle projection — an ellipse whose minor axis is the pole's tilt — flat across the face when seen edge-on, a rim ring when the pole faces up. The cue ball wears the classic red dot so its roll reads too. Fast balls clamp their per-frame spin so they smear like motion instead of strobing. None of it touches the wire: orientation is cosmetic and lives entirely in the renderer, so both phones may see different rolls of the same true shot — as two people standing at a real table do.
+
+**Pockets, the GamePigeon way.** Clean round cuts pushed out into the wood, corner holes offset along the diagonal, a wide dark jaw collar the hole is set into, a lit lip on the side facing the table's heart and a shadowed one behind. Capture physics untouched — the cut is where the eye expects the ball to fall.
+
+**And the bed got cushions** — a raised band of darker felt between rail and cloth with a light-catching nose, so the table finally has the geometry a table has.
+
+Verified headless as always: band/cap/dot audited on oversized probe renders at exact pole coordinates, pocket hole and jaw sampled by pixel, initial orientations tilted so a stripe reads as a stripe and a number reads as a number at rest.
+
 ## v0.3.1 — 2026-07-16
 **Practice Solo.** A third door on the home screen: both seats, one thumb, zero network. The wire is a stub — `send()` into the void — and everything else is untouched, because shooter authority already made every stroke local. Whichever seat holds the turn, your thumb holds the cue: full rules, full clock (the turn seat self-forecloses; there is no waiter), alternating breaks, the works. Built for the bench and for testing the game without a second phone in the room. Four poolsim assertions drive both seats through a foul, a reply, and a clock foreclosure with `tx = null` underneath, proving the whole table runs wireless.
 

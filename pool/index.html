@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.3.1
+<!-- Infinite Table — 8-Ball. Version: 0.3.2
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -160,7 +160,7 @@
 <div id="wrap">
 <header>
   <h1><span class="orb"></span>EIGHT BALL</h1>
-  <span class="ver">v0.3.1</span>
+  <span class="ver">v0.3.2</span>
 </header>
 
 <div id="home" class="screen on">
@@ -208,10 +208,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.3.1"></script>
-<script src="../shared/tablekit.js?v=0.3.1"></script>
-<script src="../shared/pool-rules.js?v=0.3.1"></script>
-<script src="../shared/pool-physics.js?v=0.3.1"></script>
+<script src="../shared/config.js?v=0.3.2"></script>
+<script src="../shared/tablekit.js?v=0.3.2"></script>
+<script src="../shared/pool-rules.js?v=0.3.2"></script>
+<script src="../shared/pool-physics.js?v=0.3.2"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -675,6 +675,13 @@ function paintTable(g, pxw, pxh, S){
   g.strokeRect(cx+S*0.009, cy+S*0.009, cw-S*0.018, ch-S*0.018);
   g.strokeStyle='rgba(255,235,200,0.13)'; g.lineWidth=S*0.008;
   g.strokeRect(cx-S*0.006, cy-S*0.006, cw+S*0.012, ch+S*0.012);
+  /* the cushions: a raised band between rail and bed, its nose catching the light */
+  const CU = S*0.036;
+  g.fillStyle='rgba(0,0,0,0.15)';
+  g.fillRect(cx,cy,cw,CU); g.fillRect(cx,cy+ch-CU,cw,CU);
+  g.fillRect(cx,cy,CU,ch); g.fillRect(cx+cw-CU,cy,CU,ch);
+  g.strokeStyle='rgba(255,255,255,0.07)'; g.lineWidth=Math.max(1,S*0.005);
+  g.strokeRect(cx+CU, cy+CU, cw-2*CU, ch-2*CU);
   /* the marks of the game */
   g.strokeStyle='#ffffff26'; g.lineWidth=Math.max(1,S*0.004);
   g.beginPath(); g.moveTo(X(PP.HEADSTRING,0),Y(PP.HEADSTRING,0)); g.lineTo(X(PP.HEADSTRING,PP.H),Y(PP.HEADSTRING,PP.H)); g.stroke();
@@ -691,16 +698,27 @@ function paintTable(g, pxw, pxh, S){
   };
   for(let i=1;i<8;i++){ if(i===4) continue; dia(PP.W*i/8, -RAILPAD*0.52); dia(PP.W*i/8, PP.H+RAILPAD*0.52); }
   for(let j=1;j<4;j++){ dia(-RAILPAD*0.52, PP.H*j/4); dia(PP.W+RAILPAD*0.52, PP.H*j/4); }
-  /* pockets: leather-rimmed dark drops */
+  /* pockets, the GamePigeon way: clean round cuts pushed into the wood, the
+     rails forming jaws around them, a lip catching light on the far side */
   PP.POCKETS.forEach(p=>{
-    const px=X(p.x,p.y), py=Y(p.x,p.y), pr=p.cap*S;
-    g.strokeStyle='#2a190c'; g.lineWidth=S*0.026;
-    g.beginPath(); g.arc(px,py,pr*1.02,0,7); g.stroke();
-    const hg=g.createRadialGradient(px,py,pr*0.1,px,py,pr*1.05);
-    hg.addColorStop(0,'#020304'); hg.addColorStop(0.72,'#07090b'); hg.addColorStop(1,'#241609');
-    g.fillStyle=hg; g.beginPath(); g.arc(px,py,pr*1.05,0,7); g.fill();
-    g.strokeStyle='rgba(255,225,170,0.10)'; g.lineWidth=Math.max(1,S*0.006);
-    g.beginPath(); g.arc(px,py,pr*1.06,Math.PI*0.15,Math.PI*0.85); g.stroke();
+    const side = p.x>0 && p.x<PP.W;
+    const ox = side ? 0 : (p.x===0?-1:1)*0.017;
+    const oy = side ? (p.y<0?-1:1)*0.012 : (p.y===0?-1:1)*0.017;
+    const px=X(p.x+ox,p.y+oy), py=Y(p.x+ox,p.y+oy), pr=p.cap*S*1.18;
+    /* the jaw: a wide wood-dark collar the hole is cut into */
+    const jg=g.createRadialGradient(px,py,pr*0.8,px,py,pr*1.5);
+    jg.addColorStop(0,'#1c0f06'); jg.addColorStop(0.55,'#2e1a0b'); jg.addColorStop(1,'rgba(46,26,11,0)');
+    g.fillStyle=jg; g.beginPath(); g.arc(px,py,pr*1.5,0,7); g.fill();
+    /* the hole */
+    const hg=g.createRadialGradient(px-pr*0.15,py-pr*0.15,pr*0.05,px,py,pr);
+    hg.addColorStop(0,'#000000'); hg.addColorStop(0.7,'#040507'); hg.addColorStop(1,'#0d0a06');
+    g.fillStyle=hg; g.beginPath(); g.arc(px,py,pr,0,7); g.fill();
+    /* the far lip, lit — always on the side facing the table's heart */
+    const toC = Math.atan2((Y(PP.W/2,PP.H/2))-py, (X(PP.W/2,PP.H/2))-px);
+    g.strokeStyle='rgba(255,222,168,0.14)'; g.lineWidth=Math.max(1,S*0.008);
+    g.beginPath(); g.arc(px,py,pr*0.97, toC-0.9, toC+0.9); g.stroke();
+    g.strokeStyle='rgba(0,0,0,0.5)'; g.lineWidth=Math.max(1,S*0.006);
+    g.beginPath(); g.arc(px,py,pr*1.01, toC+Math.PI-0.9, toC+Math.PI+0.9); g.stroke();
   });
 }
 function buildSurface(){
@@ -721,21 +739,88 @@ function drawTable(){
   if(TSURF){ ctx.drawImage(TSURF,0,0); return; }
   paintTable(ctx, VIEW.pxw, VIEW.pxh, VIEW.s);
 }
+/* ---------- rolling: the whole point of a ball ----------
+   Each ball keeps a render-side unit vector to its number pole. When it moves,
+   the vector rolls: axis perpendicular to travel, angle = distance/R — Rodrigues,
+   the honest way. Numbers slide over the crown and vanish around the limb; the
+   stripe's band is the true great-circle projection, an ellipse whose minor axis
+   is |n.z| — flat across the face when edge-on, a rim ring when the pole faces up.
+   None of this touches the wire: orientation is cosmetic, so it lives here. */
+let ORI = {};       // id -> {x,y,z} unit vector to the number pole
+let LASTPOS = {};   // id -> last drawn position, for roll deltas
+function oriFor(id){
+  let n = ORI[id];
+  if(!n){
+    const a = id*2.399 + 0.7;
+    const v = { x: Math.cos(a)*0.8, y: Math.sin(a)*0.8, z: 0.6 };   // tilted: the band reads as a band, the number still reads as a number
+    const m = Math.hypot(v.x,v.y,v.z);
+    n = ORI[id] = { x:v.x/m, y:v.y/m, z:v.z/m };
+  }
+  return n;
+}
+function rollBalls(balls){
+  balls.forEach(b=>{
+    if(b.pocketed){ delete LASTPOS[b.id]; return; }
+    const lp = LASTPOS[b.id];
+    if(lp){
+      const dx=b.x-lp.x, dy=b.y-lp.y, d=Math.hypot(dx,dy);
+      if(d>1e-7){
+        const th = Math.min(d/PP.R, 0.85);   // fast balls smear rather than strobe
+        const ax=-dy/d, ay=dx/d;             // rolling axis: perpendicular to travel
+        const n = oriFor(b.id), c=Math.cos(th), si=Math.sin(th);
+        const dot = ax*n.x + ay*n.y;         // a·n (az = 0)
+        const cx = ay*n.z, cy = -ax*n.z, cz = ax*n.y - ay*n.x;   // a×n
+        let nx = n.x*c + cx*si + ax*dot*(1-c);
+        let ny = n.y*c + cy*si + ay*dot*(1-c);
+        let nz = n.z*c + cz*si;
+        const m = Math.hypot(nx,ny,nz)||1;
+        ORI[b.id] = { x:nx/m, y:ny/m, z:nz/m };
+      }
+    }
+    LASTPOS[b.id] = { x:b.x, y:b.y };
+  });
+}
 function drawBallAt(bx,by,id,alpha,scale){
   const S=VIEW.s, r=PP.R*S*(scale==null?1:scale), x=X(bx,by), y=Y(bx,by);
   const col = id===0 ? '#f5f2ea' : PR.BALL_COLORS[id];
   const striped = id>8;
+  const n = oriFor(id);
+  const nsx=-n.y, nsy=n.x;   // the pole, in screen-plane components (portrait mapping)
   ctx.save();
   if(alpha!=null) ctx.globalAlpha=alpha;
   ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.clip();
-  ctx.fillStyle = striped ? '#f5f2ea' : col;
+  ctx.fillStyle = (striped || id===0) ? '#f5f2ea' : col;
   ctx.fillRect(x-r,y-r,2*r,2*r);
-  if(striped){ ctx.fillStyle=col; ctx.fillRect(x-r, y-r*0.56, 2*r, r*1.12); }
-  if(id>0){
-    ctx.fillStyle='#faf7f0'; ctx.beginPath(); ctx.arc(x,y,r*0.5,0,7); ctx.fill();
-    ctx.fillStyle='#17171b'; ctx.font='800 '+(r*0.6)+'px system-ui,Arial';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(String(id), x, y+r*0.04);
+  if(striped){
+    /* the band: the great circle perpendicular to the pole, projected honestly */
+    const rot = Math.atan2(nsy,nsx) + Math.PI/2;
+    ctx.strokeStyle=col; ctx.lineWidth=r*1.06; ctx.lineCap='butt';
+    ctx.beginPath();
+    ctx.ellipse(x, y, r*0.99, Math.max(r*0.015, r*Math.abs(n.z)), rot, 0, 7);
+    ctx.stroke();
+  }
+  /* the pole marks, both ends, foreshortened as they turn away */
+  for(const sgn of [1,-1]){
+    const nz = n.z*sgn;
+    if(nz < 0.12) continue;
+    const cxp = x + nsx*sgn*r*0.62, cyp = y + nsy*sgn*r*0.62;
+    const rad = Math.atan2(nsy*sgn, nsx*sgn);
+    if(id===0){                       // the red-dot cue — you can see your own roll
+      const rd = r*0.22*(0.4+0.6*nz);
+      ctx.fillStyle='#c0392b';
+      ctx.beginPath(); ctx.ellipse(cxp,cyp, rd, rd*(0.35+0.65*nz), rad+Math.PI/2, 0, 7); ctx.fill();
+      continue;
+    }
+    const Rd = r*0.5*(0.3+0.7*nz);
+    ctx.fillStyle='#faf7f0';
+    ctx.beginPath(); ctx.ellipse(cxp,cyp, Rd, Rd*(0.42+0.58*nz), rad+Math.PI/2, 0, 7); ctx.fill();
+    if(nz > 0.35){
+      ctx.globalAlpha = (alpha==null?1:alpha) * Math.min(1,(nz-0.35)/0.35);
+      ctx.fillStyle='#17171b'; ctx.font='800 '+(r*0.58*(0.7+0.3*nz))+'px system-ui,Arial';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(String(id), cxp, cyp + Rd*0.05);
+      ctx.globalAlpha = alpha==null?1:alpha;
+    }
   }
   /* the light: a hard little window up-left, a soft limb everywhere else */
   const limb=ctx.createRadialGradient(x-r*0.32,y-r*0.38,r*0.18,x,y,r*1.18);
@@ -904,6 +989,7 @@ function draw(){
   drawTable();
   const balls = ANIM ? ANIM.sim.balls : G.balls;
   notePockets(balls);
+  rollBalls(balls);
   drawShadows(balls);
   balls.forEach(drawBall);
   drawPFX();
