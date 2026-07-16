@@ -17,7 +17,7 @@
 (function (global) {
   'use strict';
 
-  var ENGINE = '2026-07-16-basic';   // no spin in this engine; english is a future engine, not a flag
+  var ENGINE = '2026-07-16-basic-r2';   // r2: soft-shot feel — lower floor, eased power curve, firmer roll-off
 
   /* The table: a 9-footer in metres, head rail at x=0, foot rail at x=W.
      The kitchen is everything behind the head string. */
@@ -30,10 +30,10 @@
   var MAXTICKS = 480 * 30;           // thirty seconds of table time is a stuck ball, not a shot
   var STOP = 0.02;                   // below this a ball is at rest (m/s)
   var DRAG = 0.32;                   // exponential decay per second
-  var ROLL = 0.18;                   // plus a linear floor so slow balls actually stop (m/s^2)
+  var ROLL = 0.24;                   // plus a linear floor so slow balls actually stop (m/s^2)
   var E_BALL = 0.95;                 // restitution, ball on ball
   var E_RAIL = 0.72;                 // restitution, ball on cushion
-  var MINSPEED = 0.55, MAXSPEED = 7; // what the power slider maps onto
+  var MINSPEED = 0.25, MAXSPEED = 7; // what the power slider maps onto
 
   /* Pockets. Corner mouths sit on the corner points, side mouths just outside the
      long rails. A ball inside a mouth zone gets no cushion; inside the capture
@@ -47,7 +47,9 @@
 
   function speedFor(power) {
     var p = Math.max(0, Math.min(1, +power || 0));
-    return MINSPEED + p * (MAXSPEED - MINSPEED);
+    /* eased, not linear: the bottom third of the bar is all touch shots, the top
+       still breaks. p^1.7 puts half the bar below 2.3 m/s. */
+    return MINSPEED + Math.pow(p, 1.7) * (MAXSPEED - MINSPEED);
   }
 
   /* Fifteen rack seats, apex on the foot spot, rows marching toward the foot rail.

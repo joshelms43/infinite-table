@@ -1,5 +1,16 @@
 # 8-Ball — Changelog
 
+## v0.3.0 — 2026-07-16
+**The touch shot, and the tailor.**
+
+**Feel first: a tiny hit no longer crosses the county.** The power curve was linear from a floor of 0.55 m/s — the gentlest legal shot rolled over a metre. Engine r2 (`2026-07-16-basic-r2`): the floor drops to 0.25 m/s, the curve eases to p^1.7 so the bottom third of the bar is all touch shots (5% of the bar now rolls 14cm, 10% rolls 23cm), half the bar sits under 2.3 m/s, and a full pull still breaks at 7. Roll-off firmed slightly so slow balls die honestly. All six seeded bot games still reach verdicts on the new engine.
+
+**Then the long sprucing.** The table is now painted once per resize onto an offscreen surface and laid down each frame — cheaper *and* richer: walnut rails with grain, a bevel highlight where wood meets cloth and an inner shadow where cloth meets wood, mother-of-pearl diamond sights at the regulation stations, leather-rimmed pockets that fall away into the dark, and a cloth with directional light and a fine speckle nap. Balls got a real lighting model — hard little window highlight, soft limb darkening — plus soft contact shadows on the cloth, and a pocket-drop flourish: a potted ball now slides into the dark, shrinking and fading, instead of blinking out of existence.
+
+Chrome to match: an 8-ball orb wordmark, a felt hero on the home screen, focus rings and gradient buttons, a brass-lit table code, avatar-initial seats and player plates (gold vs chalk-blue), a pulsing gold turn glow, a tabular-numeral clock chip that throbs red when low, italic table talk in the log, and a game-over card with gilded type and a gold rule. The canvas itself now sits in a deep drop shadow like a piece of furniture.
+
+Nothing behavioral changed outside the engine curve: same rules stamp, same networking, all suites green.
+
 ## v0.2.3 — 2026-07-16
 **The bar gets off the cloth; the cue never leaves the table.** The power bar was drawn over the playing surface — functional, but it hid balls and read as an overlay, not equipment. The canvas now reserves a wooden gutter beside the table and the bar lives there, restyled the GamePigeon way: a recessed slot with quarter ticks and an actual cue stick standing in it, tip up — chalk, ferrule, shaft, butt, bumper — that you pull down the slot. The whole gutter is the bar's touch target; thumbs are not precise instruments.
 
