@@ -433,5 +433,6 @@ function bootPool() {
 }
 
 
+finished = true;
 console.log(fails === 0 ? 'POOLSIM: ALL PASS' : 'POOLSIM FAILURES: ' + fails);
 process.exit(fails ? 1 : 0);
