@@ -7,6 +7,7 @@
 
    Usage:  npm run bump -- mdeal 0.10.3
            npm run bump -- mafia 0.3.0
+           npm run bump -- pool 0.1.1
            npm run bump -- lobby 1.2.0
 */
 const fs = require('fs');
@@ -15,6 +16,7 @@ const path = require('path');
 const TARGETS = {
   mdeal: 'coastline/index.html',
   mafia: 'mafia/index.html',
+  pool: 'pool/index.html',
   lobby: 'index.html',
 };
 

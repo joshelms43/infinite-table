@@ -15,7 +15,7 @@ function T(name, cond, detail) {
 }
 
 const ROOT = path.join(__dirname, '..');
-const HTML = ['index.html', 'coastline/index.html', 'mafia/index.html'];
+const HTML = ['index.html', 'coastline/index.html', 'mafia/index.html', 'pool/index.html'];
 const SHARED = fs.readdirSync(path.join(ROOT, 'shared')).filter(f => f.endsWith('.js'));
 
 /* ---- shared modules must parse ---- */
@@ -70,6 +70,20 @@ HTML.forEach(rel => {
   T('the game reads the rulebook rather than carrying its own copy',
     !/const\s+(COLORS|PROPS|DUAL_WILDS|RENT_DUALS|ACTIONS)\s*=/.test(game));
   T('and it actually loads it', /shared\/mdeal-rules\.js/.test(game));
+}
+
+/* ---- the pool rulebook and engine live in exactly one place too ---- */
+{
+  const rb = require(path.join(ROOT, 'shared', 'pool-rules.js'));
+  const eng = require(path.join(ROOT, 'shared', 'pool-physics.js'));
+  T('the pool rulebook is stamped', typeof rb.RULEBOOK === 'string' && rb.RULEBOOK.length > 0, rb.RULEBOOK);
+  T('the pool engine is stamped', typeof eng.ENGINE === 'string' && eng.ENGINE.length > 0, eng.ENGINE);
+
+  const game = fs.readFileSync(path.join(ROOT, 'pool', 'index.html'), 'utf8');
+  T('the pool game reads the rulebook rather than carrying its own copy',
+    !/const\s+(SOLIDS|STRIPES|BALL_COLORS|EIGHT|POCKETS|RULEBOOK|ENGINE)\s*=/.test(game));
+  T('and it actually loads the rulebook', /shared\/pool-rules\.js/.test(game));
+  T('and the engine', /shared\/pool-physics\.js/.test(game));
 }
 
 console.log(fails === 0 ? 'LINT: ALL PASS' : 'LINT FAILURES: ' + fails);

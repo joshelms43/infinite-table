@@ -17,5 +17,5 @@ jobs:
           node-version: '22'
       - name: install
         run: npm install --no-audit --no-fund
-      - name: nine stages, nothing ships red
+      - name: eleven stages, nothing ships red
         run: npm run check

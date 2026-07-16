@@ -19,6 +19,7 @@ const PAGES = {
   mafia: 'mafia/index.html',
   penalty: 'penalty/index.html',
   penaltylab: 'penalty/lab/index.html',
+  pool: 'pool/index.html',
   lobby: 'index.html',
 };
 

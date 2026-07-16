@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — platform lobby. Version: 1.2.0 -->
+<!-- Infinite Table — platform lobby. Version: 1.3.0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -108,6 +108,10 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
 .game.hero.pitchcard .gname,.game.hero.pitchcard .gdesc{color:var(--card-ivory)}
 .game.hero.pitchcard .gdesc{opacity:.8}
 .game.hero.pitchcard .gplayers{color:var(--card-ivory);opacity:.45}
+.game.hero.feltcard{padding-top:16px;background:radial-gradient(120% 160% at 20% 0%,#1F6F43 0%,#175634 52%,#0E3A22 100%);border-color:rgba(232,198,59,.28)}
+.game.hero.feltcard .gname,.game.hero.feltcard .gdesc{color:var(--card-ivory)}
+.game.hero.feltcard .gdesc{opacity:.8}
+.game.hero.feltcard .gplayers{color:var(--card-ivory);opacity:.45}
 .game.soon{display:flex;align-items:center;justify-content:space-between;padding:16px 18px}
 .soonname{font-weight:800;font-size:14px;opacity:.55}
 .soondesc{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;opacity:.3}
@@ -235,18 +239,24 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
     </div>
   </a>
 
-  <div class="game soon">
-    <div class="soonname">Game three</div>
-    <div class="soondesc">In the workshop</div>
-  </div>
+  <a class="game hero feltcard" href="./pool/">
+    <div class="gbody">
+      <div class="ginfo">
+        <div class="gname">8-Ball</div>
+        <div class="gdesc">Rack, break, run the table.</div>
+        <div class="gplayers">2 Players</div>
+      </div>
+      <span class="gplay">PLAY</span>
+    </div>
+  </a>
 </main>
 
 <footer>Infinite Table</footer>
 
 <div id="overlay" onclick="if(event.target===this){ID.sheetOpen=false;closeSheet()}"><div id="sheet"></div></div>
 
-<script src="./shared/config.js?v=1.2.0"></script>
-<script src="./shared/identity.js?v=1.2.0"></script>
+<script src="./shared/config.js?v=1.3.0"></script>
+<script src="./shared/identity.js?v=1.3.0"></script>
 <script>
 /* ---- minimal host-page adapter for the shared identity module ---- */
 function $(q){ return document.querySelector(q); }
