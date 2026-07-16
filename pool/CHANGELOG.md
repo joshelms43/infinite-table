@@ -1,5 +1,14 @@
 # 8-Ball — Changelog
 
+## v0.1.2 — 2026-07-16
+**Two sides of one gap, both caught on the phones.**
+
+**"On its way…" that never arrived (non-host).** A shot intent crossed the wire exactly once, fire-and-forget, over a phone websocket that dies quietly — the exact message-loss class the ghost-reply watchdog fixed in M Deal v0.9.7, shipped here without one. Now: every intent carries a nonce; the shooter's 1-second heartbeat re-sends an unacknowledged shot at 2.2s intervals, three times, then unlocks honestly with THE TABLE DIDN'T HEAR THAT. The host answers a nonce it has already played with the current state — never a second simulation — and re-broadcasts the final state when its animation lands, so a phone that missed the shot broadcast itself heals within one flight.
+
+**The host knew the result before the balls did.** `applyIntent` wrote the final state into `G` and the HUD reads `G` — log line, group dots, turn highlight, even the WINS overlay landed the instant the shooter released, mid-roll. The host now broadcasts the truth, winds its visible table back to the pre-shot state, and watches its own animation like every other client; the result arrives when the balls stop. The stale-busy heal settles any frozen flight *before* freeing the lock, so the visible table can never become the base of the next simulation — that would fork the game.
+
+The heartbeat consolidated into one `netTick()`: stale-busy settle, shot clock, and the shooter's watchdog — every recovery path that must not depend on the happy path, in one place, driven by tests directly. poolsim grew nine assertions across three fixtures: the no-spoiler wind-back, nonce dedupe answered with state, and the full watchdog lifecycle from first send to honest surrender.
+
 ## v0.1.1 — 2026-07-16
 **The table said NOT RIGHT NOW to everyone, forever.** Caught live on the first two-phone rack: `applyIntent` raised the host's `busy` flag before simulating a shot and nothing anywhere lowered it — the opening break locked every later intent out of the match, and the shot clock (which also defers to `busy`) went silent with it. The M Deal clock deadlocks (v0.9.9, v0.9.10) taught that any flag that can stop play needs a path back down that doesn't depend on the happy path; this one had no path at all.
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.1.1
+<!-- Infinite Table — 8-Ball. Version: 0.1.2
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -61,7 +61,7 @@
 <div id="wrap">
 <header>
   <h1>8<span class="thin">-</span>BALL</h1>
-  <span class="ver">v0.1.1</span>
+  <span class="ver">v0.1.2</span>
 </header>
 
 <div id="home" class="screen on">
@@ -101,10 +101,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.1.1"></script>
-<script src="../shared/tablekit.js?v=0.1.1"></script>
-<script src="../shared/pool-rules.js?v=0.1.1"></script>
-<script src="../shared/pool-physics.js?v=0.1.1"></script>
+<script src="../shared/config.js?v=0.1.2"></script>
+<script src="../shared/tablekit.js?v=0.1.2"></script>
+<script src="../shared/pool-rules.js?v=0.1.2"></script>
+<script src="../shared/pool-physics.js?v=0.1.2"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -138,6 +138,7 @@ let CLOCKBASE = null;      // {secs, at} — the client's view of the host's clo
 let AIM = null;            // {x,y} pointer in table coords while dragging an aim
 let PLACING = false;       // dragging the cue for ball in hand
 let PENDING = false;       // my shot is with the host, waiting for the echo
+let RESEND = null;         // the un-acknowledged intent — re-sent, not mourned
 
 function me(){ return NET.pkey; }
 function myTurn(){ return G.phase==='play' && G.turnKey===me() && !ANIM && !PENDING; }
@@ -148,7 +149,7 @@ function onTableIds(balls){ return (balls||G.balls).filter(b=>!b.pocketed && b.i
 /* ---------- the network, mirrored from Mafia: host applies, clients intend ---------- */
 const NET = {
   mode:'off', code:null, pkey:null, myName:'', tx:null, sb:null, _ch:null, _meta:null,
-  seed:0, breakerKey:null, busy:false, busyUntil:0, clockAt:null,
+  seed:0, breakerKey:null, busy:false, busyUntil:0, clockAt:null, nonce:0, seen:{},
   async ensure(){
     if(this.sb) return true;
     try{
@@ -278,19 +279,24 @@ const NET = {
     if(type==='nack' && m.key===this.pkey){ PENDING=false; banner(m.why||'NOT RIGHT NOW'); render(); }
   },
   sendIntent(k, a){
+    if(k==='shot'){ PENDING = true; render(); }
     if(this.mode==='host'){ this.applyIntent({ key:this.pkey, k, a }); return; }
-    this.tx.send('intent',{ key:this.pkey, k, a });
+    const p = { key:this.pkey, k, a, n:++this.nonce };
+    if(k==='shot') RESEND = { p, at:Date.now(), tries:0 };
+    this.tx.send('intent', p);
   },
   nack(key, why){ if(key===this.pkey){ PENDING=false; banner(why); } else this.tx.send('nack',{ key, why }); },
   applyIntent(m){
+    if(m.n && (this.seen[m.key]|0) >= m.n){ this.pushState(); return; }   // a re-send of something already played: answer with the state, not a second shot
     if(m.k==='rerack'){
       if(G.phase!=='over'){ this.nack(m.key,'THE RACK IS LIVE'); return; }
       if(!G.roster.some(r=>r.key===m.key)) return;
+      if(m.n) this.seen[m.key] = m.n;
       this.breakerKey = opponentOf(this.breakerKey) || this.pkey;   // alternate breaks
       this.newRack(); this.pushState(); render();
       return;
     }
-    if(this.busy && Date.now() > (this.busyUntil||0)) this.busy = false;   // a shot holds the table for its flight, never forever
+    if(this.busy && Date.now() > (this.busyUntil||0)){ settle(); this.busy = false; }   // a shot holds the table for its flight, never forever — and the truth lands before the lock lifts
     if(G.phase!=='play' || this.busy){ this.nack(m.key,'NOT RIGHT NOW'); return; }
     if(m.key!==G.turnKey){ this.nack(m.key,'NOT YOUR SHOT'); return; }
 
@@ -298,6 +304,7 @@ const NET = {
       if(!G.inHand || G.inHand.key!==m.key){ this.nack(m.key,'THE CUE LIES WHERE IT LIES'); return; }
       const a = m.a||{};
       if(!PP.placeOK(G.balls, +a.x, +a.y, G.inHand.behindHead)){ this.nack(m.key,'IT WON\'T SIT THERE'); return; }
+      if(m.n) this.seen[m.key] = m.n;
       const cue = cueBall(); cue.x=+a.x; cue.y=+a.y; cue.pocketed=false;
       G.seq++; this.pushState();
       return;
@@ -310,6 +317,8 @@ const NET = {
     const cue = cueBall();
     if(!cue || cue.pocketed){ this.nack(m.key,'NO CUE BALL'); return; }
 
+    if(m.n) this.seen[m.key] = m.n;
+    const pre = this.serialize();   // the table as everyone still sees it
     this.busy = true;
     const shooter = m.key;
     const before = G.balls.map(b=>({ id:b.id, x:b.x, y:b.y, pocketed:b.pocketed }));
@@ -370,9 +379,10 @@ const NET = {
     G.seq++;
 
     const state = this.serialize();
-    this.tx.send('shot', { seq:G.seq, shooter, before, shot:{ angle, power }, state });
+    this.tx.send('shot', { seq:state.seq, shooter, before, shot:{ angle, power }, state });
     if(shooter===this.pkey) PENDING=false;
-    playShot(before, { angle, power }, state);   // the host watches its own table too
+    applyState(pre, true);                       // wind the visible table back to before the stroke —
+    playShot(before, { angle, power }, state);   // the host learns the result when the balls stop, like everyone else
   },
   /* somewhere legal to put a returned cue ball */
   freeSpot(behindHead){
@@ -387,25 +397,39 @@ const NET = {
   },
 };
 
-/* the host's clock lives on an interval, not a timeout — a throttled tab fires late,
-   a killed timeout never fires at all, and a stalled clock is a deadlock we've shipped
-   before in another game. The interval just keeps asking. */
-setInterval(()=>{
-  if(NET.mode!=='host') return;
-  if(NET.busy && Date.now() > (NET.busyUntil||0)) NET.busy = false;   // a backgrounded host never steps its animation; free the table anyway
-  if(G.phase!=='play' || NET.busy || !NET.clockAt) return;
-  if(Date.now() < NET.clockAt) return;
-  const slow = G.turnKey, next = opponentOf(slow);
-  const names={}; G.roster.forEach(r=>names[r.key]=r.name);
-  G.turnKey = next;
-  G.inHand = { key:next, behindHead:!!G.breakShot };
-  const cb = cueBall();
-  if(cb && G.breakShot && cb.x > PP.HEADSTRING){ const s=NET.freeSpot(true); cb.x=s.x; cb.y=s.y; }
-  G.log.unshift('Shot clock on '+(names[slow]||'?')+'. '+(names[next]||'?')+' has ball in hand.');
-  G.seq++;
-  NET.armClock(0);
-  NET.pushState(); render();
-}, 1000);
+/* one heartbeat for everything that must not depend on the happy path.
+   The host's clock lives here, not in a timeout — throttled tabs fire timeouts
+   late and killed tabs never fire them at all. The stale-busy heal settles any
+   frozen animation FIRST, so the visible table can never fork from the truth.
+   And the shooter's watchdog re-sends an unacknowledged intent, because phone
+   websockets die quietly and a lost shot used to mean ON ITS WAY forever. */
+function settle(){
+  if(ANIM){ const e=ANIM.endState; ANIM=null; applyState(e, e.turnKey===me()); }
+  while(SHOTQ.length){ const n=SHOTQ.shift(); applyState(n.state, true); }
+}
+function netTick(){
+  if(NET.mode==='host'){
+    if(NET.busy && Date.now() > (NET.busyUntil||0)){ settle(); NET.busy = false; }
+    if(G.phase==='play' && !NET.busy && NET.clockAt && Date.now() >= NET.clockAt){
+      const slow = G.turnKey, next = opponentOf(slow);
+      const names={}; G.roster.forEach(r=>names[r.key]=r.name);
+      G.turnKey = next;
+      G.inHand = { key:next, behindHead:!!G.breakShot };
+      const cb = cueBall();
+      if(cb && G.breakShot && cb.x > PP.HEADSTRING){ const s=NET.freeSpot(true); cb.x=s.x; cb.y=s.y; }
+      G.log.unshift('Shot clock on '+(names[slow]||'?')+'. '+(names[next]||'?')+' has ball in hand.');
+      G.seq++;
+      NET.armClock(0);
+      NET.pushState(); render();
+    }
+  }
+  if(!PENDING){ RESEND = null; }
+  else if(RESEND && Date.now() - RESEND.at > 2200){
+    if(RESEND.tries >= 3){ RESEND=null; PENDING=false; banner("THE TABLE DIDN'T HEAR THAT — GO AGAIN"); render(); }
+    else { RESEND.tries++; RESEND.at = Date.now(); if(NET.tx) NET.tx.send('intent', RESEND.p); }
+  }
+}
+setInterval(netTick, 1000);
 
 /* ---------- applying state, animating shots ---------- */
 function applyState(s, localEcho){
@@ -435,6 +459,7 @@ function stepAnim(){
     const end = ANIM.endState; ANIM=null;
     if(NET.mode==='host') NET.busy=false;   // the balls stopped; the table is free
     applyState(end, end.turnKey===me());
+    if(NET.mode==='host') NET.pushState();  // and the truth goes out again — any phone that missed the shot broadcast heals here
     if(G.phase==='over') banner((rosterName(G.winner)||'?').toUpperCase()+' WINS');
     else if(/^Foul|^Shot clock/.test(G.log[0]||'')) banner('FOUL');
     if(SHOTQ.length){ const n=SHOTQ.shift(); playShot(n.before, n.shot, n.state); }
@@ -641,7 +666,6 @@ function onUp(e){
   const dx=p.x-cue.x, dy=p.y-cue.y, dist=Math.hypot(dx,dy);
   if(dist < 0.07) return;                       // a tap is a thought, not a shot
   const power=Math.min(1,dist/0.85);
-  PENDING=true; render();
   NET.sendIntent('shot',{ angle:+Math.atan2(dy,dx).toFixed(5), power:+power.toFixed(3) });
 }
 if(cv && cv.addEventListener){
@@ -731,6 +755,8 @@ globalThis.__B = {
   get NET(){ return NET; }, get G(){ return G; }, set G(v){ G = v; },
   get ANIM(){ return ANIM; }, set ANIM(v){ ANIM = v; },
   get SHOTQ(){ return SHOTQ; },
+  get PENDING(){ return PENDING; }, set PENDING(v){ PENDING = v; },
+  get RESEND(){ return RESEND; },
   applyState, playShot,
 };
 </script>

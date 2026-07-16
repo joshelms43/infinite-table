@@ -327,6 +327,78 @@ function checkTable(balls, label) {
   sandbox.Date.now = realNow;
   T('deadlock repro — the table frees itself for the next shot', nacksTo('them') === before && SENT.filter(s => s.ev === 'shot').length === 2);
   T('deadlock repro — and play actually moved on', G().seq >= 2 && G().phase === 'play');
+
+  /* v0.1.1 caught live, part two: the host's HUD spoiled every shot — G held the
+     final state while the balls were still rolling, so the log, the group dots,
+     even the WINS overlay arrived before the 8 did. The host now winds the visible
+     table back after broadcasting and learns the result when the animation lands. */
+  T('no spoilers — the host holds the pre-shot state while the balls roll',
+    B.ANIM !== null && G().seq === 2 && G().turnKey === 'them',
+    'seq=' + G().seq + ' turn=' + G().turnKey);
+  T('no spoilers — the truth waits inside the animation', B.ANIM.endState.seq === 3);
+  T('no spoilers — freeing a stale busy settles the flight first, never forks the table',
+    SENT.filter(s => s.ev === 'shot').length === 2);   // shot 2 simulated from shot 1's true end, not from the pre-state
+
+  /* lost intents: phones drop websocket messages quietly. A re-sent intent the host
+     already played must be answered with the state — never simulated twice. */
+  sandbox.Date.now = () => realNow() + 120000;
+  vm.runInContext('settle()', sandbox);                                        // land the flight, then ask whose table it is
+  const who = G().turnKey;
+  const nacksBefore = nacksTo(who);
+  NET.applyIntent({ key: who, k: 'shot', a: { angle: 2, power: 0.4 }, n: 7 });
+  const shotsAfter = SENT.filter(s => s.ev === 'shot').length;
+  const statesBefore = SENT.filter(s => s.ev === 'state').length;
+  NET.applyIntent({ key: who, k: 'shot', a: { angle: 2, power: 0.4 }, n: 7 });   // the watchdog's duplicate
+  sandbox.Date.now = realNow;
+  T('dedupe — a re-sent intent is answered with the state, not a second shot',
+    SENT.filter(s => s.ev === 'shot').length === shotsAfter &&
+    SENT.filter(s => s.ev === 'state').length === statesBefore + 1 &&
+    nacksTo(who) === nacksBefore);
+}
+
+/* ---- the shooter's watchdog: ON ITS WAY must mean it arrives, or it says so ---- */
+{
+  const vm = require('vm');
+  const { sourceFor } = require(path.join(__dirname, '_document'));
+  const code = sourceFor('pool');
+  const makeEl = () => new Proxy({ classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, style: {}, value: '' }, {
+    get(t, k) { if (k in t) return t[k]; return () => {}; }, set() { return true; },
+  });
+  const sandbox = {
+    console, Math, JSON, Date, Object, Array, Set, Map, Number, String, Boolean, Promise, RegExp,
+    isNaN, isFinite, parseInt, parseFloat, URLSearchParams,
+    setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    document: { querySelector: () => makeEl(), querySelectorAll: () => [], createElement: makeEl, getElementById: makeEl, addEventListener() {}, visibilityState: 'visible', head: { appendChild() {} }, body: { appendChild() {}, classList: { add() {}, remove() {}, toggle() {} } } },
+    addEventListener() {}, location: { reload() {}, search: '', href: '' }, navigator: {}, devicePixelRatio: 1, innerWidth: 800, innerHeight: 500,
+  };
+  sandbox.window = sandbox; sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(code, sandbox, { filename: 'pool/index.html' });
+  const B = sandbox.__B, NET = B.NET;
+  const SENT = [];
+  NET.pkey = 'c'; NET.mode = 'client';
+  NET.tx = { send: (ev, p) => SENT.push({ ev, p }), presence: () => ({}), track() {}, alive: () => true, close() {} };
+  B.G.phase = 'play'; B.G.turnKey = 'c'; B.G.roster = [{ key: 'c', name: 'C' }, { key: 'h', name: 'H' }];
+
+  const intents = () => SENT.filter(s => s.ev === 'intent').length;
+  NET.sendIntent('shot', { angle: 1, power: 0.5 });
+  T('watchdog — the shot goes out once, carrying a nonce', intents() === 1 && SENT[0].p.n === 1 && B.PENDING === true);
+
+  const realNow = sandbox.Date.now.bind(sandbox.Date);
+  let off = 0;
+  sandbox.Date.now = () => realNow() + off;
+  for (let k = 1; k <= 3; k++) {
+    off += 3000;
+    vm.runInContext('netTick()', sandbox);
+    T('watchdog — unacknowledged after ' + (off / 1000) + 's, sent again', intents() === 1 + k && B.PENDING === true);
+  }
+  off += 3000;
+  vm.runInContext('netTick()', sandbox);
+  sandbox.Date.now = realNow;
+  T('watchdog — three re-sends, then honesty: the shooter is unlocked', B.PENDING === false && intents() === 4);
+  T('watchdog — every copy is the same nonce, so the host plays at most one',
+    SENT.filter(s => s.ev === 'intent').every(s => s.p.n === 1));
 }
 
 finished = true;
