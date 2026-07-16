@@ -414,6 +414,24 @@ function bootPool() {
   T('rerack — a duplicate tap after the rack is a no-op', G().seq === seqNow);
 }
 
-finished = true;
+{ /* solo: both seats, one thumb, zero network — for the bench, and for testing */
+  const t = bootPool();
+  const { B, NET, run } = t;
+  const G = () => B.G;
+  NET.tx = null;                       // prove it needs no wire at all
+  NET.solo();
+  T('solo — a table with no network underneath', G().phase === 'play' && NET.mode === 'solo' && G().roster.length === 2);
+  NET.shoot({ angle: 0.2, power: 0.05 });   // seat A whiffs the break
+  run('settle()');
+  T('solo — the foul passed to the second seat', G().turnKey === 'solo-b' && G().seq === 2);
+  NET.shoot({ angle: 1.2, power: 0.4 });    // and the same thumb keeps playing
+  run('settle()');
+  T('solo — the same thumb plays the other seat', G().seq === 3);
+  B.DEADLINE = Date.now() - 1000;
+  run('netTick()');
+  T('solo — the clock still forecloses, on whichever seat dawdles', G().seq === 4);
+}
+
+
 console.log(fails === 0 ? 'POOLSIM: ALL PASS' : 'POOLSIM FAILURES: ' + fails);
 process.exit(fails ? 1 : 0);

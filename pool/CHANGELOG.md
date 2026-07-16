@@ -1,5 +1,8 @@
 # 8-Ball — Changelog
 
+## v0.3.1 — 2026-07-16
+**Practice Solo.** A third door on the home screen: both seats, one thumb, zero network. The wire is a stub — `send()` into the void — and everything else is untouched, because shooter authority already made every stroke local. Whichever seat holds the turn, your thumb holds the cue: full rules, full clock (the turn seat self-forecloses; there is no waiter), alternating breaks, the works. Built for the bench and for testing the game without a second phone in the room. Four poolsim assertions drive both seats through a foul, a reply, and a clock foreclosure with `tx = null` underneath, proving the whole table runs wireless.
+
 ## v0.3.0 — 2026-07-16
 **The touch shot, and the tailor.**
 
