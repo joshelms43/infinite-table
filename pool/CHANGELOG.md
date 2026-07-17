@@ -1,5 +1,17 @@
 # 8-Ball — Changelog
 
+## v0.6.3 — 2026-07-16
+**Measured, not imagined.** Three releases guessed at the reference board; this one measured it. The photograph was analysed numerically — colour samples, run-length scans, blob centroids — and the table repainted to the numbers:
+
+- **The cloth is teal** — (10,132,127), not grass green. The whole palette moved: crimson mahogany rails (84,38,40) with red-toned grain, teal cushion band, softer sights.
+- **Rails are 0.19 of the cloth width** — more than double the old proportion. The table finally has the reference's heft.
+- **Pocket holes are r = 0.075 CW** and centred *outside* the cloth corner at (−0.05, −0.065) CW — mostly in the rail, kissing the felt. Side holes sit 0.08 CW outside the edge.
+- **One cream block per corner, the hole embedded in it**; a cream tab outside each side hole. No arms, no wraps.
+
+Then the same measurement script was run against our own render: cloth (11,140,131) vs (10,134,129); corner hole (−0.059,−0.059) r 0.076 vs (−0.049,−0.066) r 0.076; rail 0.183 vs 0.19; mahogany rail scans clean end to end. The board now matches the photograph by the same instrument that read the photograph.
+
+Process note, honestly: the renderer's image previews were down all session, so earlier rounds verified structure while the gestalt drifted — the user's screenshot was the correction. When the eye is out, measure both sides with one ruler.
+
 ## v0.6.2 — 2026-07-16
 **The pocket layering, corrected against the photograph.** v0.6.1 read the reference's cream but not its order: the plates wrapped around the hole on the cloth side, which from inside the table looked like the casting was covering the mouth. The photograph's actual layering: the black hole opens INTO the cloth — the mouth eats the felt corner — and the cream is strictly the outer hardware behind it, an L-shaped cap running along both rails past the hole, never between hole and table. Rebuilt in that order: L-arms confined to the rail band inside the lip, hole drawn last on top.
 

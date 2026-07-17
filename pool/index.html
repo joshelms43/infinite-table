@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.6.2
+<!-- Infinite Table — 8-Ball. Version: 0.6.3
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -169,7 +169,7 @@
 <div id="wrap">
 <header>
   <h1><span class="orb"></span>EIGHT BALL</h1>
-  <span class="ver">v0.6.2</span>
+  <span class="ver">v0.6.3</span>
 </header>
 
 <div id="home" class="screen on">
@@ -218,10 +218,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.6.2"></script>
-<script src="../shared/tablekit.js?v=0.6.2"></script>
-<script src="../shared/pool-rules.js?v=0.6.2"></script>
-<script src="../shared/pool-physics.js?v=0.6.2"></script>
+<script src="../shared/config.js?v=0.6.3"></script>
+<script src="../shared/tablekit.js?v=0.6.3"></script>
+<script src="../shared/pool-rules.js?v=0.6.3"></script>
+<script src="../shared/pool-physics.js?v=0.6.3"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -631,7 +631,7 @@ function rosterName(key){ const r=G.roster.find(x=>x.key===key); return r&&r.nam
 const cv = $('#cv');
 const ctx = cv && cv.getContext ? (cv.getContext('2d')||null) : null;
 let VIEW = { s:1, ox:0, oy:0, rot:false, pxw:0, pxh:0 };
-const RAILPAD = 0.098;   // wooden rail width in table metres — wide enough to own the pocket cuts entirely
+const RAILPAD = 0.205;   // rail width in table metres — measured off the reference: 0.19 of cloth width
 
 const GUTTER = 0.24;   // metres-equivalent of wood beside the table, where the power bar lives — never over the cloth
 function fit(){
@@ -666,107 +666,98 @@ let PREVPOCK = '';   // last frame's pocketed set, to notice the moment a ball d
 function lcg(seed){ let x=seed>>>0; return ()=>((x = (x*1664525+1013904223)>>>0)/4294967296); }
 
 function paintTable(g, pxw, pxh, S){
-  /* the bed: walnut, with grain */
+  /* Every colour and ratio below is measured off the reference photograph, not
+     guessed: cloth teal (10,132,127), mahogany (84,38,40), rails 0.19 of cloth
+     width, corner holes r=0.075 CW centred (-0.05,-0.065) CW outside the corner,
+     side holes r=0.075 CW centred 0.084 CW outside the edge, one cream block per
+     corner with the hole embedded in it, a cream tab outside each side hole. */
+  const CW = PP.H;   // cloth width in table metres — the reference's measuring stick
+  /* the mahogany bed */
   const wg = g.createLinearGradient(0,0,pxw,pxh);
-  wg.addColorStop(0,'#6b4423'); wg.addColorStop(0.5,'#553318'); wg.addColorStop(1,'#3f2512');
+  wg.addColorStop(0,'#7c2b2d'); wg.addColorStop(0.5,'#5e2023'); wg.addColorStop(1,'#471a1c');
   g.fillStyle = wg; g.fillRect(0,0,pxw,pxh);
   const rnd = lcg(8);
-  for(let i=0;i<26;i++){
+  for(let i=0;i<24;i++){
     const gx = rnd()*pxw;
-    g.strokeStyle = rnd()<0.5 ? 'rgba(0,0,0,0.07)' : 'rgba(255,230,190,0.045)';
+    g.strokeStyle = rnd()<0.5 ? 'rgba(0,0,0,0.10)' : 'rgba(190,90,88,0.10)';
     g.lineWidth = 1 + rnd()*2.2;
     g.beginPath(); g.moveTo(gx + (rnd()-0.5)*8, 0); g.lineTo(gx + (rnd()-0.5)*18, pxh); g.stroke();
   }
-  /* the cloth, lit from above */
+  /* the teal cloth */
   const x0=X(0,0), y0=Y(0,0), x1=X(PP.W,PP.H), y1=Y(PP.W,PP.H);
   const cx=Math.min(x0,x1), cy=Math.min(y0,y1), cw=Math.abs(x1-x0), ch=Math.abs(y1-y0);
-  g.fillStyle='#1d6a40'; g.fillRect(cx,cy,cw,ch);
+  g.fillStyle='#07655e'; g.fillRect(cx,cy,cw,ch);
   const fg=g.createRadialGradient(cx+cw/2, cy+ch*0.42, ch*0.05, cx+cw/2, cy+ch/2, ch*0.72);
-  fg.addColorStop(0,'#2c8a54'); fg.addColorStop(0.62,'#1f6f43'); fg.addColorStop(1,'#144d2e');
+  fg.addColorStop(0,'#0b8d84'); fg.addColorStop(0.62,'#087a72'); fg.addColorStop(1,'#05534d');
   g.fillStyle=fg; g.fillRect(cx,cy,cw,ch);
   const sp = lcg(41);
-  g.globalAlpha = 1;
   for(let i=0;i<1400;i++){
     const nx=cx+sp()*cw, ny=cy+sp()*ch;
-    g.fillStyle = sp()<0.5 ? 'rgba(255,255,255,0.022)' : 'rgba(0,0,0,0.028)';
+    g.fillStyle = sp()<0.5 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)';
     g.fillRect(nx, ny, 1.4, 1.4);
   }
-  /* the rails meet the cloth: an inner shadow, then a bevel highlight on the wood */
-  g.strokeStyle='rgba(0,0,0,0.38)'; g.lineWidth=S*0.018;
-  g.strokeRect(cx+S*0.009, cy+S*0.009, cw-S*0.018, ch-S*0.018);
-  g.strokeStyle='rgba(255,235,200,0.13)'; g.lineWidth=S*0.008;
-  g.strokeRect(cx-S*0.006, cy-S*0.006, cw+S*0.012, ch+S*0.012);
-  /* the cushions: a raised band between rail and bed, its nose catching the light */
-  const CU = S*0.036;
-  g.fillStyle='rgba(0,0,0,0.15)';
+  /* cushions: a slightly darker teal band with a lit nose */
+  const CU = S*0.034;
+  g.fillStyle='rgba(0,0,0,0.16)';
   g.fillRect(cx,cy,cw,CU); g.fillRect(cx,cy+ch-CU,cw,CU);
   g.fillRect(cx,cy,CU,ch); g.fillRect(cx+cw-CU,cy,CU,ch);
-  g.strokeStyle='rgba(255,255,255,0.07)'; g.lineWidth=Math.max(1,S*0.005);
+  g.strokeStyle='rgba(255,255,255,0.09)'; g.lineWidth=Math.max(1,S*0.005);
   g.strokeRect(cx+CU, cy+CU, cw-2*CU, ch-2*CU);
+  /* the rails meet the cloth */
+  g.strokeStyle='rgba(0,0,0,0.4)'; g.lineWidth=S*0.014;
+  g.strokeRect(cx+S*0.007, cy+S*0.007, cw-S*0.014, ch-S*0.014);
+  g.strokeStyle='rgba(255,205,200,0.12)'; g.lineWidth=S*0.008;
+  g.strokeRect(cx-S*0.006, cy-S*0.006, cw+S*0.012, ch+S*0.012);
   /* the marks of the game */
-  g.strokeStyle='#ffffff26'; g.lineWidth=Math.max(1,S*0.004);
+  g.strokeStyle='#ffffff22'; g.lineWidth=Math.max(1,S*0.004);
   g.beginPath(); g.moveTo(X(PP.HEADSTRING,0),Y(PP.HEADSTRING,0)); g.lineTo(X(PP.HEADSTRING,PP.H),Y(PP.HEADSTRING,PP.H)); g.stroke();
-  g.fillStyle='#ffffff30'; g.beginPath(); g.arc(X(PP.FOOTSPOT.x,PP.FOOTSPOT.y),Y(PP.FOOTSPOT.x,PP.FOOTSPOT.y),S*0.008,0,7); g.fill();
-  /* diamond sights, mother-of-pearl on the wood */
+  g.fillStyle='#ffffff2c'; g.beginPath(); g.arc(X(PP.FOOTSPOT.x,PP.FOOTSPOT.y),Y(PP.FOOTSPOT.x,PP.FOOTSPOT.y),S*0.008,0,7); g.fill();
+  /* diamond sights */
   const dia=(tx,ty)=>{
-    const dx=X(tx,ty), dy=Y(tx,ty), r=S*0.012;
-    g.save(); g.translate(dx,dy); g.rotate(Math.PI/4);
-    g.fillStyle='rgba(0,0,0,0.35)'; g.fillRect(-r+1,-r+1,2*r,2*r);
+    const dx2=X(tx,ty), dy2=Y(tx,ty), r=S*0.011;
+    g.save(); g.translate(dx2,dy2); g.rotate(Math.PI/4);
+    g.fillStyle='rgba(0,0,0,0.3)'; g.fillRect(-r+1,-r+1,2*r,2*r);
     const pg=g.createLinearGradient(-r,-r,r,r);
-    pg.addColorStop(0,'#f7f2e6'); pg.addColorStop(1,'#cfc3a8');
+    pg.addColorStop(0,'#f4efe2'); pg.addColorStop(1,'#cdc2a6');
     g.fillStyle=pg; g.fillRect(-r,-r,2*r,2*r);
     g.restore();
   };
-  for(let i=1;i<8;i++){ if(i===4) continue; dia(PP.W*i/8, -RAILPAD*0.52); dia(PP.W*i/8, PP.H+RAILPAD*0.52); }
-  for(let j=1;j<4;j++){ dia(-RAILPAD*0.52, PP.H*j/4); dia(PP.W+RAILPAD*0.52, PP.H*j/4); }
-  /* pockets, from the reference photo at last: GamePigeon frames every hole in a
-     cream casting — ivory corner plates and side plates set into the mahogany,
-     with the black drop inside the plate. The pocket is hardware, not a cut.
-     Everything still clips behind the outer lip: the slab's silhouette is law. */
-  const LIP = S*0.028;
+  for(let i=1;i<8;i++){ if(i===4) continue; dia(PP.W*i/8, -RAILPAD*0.5); dia(PP.W*i/8, PP.H+RAILPAD*0.5); }
+  for(let j=1;j<4;j++){ dia(-RAILPAD*0.5, PP.H*j/4); dia(PP.W+RAILPAD*0.5, PP.H*j/4); }
+  /* pocket stations, to the measurements. Silhouette law still holds. */
+  const LIP = S*0.03;
   g.save();
   g.beginPath();
   const rr2=(x,y,w2,h2,rad)=>{ g.moveTo(x+rad,y); g.arcTo(x+w2,y,x+w2,y+h2,rad); g.arcTo(x+w2,y+h2,x,y+h2,rad); g.arcTo(x,y+h2,x,y,rad); g.arcTo(x,y,x+w2,y,rad); g.closePath(); };
-  rr2(LIP, LIP, (VIEW.gutX||pxw)-2*LIP, pxh-2*LIP, S*0.03);
+  rr2(LIP, LIP, (VIEW.gutX||pxw)-2*LIP, pxh-2*LIP, S*0.075);
   g.clip();
-  const casting=(x,y,w2,h2,rad)=>{
+  const cream=(x,y,w2,h2,rad)=>{
     const cg=g.createLinearGradient(x,y,x,y+h2);
-    cg.addColorStop(0,'#f2ebd6'); cg.addColorStop(0.55,'#e2d7ba'); cg.addColorStop(1,'#c9bd9d');
-    g.beginPath(); rr2(x,y,w2,h2,rad);
-    g.fillStyle='rgba(0,0,0,0.28)'; g.save(); g.translate(1.5,2); g.fill(); g.restore();   // its shadow on the wood
+    cg.addColorStop(0,'#f1e9d4'); cg.addColorStop(0.6,'#e0d5b8'); cg.addColorStop(1,'#c6ba9b');
     g.beginPath(); rr2(x,y,w2,h2,rad); g.fillStyle=cg; g.fill();
-    g.strokeStyle='rgba(60,38,18,0.5)'; g.lineWidth=Math.max(1,S*0.004);
+    g.strokeStyle='rgba(45,20,18,0.5)'; g.lineWidth=Math.max(1,S*0.004);
     g.beginPath(); rr2(x,y,w2,h2,rad); g.stroke();
   };
   const hole=(x,y,r2)=>{
     const hg=g.createRadialGradient(x-r2*0.15,y-r2*0.15,r2*0.05,x,y,r2);
-    hg.addColorStop(0,'#000000'); hg.addColorStop(0.8,'#060708'); hg.addColorStop(1,'#111');
+    hg.addColorStop(0,'#000000'); hg.addColorStop(0.8,'#060708'); hg.addColorStop(1,'#101010');
     g.fillStyle=hg; g.beginPath(); g.arc(x,y,r2,0,7); g.fill();
-    g.strokeStyle='rgba(0,0,0,0.55)'; g.lineWidth=Math.max(1,S*0.005);
-    g.beginPath(); g.arc(x,y,r2*1.02,0,7); g.stroke();
   };
-  /* corner stations, layered as the photograph has them: the cream cap hugs the
-     OUTER corner of the frame, and the black hole is drawn over it, opening into
-     the cloth — the mouth eats the felt corner, the cream only ever shows behind
-     the hole, never between hole and table. */
-  const CD = RAILPAD*S - LIP*1.2;    // casting depth: the full rail band, inside the lip — never the cloth
-  const CL = 0.185*S;                // and each cap runs this far along both rails, the reference's L
+  const HR = 0.075*CW*S;      // hole radius, measured
+  const OFF = 0.058*CW*S;     // corner hole centre, outside the corner on both axes
+  /* corners: one cream block, the hole embedded in it */
+  const BLK = 0.21*CW*S;
   [[cx,cy,-1,-1],[cx+cw,cy,1,-1],[cx,cy+ch,-1,1],[cx+cw,cy+ch,1,1]].forEach(([kx,ky,dx,dy])=>{
-    const hx = dx<0 ? kx - CD : kx + CD - CL;      // the arm along the horizontal rail
-    const hy = dy<0 ? ky - CD : ky;
-    casting(hx, hy, CL, CD, S*0.03);
-    const vx = dx<0 ? kx - CD : kx;                // and along the vertical rail
-    const vy = dy<0 ? ky - CD : ky + CD - CL;
-    casting(vx, vy, CD, CL, S*0.03);
-    hole(kx + dx*S*0.018, ky + dy*S*0.018, 0.056*S);
+    const hx = kx + dx*OFF, hy = ky + dy*OFF;
+    cream(hx - BLK/2 + dx*BLK*0.12, hy - BLK/2 + dy*BLK*0.12, BLK, BLK, S*0.06);
+    hole(hx, hy, HR);
   });
-  /* side stations: a slim cream plate against the outer lip, the hole over it at
-     the cushion line, mouth bulging into the cloth */
-  const SPW = RAILPAD*S - LIP*1.3, SPH = 0.16*S;
+  /* sides: hole in the rail kissing the cloth edge, a cream tab outside it */
+  const SOFF = 0.082*CW*S;
   [[cx,-1],[cx+cw,1]].forEach(([kx,dx])=>{
-    const bx = dx<0 ? kx - RAILPAD*S + LIP*0.65 : kx + RAILPAD*S - LIP*0.65 - SPW;
-    casting(bx, cy+ch/2 - SPH/2, SPW, SPH, S*0.045);
-    hole(kx + dx*S*0.012, cy+ch/2, 0.05*S);
+    const hx = kx + dx*SOFF, hy = cy+ch/2;
+    cream(hx + dx*HR*0.35 - (dx<0?0.09*CW*S:0), hy - 0.105*CW*S, 0.09*CW*S, 0.21*CW*S, S*0.045);
+    hole(hx, hy, HR*0.96);
   });
   g.restore();
 }
