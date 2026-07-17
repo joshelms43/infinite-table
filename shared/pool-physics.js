@@ -17,10 +17,13 @@
 (function (global) {
   'use strict';
 
-  var ENGINE = '2026-07-16-spin-r3';   /* r3: spin. Follow and draw land as a delayed
-     impulse along the cue's pre-contact line when it first meets a ball; side
-     english kicks the cue's rebound tangentially at every cushion and fades with
-     each one. Zero spin is bit-identical to r2 — poolsim pins that. */
+  var ENGINE = '2026-07-16-roll-r4';   /* r4: the honest ball. Every ball carries a
+     surface-roll state (w) beside its velocity; sliding friction drags the two
+     together at sphere ratios (1 : 2.5), and only a rolling ball feels rolling
+     resistance. Draw and follow are nothing special any more — they are just
+     backspin and topspin struck into the cue, grabbing the cloth after contact
+     and curving the cue along the real tangent-line arc. Object balls slide
+     then roll like real balls. Side english stays a cushion-tangent kick. */
 
   /* The table: a 9-footer in metres, head rail at x=0, foot rail at x=W.
      The kitchen is everything behind the head string. */
@@ -36,12 +39,14 @@
   var ROLL = 0.24;                   // plus a linear floor so slow balls actually stop (m/s^2)
   var E_BALL = 0.95;                 // restitution, ball on ball
   var E_RAIL = 0.72;                 // restitution, ball on cushion
-  var MINSPEED = 0.25, MAXSPEED = 7; // what the power slider maps onto
-  var SIDE_K = 0.6;                  // cushion tangent kick per unit side spin, scaled by impact speed
+  var MINSPEED = 0.25, MAXSPEED = 8.5; // the slide phase eats ~30% of a stun shot, so the top end rises to keep the break honest
+  var MU_SLIDE = 2.0;                // sliding friction (m/s^2) — the grab
+  var SLIP_EPS = 0.02;               // below this surface slip, a ball is rolling
+  var K_OFF = 1.8;                   // full-slider strike offset: w0 = v * K_OFF * sy — a touch past physical, for punch
+  var W_RAIL_N = 0.55;               // roll state surviving a cushion, normal part (reversed)
+  var W_RAIL_T = 0.92;               // and tangential part
+  var SIDE_K = 0.4;                  // cushion tangent kick per unit side spin, scaled by impact speed
   var SIDE_FADE = 0.65;              // side spin surviving each cushion
-  var FOLLOW_K = 1.9;                // full follow/draw is this much delta-v along the incoming line
-  var SPIN_DELAY = 0.075;            // the cue checks up before the spin takes (seconds)
-  var SPIN_APPLY = 0.12;             // and the spin lands over this long, not as a jolt
 
   /* Pockets. Corner mouths sit on the corner points, side mouths just outside the
      long rails. A ball inside a mouth zone gets no cushion; inside the capture
@@ -122,32 +127,33 @@
   }
 
   /* One fixed tick. Mutates the ball array it is given; the stepper owns the copies.
-     spin is the cue's alone: {z: side, y: pending follow/draw, dir, delay, left, per}. */
+     spin carries only the cue's side english: {z}. Top and back spin live in the
+     balls themselves now, as roll state. */
   function tick(balls, ev, spin) {
     var i, j, b;
     spin.z *= (1 - 0.35 * DT);
-    if (spin.dir) {
-      if (spin.delay > 0) spin.delay--;
-      else if (spin.left > 0) {
-        for (i = 0; i < balls.length; i++) {
-          if (balls[i].id === 0 && !balls[i].pocketed) {
-            balls[i].vx += spin.dir.x * spin.per;
-            balls[i].vy += spin.dir.y * spin.per;
-          }
-        }
-        spin.left--;
-      }
-    }
 
     for (i = 0; i < balls.length; i++) {
       b = balls[i];
       if (b.pocketed) continue;
-      var sp = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
-      if (sp > 0) {
-        var ns = sp * (1 - DRAG * DT) - ROLL * DT;
-        if (ns < STOP) ns = 0;
-        var f = sp > 0 ? ns / sp : 0;
-        b.vx *= f; b.vy *= f;
+      var ux = b.vx - b.wx, uy = b.vy - b.wy;
+      var us = Math.sqrt(ux * ux + uy * uy);
+      if (us > SLIP_EPS) {
+        /* sliding: friction drags velocity and roll toward each other, 1 : 2.5 */
+        var k = Math.min(MU_SLIDE * DT, us / 3.5);
+        var fx = ux / us, fy = uy / us;
+        b.vx -= k * fx;       b.vy -= k * fy;
+        b.wx += 2.5 * k * fx; b.wy += 2.5 * k * fy;
+      } else {
+        /* rolling: the old gentle decay, roll locked to travel */
+        var sp = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+        if (sp > 0) {
+          var ns = sp * (1 - DRAG * DT) - ROLL * DT;
+          if (ns < STOP) ns = 0;
+          var f = ns / sp;
+          b.vx *= f; b.vy *= f;
+        }
+        b.wx = b.vx; b.wy = b.vy;
       }
       b.x += b.vx * DT;
       b.y += b.vy * DT;
@@ -169,10 +175,10 @@
       }
       var railed = false;
       var english = (b.id === 0 && spin.z !== 0);
-      if (b.x < R)      { b.x = R;     if (b.vx < 0) { b.vx = -b.vx * E_RAIL; railed = true; if (english) { b.vy += spin.z * SIDE_K * b.vx;  spin.z *= SIDE_FADE; } } }
-      if (b.x > W - R)  { b.x = W - R; if (b.vx > 0) { b.vx = -b.vx * E_RAIL; railed = true; if (english) { b.vy += -spin.z * SIDE_K * (-b.vx); spin.z *= SIDE_FADE; } } }
-      if (b.y < R)      { b.y = R;     if (b.vy < 0) { b.vy = -b.vy * E_RAIL; railed = true; if (english) { b.vx += -spin.z * SIDE_K * b.vy;  spin.z *= SIDE_FADE; } } }
-      if (b.y > H - R)  { b.y = H - R; if (b.vy > 0) { b.vy = -b.vy * E_RAIL; railed = true; if (english) { b.vx += spin.z * SIDE_K * (-b.vy); spin.z *= SIDE_FADE; } } }
+      if (b.x < R)      { b.x = R;     if (b.vx < 0) { b.vx = -b.vx * E_RAIL; b.wx = -b.wx * W_RAIL_N; b.wy *= W_RAIL_T; railed = true; if (english) { b.vy += spin.z * SIDE_K * b.vx;  spin.z *= SIDE_FADE; } } }
+      if (b.x > W - R)  { b.x = W - R; if (b.vx > 0) { b.vx = -b.vx * E_RAIL; b.wx = -b.wx * W_RAIL_N; b.wy *= W_RAIL_T; railed = true; if (english) { b.vy += -spin.z * SIDE_K * (-b.vx); spin.z *= SIDE_FADE; } } }
+      if (b.y < R)      { b.y = R;     if (b.vy < 0) { b.vy = -b.vy * E_RAIL; b.wy = -b.wy * W_RAIL_N; b.wx *= W_RAIL_T; railed = true; if (english) { b.vx += -spin.z * SIDE_K * b.vy;  spin.z *= SIDE_FADE; } } }
+      if (b.y > H - R)  { b.y = H - R; if (b.vy > 0) { b.vy = -b.vy * E_RAIL; b.wy = -b.wy * W_RAIL_N; b.wx *= W_RAIL_T; railed = true; if (english) { b.vx += spin.z * SIDE_K * (-b.vy); spin.z *= SIDE_FADE; } } }
       if (railed) {
         if (ev.firstHit != null) ev.railsAfterContact++;
         if (b.id !== 0) ev.railBalls[b.id] = true;
@@ -200,28 +206,19 @@
           c.vx += imp * nx; c.vy += imp * ny;
           if (ev.firstHit == null && (a.id === 0 || c.id === 0)) {
             ev.firstHit = a.id === 0 ? c.id : a.id;
-            if (spin.y !== 0) {
-              var cueB = a.id === 0 ? a : c;
-              var cs = Math.sqrt(cueB.vx * cueB.vx + cueB.vy * cueB.vy);
-              var ux = cs > 1e-9 ? cueB.vx / cs : nx, uy = cs > 1e-9 ? cueB.vy / cs : ny;
-              var ticksApply = Math.max(1, Math.round(SPIN_APPLY / DT));
-              spin.dir = { x: ux, y: uy };
-              spin.delay = Math.round(SPIN_DELAY / DT);
-              spin.left = ticksApply;
-              spin.per = (spin.y * FOLLOW_K) / ticksApply;
-              spin.y = 0;
-            }
           }
         }
       }
     }
   }
 
-  function atRest(balls, spin) {
-    if (spin && spin.dir && (spin.delay > 0 || spin.left > 0) && spin.per !== 0) return false;
+  function atRest(balls) {
     for (var i = 0; i < balls.length; i++) {
       var b = balls[i];
-      if (!b.pocketed && (b.vx !== 0 || b.vy !== 0)) return false;
+      if (b.pocketed) continue;
+      if (b.vx !== 0 || b.vy !== 0) return false;
+      var sx = b.vx - b.wx, sy2 = b.vy - b.wy;
+      if (sx * sx + sy2 * sy2 > SLIP_EPS * SLIP_EPS) return false;   // spin still working the cloth
     }
     return true;
   }
@@ -231,7 +228,7 @@
   function stepper(balls, shot) {
     var sim = {
       balls: balls.map(function (b) {
-        return { id: b.id, x: b.x, y: b.y, vx: 0, vy: 0, pocketed: !!b.pocketed };
+        return { id: b.id, x: b.x, y: b.y, vx: 0, vy: 0, wx: 0, wy: 0, pocketed: !!b.pocketed };
       }),
       events: { firstHit: null, pocketed: [], railsAfterContact: 0, railBalls: {} },
       ticks: 0,
@@ -242,18 +239,20 @@
     for (var i = 0; i < sim.balls.length; i++) if (sim.balls[i].id === 0) cue = sim.balls[i];
     if (!cue || cue.pocketed) { sim.done = true; return sim; }
     var v = speedFor(shot.power);
+    var cl = function (x) { return Math.max(-1, Math.min(1, +x || 0)); };
     cue.vx = Math.cos(shot.angle) * v;
     cue.vy = Math.sin(shot.angle) * v;
-    var cl = function (x) { return Math.max(-1, Math.min(1, +x || 0)); };
-    sim._spin = { z: cl(shot.sx), y: cl(shot.sy), dir: null, delay: 0, left: 0, per: 0 };
+    var sy0 = cl(shot.sy);
+    cue.wx = cue.vx * K_OFF * sy0;   // struck above centre rolls ahead of travel; below, against it
+    cue.wy = cue.vy * K_OFF * sy0;
+    sim._spin = { z: cl(shot.sx) };
 
     sim.step = function (n) {
       n = n || 1;
       while (n-- > 0 && !sim.done) {
-        if (sim._spin.y !== 0 && sim.events.firstHit == null) sim._spin.y *= (1 - 0.5 * DT);   // a long approach loses its bite
         tick(sim.balls, sim.events, sim._spin);
         sim.ticks++;
-        if (atRest(sim.balls, sim._spin) || sim.ticks >= MAXTICKS) sim.done = true;
+        if (atRest(sim.balls) || sim.ticks >= MAXTICKS) sim.done = true;
       }
       return sim.done;
     };

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.5.0
+<!-- Infinite Table — 8-Ball. Version: 0.6.0
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -169,7 +169,7 @@
 <div id="wrap">
 <header>
   <h1><span class="orb"></span>EIGHT BALL</h1>
-  <span class="ver">v0.5.0</span>
+  <span class="ver">v0.6.0</span>
 </header>
 
 <div id="home" class="screen on">
@@ -218,10 +218,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.5.0"></script>
-<script src="../shared/tablekit.js?v=0.5.0"></script>
-<script src="../shared/pool-rules.js?v=0.5.0"></script>
-<script src="../shared/pool-physics.js?v=0.5.0"></script>
+<script src="../shared/config.js?v=0.6.0"></script>
+<script src="../shared/tablekit.js?v=0.6.0"></script>
+<script src="../shared/pool-rules.js?v=0.6.0"></script>
+<script src="../shared/pool-physics.js?v=0.6.0"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -631,7 +631,7 @@ function rosterName(key){ const r=G.roster.find(x=>x.key===key); return r&&r.nam
 const cv = $('#cv');
 const ctx = cv && cv.getContext ? (cv.getContext('2d')||null) : null;
 let VIEW = { s:1, ox:0, oy:0, rot:false, pxw:0, pxh:0 };
-const RAILPAD = 0.075;   // wooden rail width in table metres
+const RAILPAD = 0.098;   // wooden rail width in table metres — wide enough to own the pocket cuts entirely
 
 const GUTTER = 0.24;   // metres-equivalent of wood beside the table, where the power bar lives — never over the cloth
 function fit(){
@@ -719,16 +719,22 @@ function paintTable(g, pxw, pxh, S){
   };
   for(let i=1;i<8;i++){ if(i===4) continue; dia(PP.W*i/8, -RAILPAD*0.52); dia(PP.W*i/8, PP.H+RAILPAD*0.52); }
   for(let j=1;j<4;j++){ dia(-RAILPAD*0.52, PP.H*j/4); dia(PP.W+RAILPAD*0.52, PP.H*j/4); }
-  /* pockets: crisp GamePigeon circles. A clean hole nested into the corner, a
-     thin dark collar where the cut meets the wood, a whisper of light on the far
-     lip — and nothing bleeding onto the cloth. */
+  /* pockets: crisp GamePigeon circles, and the frame never breaks. The holes are
+     clipped behind a solid outer lip of wood, so however the geometry falls, the
+     table's silhouette stays a clean rounded slab — exactly the reference board. */
+  const LIP = S*0.028;
+  g.save();
+  g.beginPath();
+  const rr2=(x,y,w2,h2,rad)=>{ g.moveTo(x+rad,y); g.arcTo(x+w2,y,x+w2,y+h2,rad); g.arcTo(x+w2,y+h2,x,y+h2,rad); g.arcTo(x,y+h2,x,y,rad); g.arcTo(x,y,x+w2,y,rad); g.closePath(); };
+  rr2(LIP, LIP, (VIEW.gutX||pxw)-2*LIP, pxh-2*LIP, S*0.03);
+  g.clip();
   PP.POCKETS.forEach(p=>{
     const side = p.x>0 && p.x<PP.W;
-    const ox = side ? 0 : (p.x===0?-1:1)*0.008;
-    const oy = side ? (p.y<0?-1:1)*0.006 : (p.y===0?-1:1)*0.008;
-    const px=X(p.x+ox,p.y+oy), py=Y(p.x+ox,p.y+oy), pr=p.cap*S*1.1;
+    const ox = side ? 0 : (p.x===0?-1:1)*0.004;
+    const oy = side ? (p.y<0?-1:1)*0.004 : (p.y===0?-1:1)*0.004;
+    const px=X(p.x+ox,p.y+oy), py=Y(p.x+ox,p.y+oy), pr=p.cap*S*1.04;
     g.fillStyle='#1a0e05';
-    g.beginPath(); g.arc(px,py,pr*1.12,0,7); g.fill();
+    g.beginPath(); g.arc(px,py,pr*1.1,0,7); g.fill();
     const hg=g.createRadialGradient(px-pr*0.12,py-pr*0.12,pr*0.06,px,py,pr);
     hg.addColorStop(0,'#000000'); hg.addColorStop(0.78,'#050607'); hg.addColorStop(1,'#0c0a07');
     g.fillStyle=hg; g.beginPath(); g.arc(px,py,pr,0,7); g.fill();
@@ -736,6 +742,7 @@ function paintTable(g, pxw, pxh, S){
     g.strokeStyle='rgba(255,218,160,0.11)'; g.lineWidth=Math.max(1,S*0.006);
     g.beginPath(); g.arc(px,py,pr*0.93, toC-0.8, toC+0.8); g.stroke();
   });
+  g.restore();
 }
 function buildSurface(){
   TSURF = null;
