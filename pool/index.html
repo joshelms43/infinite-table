@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.4.0
+<!-- Infinite Table — 8-Ball. Version: 0.5.0
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -135,6 +135,15 @@
   @keyframes clockpulse{0%,100%{box-shadow:none;}50%{box-shadow:0 0 12px rgba(255,93,108,.3);}}
   #stage{position:relative;width:100%;}
   canvas{display:block;width:100%;touch-action:none;border-radius:14px;box-shadow:0 22px 48px rgba(0,0,0,.55), 0 3px 10px rgba(0,0,0,.4);}
+  #fine{display:none;align-items:center;gap:10px;margin-top:9px;}
+  #fine.on{display:flex;}
+  #finelab{font-size:9px;letter-spacing:2px;color:var(--dimmer);font-weight:800;}
+  #finetrack{position:relative;flex:1;height:24px;border-radius:12px;background:#0b150f;border:1px solid var(--line);touch-action:none;overflow:hidden;}
+  #finetrack::before{content:'';position:absolute;left:50%;top:5px;bottom:5px;width:1px;background:var(--line);}
+  #fineknob{position:absolute;left:50%;top:2px;width:44px;height:18px;margin-left:-22px;border-radius:10px;
+    background:linear-gradient(180deg,#2f9459,#1e6c41);border:1px solid rgba(63,206,111,.5);
+    transition:transform .18s;}
+  #fineknob.live{transition:none;}
   #hint{text-align:center;font-size:12.5px;color:var(--dim);margin-top:9px;min-height:17px;letter-spacing:.3px;}
   #log{font-size:11.5px;color:var(--dimmer);margin-top:5px;text-align:center;min-height:15px;font-style:italic;}
   #over{
@@ -160,7 +169,7 @@
 <div id="wrap">
 <header>
   <h1><span class="orb"></span>EIGHT BALL</h1>
-  <span class="ver">v0.4.0</span>
+  <span class="ver">v0.5.0</span>
 </header>
 
 <div id="home" class="screen on">
@@ -202,16 +211,17 @@
     <canvas id="cv"></canvas>
     <div id="over"><div class="big"></div><div class="why"></div><div class="rule"></div><div id="overctl"></div></div>
   </div>
+  <div id="fine"><div id="finelab">FINE AIM</div><div id="finetrack"><div id="fineknob"></div></div></div>
   <div id="hint"></div>
   <div id="log"></div>
 </div>
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.4.0"></script>
-<script src="../shared/tablekit.js?v=0.4.0"></script>
-<script src="../shared/pool-rules.js?v=0.4.0"></script>
-<script src="../shared/pool-physics.js?v=0.4.0"></script>
+<script src="../shared/config.js?v=0.5.0"></script>
+<script src="../shared/tablekit.js?v=0.5.0"></script>
+<script src="../shared/pool-rules.js?v=0.5.0"></script>
+<script src="../shared/pool-physics.js?v=0.5.0"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -250,6 +260,7 @@ let CLOCKBASE = null;      // {secs, at} — this phone's view of the running cl
 let DEADLINE = null;       // the same clock as a local timestamp — whoever's job it is, enforces from this
 let AIMDIR = null;         // {angle} — sticky aim, set by dragging the table, kept until the turn passes
 let POWERDRAG = null;      // {p} while the side bar is being pulled — release fires
+let SPIN = { x:0, y:0 };   // english: x side, y follow(+)/draw(-) — set on the little cue face, spent by the next shot
 let PLACING = false;       // dragging the cue for ball in hand
 let OPPAT = 0;             // when the other side was last heard from
 let OPPQUIET = false;      // their phone went quiet — informational, never blocking: this is the whole point
@@ -509,13 +520,14 @@ const NET = {
     if(!myTurn()) return;
     const shooter = this.mode==='solo' ? G.turnKey : this.pkey;
     const angle = +a.angle, power = Math.max(0, Math.min(1, +a.power));
+    const sx = Math.max(-1, Math.min(1, +a.sx||0)), sy = Math.max(-1, Math.min(1, +a.sy||0));
     if(!isFinite(angle) || !isFinite(power)) return;
     const cue = cueBall();
     if(!cue || cue.pocketed) return;
     const pre = snapshot();
     const before = G.balls.map(b=>({ id:b.id, x:b.x, y:b.y, pocketed:b.pocketed }));
     const ballsBefore = onTableIds(G.balls);
-    const sim = PP.simulate(G.balls, { angle, power });
+    const sim = PP.simulate(G.balls, { angle, power, sx, sy });
     const res = PR.judge({
       breakShot:G.breakShot, open:G.open,
       myGroup:G.groups[shooter]||null,
@@ -523,9 +535,10 @@ const NET = {
     });
     foldShot(shooter, sim, res, Math.ceil(sim.ticks * PP.DT * 1000));
     const state = snapshot();
-    this.tx.send('shot', { seq:state.seq, shooter, before, shot:{ angle, power }, state });
-    applyState(pre, true);                       // wind the visible table back to before the stroke —
-    playShot(before, { angle, power }, state);   // the result arrives when the balls stop, same as for them
+    this.tx.send('shot', { seq:state.seq, shooter, before, shot:{ angle, power, sx, sy }, state });
+    SPIN = { x:0, y:0 };                              // spin is spent by the stroke that used it
+    applyState(pre, true);                            // wind the visible table back —
+    playShot(before, { angle, power, sx, sy }, state);// the result arrives when the balls stop, same as for them
   },
   place(x, y){
     const seat = this.mode==='solo' ? G.turnKey : this.pkey;
@@ -706,27 +719,22 @@ function paintTable(g, pxw, pxh, S){
   };
   for(let i=1;i<8;i++){ if(i===4) continue; dia(PP.W*i/8, -RAILPAD*0.52); dia(PP.W*i/8, PP.H+RAILPAD*0.52); }
   for(let j=1;j<4;j++){ dia(-RAILPAD*0.52, PP.H*j/4); dia(PP.W+RAILPAD*0.52, PP.H*j/4); }
-  /* pockets, the GamePigeon way: clean round cuts pushed into the wood, the
-     rails forming jaws around them, a lip catching light on the far side */
+  /* pockets: crisp GamePigeon circles. A clean hole nested into the corner, a
+     thin dark collar where the cut meets the wood, a whisper of light on the far
+     lip — and nothing bleeding onto the cloth. */
   PP.POCKETS.forEach(p=>{
     const side = p.x>0 && p.x<PP.W;
-    const ox = side ? 0 : (p.x===0?-1:1)*0.017;
-    const oy = side ? (p.y<0?-1:1)*0.012 : (p.y===0?-1:1)*0.017;
-    const px=X(p.x+ox,p.y+oy), py=Y(p.x+ox,p.y+oy), pr=p.cap*S*1.18;
-    /* the jaw: a wide wood-dark collar the hole is cut into */
-    const jg=g.createRadialGradient(px,py,pr*0.8,px,py,pr*1.5);
-    jg.addColorStop(0,'#1c0f06'); jg.addColorStop(0.55,'#2e1a0b'); jg.addColorStop(1,'rgba(46,26,11,0)');
-    g.fillStyle=jg; g.beginPath(); g.arc(px,py,pr*1.5,0,7); g.fill();
-    /* the hole */
-    const hg=g.createRadialGradient(px-pr*0.15,py-pr*0.15,pr*0.05,px,py,pr);
-    hg.addColorStop(0,'#000000'); hg.addColorStop(0.7,'#040507'); hg.addColorStop(1,'#0d0a06');
+    const ox = side ? 0 : (p.x===0?-1:1)*0.008;
+    const oy = side ? (p.y<0?-1:1)*0.006 : (p.y===0?-1:1)*0.008;
+    const px=X(p.x+ox,p.y+oy), py=Y(p.x+ox,p.y+oy), pr=p.cap*S*1.1;
+    g.fillStyle='#1a0e05';
+    g.beginPath(); g.arc(px,py,pr*1.12,0,7); g.fill();
+    const hg=g.createRadialGradient(px-pr*0.12,py-pr*0.12,pr*0.06,px,py,pr);
+    hg.addColorStop(0,'#000000'); hg.addColorStop(0.78,'#050607'); hg.addColorStop(1,'#0c0a07');
     g.fillStyle=hg; g.beginPath(); g.arc(px,py,pr,0,7); g.fill();
-    /* the far lip, lit — always on the side facing the table's heart */
-    const toC = Math.atan2((Y(PP.W/2,PP.H/2))-py, (X(PP.W/2,PP.H/2))-px);
-    g.strokeStyle='rgba(255,222,168,0.14)'; g.lineWidth=Math.max(1,S*0.008);
-    g.beginPath(); g.arc(px,py,pr*0.97, toC-0.9, toC+0.9); g.stroke();
-    g.strokeStyle='rgba(0,0,0,0.5)'; g.lineWidth=Math.max(1,S*0.006);
-    g.beginPath(); g.arc(px,py,pr*1.01, toC+Math.PI-0.9, toC+Math.PI+0.9); g.stroke();
+    const toC = Math.atan2(Y(PP.W/2,PP.H/2)-py, X(PP.W/2,PP.H/2)-px);
+    g.strokeStyle='rgba(255,218,160,0.11)'; g.lineWidth=Math.max(1,S*0.006);
+    g.beginPath(); g.arc(px,py,pr*0.93, toC-0.8, toC+0.8); g.stroke();
   });
 }
 function buildSurface(){
@@ -901,9 +909,14 @@ function defaultAim(){   // a fresh turn opens aimed at the nearest ball — nev
   AIMDIR = best ? { angle: Math.atan2(best.y-cue.y, best.x-cue.x) } : { angle: 0 };
 }
 function barRect(){
-  const w = 0.115*VIEW.s, h = VIEW.pxh*0.62;
+  const w = 0.115*VIEW.s, h = VIEW.pxh*0.56;
   const gutW = VIEW.pxw - VIEW.gutX;
-  return { x: VIEW.gutX + (gutW - w)/2, y: (VIEW.pxh - h)/2, w, h };
+  return { x: VIEW.gutX + (gutW - w)/2, y: (VIEW.pxh - h)/2 + VIEW.pxh*0.05, w, h };
+}
+function spinRect(){
+  const gutW = VIEW.pxw - VIEW.gutX;
+  const r = gutW*0.33;
+  return { cx: VIEW.gutX + gutW/2, cy: barRect().y - r - VIEW.s*0.05, r };
 }
 function rr(x,y,w,h,r){
   ctx.beginPath();
@@ -944,8 +957,24 @@ function drawAim(){
   ctx.beginPath(); ctx.arc(X(tx0,ty0),Y(tx0,ty0),S*0.0075,0,7); ctx.fill();
   ctx.lineCap='butt';
 }
+function drawSpin(){
+  const sp=spinRect(), S=VIEW.s;
+  /* a little cue face: tap where the tip should strike */
+  const bg=ctx.createRadialGradient(sp.cx-sp.r*0.3,sp.cy-sp.r*0.35,sp.r*0.15,sp.cx,sp.cy,sp.r*1.1);
+  bg.addColorStop(0,'#ffffff'); bg.addColorStop(0.75,'#e8e2d4'); bg.addColorStop(1,'#b9b2a2');
+  ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(sp.cx,sp.cy,sp.r,0,7); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.45)'; ctx.lineWidth=Math.max(1,S*0.004);
+  ctx.beginPath(); ctx.arc(sp.cx,sp.cy,sp.r,0,7); ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.14)';
+  ctx.beginPath(); ctx.moveTo(sp.cx-sp.r*0.75,sp.cy); ctx.lineTo(sp.cx+sp.r*0.75,sp.cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sp.cx,sp.cy-sp.r*0.75); ctx.lineTo(sp.cx,sp.cy+sp.r*0.75); ctx.stroke();
+  const mx = sp.cx + SPIN.x*sp.r*0.66, my = sp.cy - SPIN.y*sp.r*0.66;
+  ctx.fillStyle = (SPIN.x||SPIN.y) ? '#c0392b' : 'rgba(192,57,43,0.45)';
+  ctx.beginPath(); ctx.arc(mx,my,sp.r*0.17,0,7); ctx.fill();
+}
 function drawBar(){
   if(!myTurn() || PLACING) return;
+  drawSpin();
   const b=barRect(), p=POWERDRAG?POWERDRAG.p:0, S=VIEW.s;
   /* the recessed slot */
   ctx.fillStyle='#2a180c'; rr(b.x,b.y,b.w,b.h,b.w/2); ctx.fill();
@@ -1011,7 +1040,15 @@ function loop(){
 const raf = (typeof requestAnimationFrame!=='undefined') ? requestAnimationFrame : (fn)=>0;
 
 /* ---------- touch: place the cue, or aim through the finger and let go ---------- */
-let DRAGID=null, DRAGKIND=null;   // 'power' | 'aim' | 'place'
+let DRAGID=null, DRAGKIND=null;   // 'power' | 'aim' | 'place' | 'spin'
+function setSpin(px){
+  const sp=spinRect();
+  let x=(px.x-sp.cx)/(sp.r*0.66), y=-(px.y-sp.cy)/(sp.r*0.66);
+  const m=Math.hypot(x,y);
+  if(m>1){ x/=m; y/=m; }
+  if(m<0.18){ x=0; y=0; }            // the middle is a clean strike — tap it to clear
+  SPIN={ x:+x.toFixed(2), y:+y.toFixed(2) };
+}
 function rawPx(e){
   const r=cv.getBoundingClientRect(); if(!r) return null;
   const dpr=(window.devicePixelRatio||1);
@@ -1024,10 +1061,15 @@ function onDown(e){
   DRAGID=e.pointerId;
   try{ cv.setPointerCapture(e.pointerId); }catch(err){}
   const bar=barRect();
-  if(px.x >= VIEW.gutX - bar.w*0.4){   // the whole gutter is the bar's — thumbs are not precise instruments
-    if(!AIMDIR) defaultAim();
-    DRAGKIND='power';
-    POWERDRAG={ p: Math.max(0, Math.min(1, (px.y-bar.y)/bar.h)) };
+  if(px.x >= VIEW.gutX - bar.w*0.4){   // the whole gutter is control territory — thumbs are not precise instruments
+    const sp=spinRect();
+    if(Math.hypot(px.x-sp.cx, px.y-sp.cy) < sp.r*1.45){
+      DRAGKIND='spin'; setSpin(px);
+    } else {
+      if(!AIMDIR) defaultAim();
+      DRAGKIND='power';
+      POWERDRAG={ p: Math.max(0, Math.min(1, (px.y-bar.y)/bar.h)) };
+    }
     if(e.preventDefault) e.preventDefault();
     return;
   }
@@ -1045,6 +1087,7 @@ function onMove(e){
   if(e.pointerId!==DRAGID) return;
   const px=rawPx(e); if(!px) return;
   const p=toTable(px.x,px.y);
+  if(DRAGKIND==='spin'){ setSpin(px); return; }
   if(DRAGKIND==='power' && POWERDRAG){
     const bar=barRect();
     POWERDRAG.p = Math.max(0, Math.min(1, (px.y-bar.y)/bar.h));
@@ -1074,10 +1117,33 @@ function onUp(e){
   }
   if(kind==='power' && POWERDRAG){
     const p=POWERDRAG.p; POWERDRAG=null;
-    if(p > 0.04 && AIMDIR) NET.shoot({ angle:+AIMDIR.angle.toFixed(5), power:+p.toFixed(3) });   // a nudge back up is a change of heart
+    if(p > 0.04 && AIMDIR) NET.shoot({ angle:+AIMDIR.angle.toFixed(5), power:+p.toFixed(3), sx:SPIN.x, sy:SPIN.y });   // a nudge back up is a change of heart
     return;
   }
   /* an aim drag just ends — the line stays where you left it */
+}
+/* the fine slider: one stroke is at most two degrees; the knob springs home so a
+   dozen small strokes make an arbitrarily fine adjustment */
+const FINE=$('#finetrack'), FKNOB=$('#fineknob');
+let FDRAG=null;
+if(FINE && FINE.addEventListener){
+  FINE.addEventListener('pointerdown',(e)=>{
+    if(!myTurn() || !AIMDIR) return;
+    FDRAG={ x0:e.clientX, a0:AIMDIR.angle };
+    if(FKNOB) FKNOB.classList.add('live');
+    try{ FINE.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  FINE.addEventListener('pointermove',(e)=>{
+    if(!FDRAG) return;
+    const r=FINE.getBoundingClientRect(); if(!r||!r.width) return;
+    const half=r.width/2;
+    const dx=Math.max(-half,Math.min(half,e.clientX-FDRAG.x0));
+    AIMDIR={ angle: FDRAG.a0 + (dx/half)*(2*Math.PI/180) };
+    if(FKNOB) FKNOB.style.transform='translateX('+(dx*0.9)+'px)';
+  });
+  const fineUp=()=>{ FDRAG=null; if(FKNOB){ FKNOB.classList.remove('live'); FKNOB.style.transform='translateX(0)'; } };
+  FINE.addEventListener('pointerup',fineUp);
+  FINE.addEventListener('pointercancel',fineUp);
 }
 if(cv && cv.addEventListener){
   cv.addEventListener('pointerdown',onDown);
@@ -1134,10 +1200,11 @@ function render(){
     else if(ANIM) t='';
     else if(myTurn()){
       if(G.inHand && G.inHand.key===(NET.mode==='solo'?G.turnKey:me())) t=G.breakShot ? 'Drag the cue to place it behind the line. Aim on the table, then pull the side bar down and let go.' : 'Ball in hand — drag the cue'+(G.inHand.behindHead?' behind the line':' anywhere')+'. Aim on the table, power on the bar.';
-      else t='Drag on the table to aim. Pull the bar down for power — let go to shoot.';
+      else t='Aim on the table, trim with FINE AIM. Tap the little ball for spin. Pull the bar — let go.';
     } else t=(rosterName(G.turnKey)||'They')+' is at the table.'+(OPPQUIET?' Their phone went quiet — the clock still runs.':'');
     hint.textContent=t;
   }
+  const fineEl=$('#fine'); if(fineEl && fineEl.classList) fineEl.classList.toggle('on', myTurn() && !!AIMDIR && !PLACING);
   const log=$('#log'); if(log) log.textContent=G.log[0]||'';
   const over=$('#over');
   if(over){

@@ -1,5 +1,14 @@
 # 8-Ball — Changelog
 
+## v0.5.0 — 2026-07-16
+**Spin.** Engine r3. The gutter grows a little cue face above the power bar — tap or drag where the tip should strike. Up is follow, down is draw, sides are english; the middle is a clean strike and tapping it clears. The physics is honest and deterministic: follow and draw land as a *delayed* impulse along the cue's incoming line at first contact (the cue visibly checks up, then takes), losing bite over a long approach; side english kicks the cue's rebound tangentially at every cushion and fades with each one. Spin travels on the wire inside the shot — `{angle, power, sx, sy}` — so both phones replay the identical spun stroke, and **zero spin is bit-identical to the spinless engine**, so every old shot replays unchanged. Both claims pinned in poolsim, along with draw-behind/follow-through ordering, the object ball's indifference to what the cue was doing, a bent cushion rebound, and guaranteed rest. Spin is spent by the stroke that uses it.
+
+**Fine aim.** A slim FINE AIM strip under the table: one stroke sweeps at most two degrees, and the knob springs home on release — so a dozen small strokes make an arbitrarily fine adjustment, and a pocket-length cut can be trimmed by fractions of a degree with a thumb.
+
+**Pockets, de-weirded.** The soft jaw collar that bled past the rails is gone. Each pocket is now a crisp GamePigeon circle — a clean hole nested into its corner, a thin dark collar where the cut meets the wood, a whisper of light on the far lip, and nothing touching the cloth. Audited: the felt beside every pocket samples pure green.
+
+One playtest note, stated honestly: which way "right english" bends off a cushion is a sign convention, and I chose it by physics argument, not by feel. If a spun rebound bends the opposite way to your instinct at the table, it is one constant (`SIDE_K`'s sign) and one line to flip.
+
 ## v0.4.0 — 2026-07-16
 **Reds and yellows.** The table dresses for the pub: seven reds, seven yellows, and the black. The rulebook re-stamps to `2026-07-16-wpa-nocall-uk` — the dress code changed, the law did not: this is still WPA-minus-calling underneath (one shot after a foul, ball in hand anywhere), just wearing the colours every Australian pub table wears.
 

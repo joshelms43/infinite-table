@@ -91,6 +91,7 @@ still('pool-aim.png', 380, 380, 780, MIDGAME + `
   const cue = G.balls.find(b=>b.id===0);
   AIMDIR = { angle: Math.atan2(-0.18, 0.5) };      // a sticky aim with the guide up
   POWERDRAG = { p: 0.62 };                          // the bar pulled well down, stick drawn back
+  SPIN = { x: 0.5, y: -0.6 };                       // low-right english dialled in on the little ball
 `);
 
 still('pool-portrait.png', 380, 380, 780, MIDGAME + `

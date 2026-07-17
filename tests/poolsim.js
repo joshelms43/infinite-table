@@ -414,6 +414,38 @@ function bootPool() {
   T('rerack — a duplicate tap after the rack is a no-op', G().seq === seqNow);
 }
 
+/* ---- spin: engine r3 ----
+   Follow and draw land as a delayed impulse along the cue's incoming line at first
+   contact; side english kicks the cue's cushion rebounds and fades per cushion.
+   The two claims that matter: zero spin is bit-identical to the spinless engine
+   (the wire's old shots replay unchanged), and spin is as deterministic as
+   everything else (the wire's new shots replay identically everywhere). */
+{
+  const mk = () => [
+    { id: 0, x: 0.6, y: PP.H / 2, vx: 0, vy: 0, pocketed: false },
+    { id: 1, x: 1.1, y: PP.H / 2, vx: 0, vy: 0, pocketed: false },
+  ];
+  const plain = PP.simulate(mk(), { angle: 0, power: 0.3 });
+  const zeroed = PP.simulate(mk(), { angle: 0, power: 0.3, sx: 0, sy: 0 });
+  T('spin — zero spin is bit-identical to no spin', JSON.stringify(plain.balls) === JSON.stringify(zeroed.balls));
+  const draw = PP.simulate(mk(), { angle: 0, power: 0.3, sy: -1 });
+  const follow = PP.simulate(mk(), { angle: 0, power: 0.3, sy: 1 });
+  T('spin — draw pulls the cue back behind its plain rest', draw.balls[0].x < plain.balls[0].x - 0.15,
+    draw.balls[0].x.toFixed(3) + ' vs ' + plain.balls[0].x.toFixed(3));
+  T('spin — follow drives the cue through it', follow.balls[0].x > plain.balls[0].x + 0.15);
+  T('spin — the object ball does not care what the cue was doing',
+    Math.abs(draw.balls[1].x - plain.balls[1].x) < 0.02 && Math.abs(follow.balls[1].x - plain.balls[1].x) < 0.02);
+  const lone = () => [{ id: 0, x: PP.W / 2, y: PP.H / 2, vx: 0, vy: 0, pocketed: false }];
+  const noside = PP.simulate(lone(), { angle: 0, power: 0.55 });
+  const side = PP.simulate(lone(), { angle: 0, power: 0.55, sx: 1 });
+  T('spin — english bends the cushion rebound', Math.abs(noside.balls[0].y - side.balls[0].y) > 0.1,
+    Math.abs(noside.balls[0].y - side.balls[0].y).toFixed(3) + 'm apart');
+  const a1 = PP.simulate(mk(), { angle: 0.02, power: 0.5, sx: 0.7, sy: -0.8 });
+  const a2 = PP.simulate(mk(), { angle: 0.02, power: 0.5, sx: 0.7, sy: -0.8 });
+  T('spin — a spun shot replays byte-identically', JSON.stringify(a1.balls) === JSON.stringify(a2.balls) && a1.ticks === a2.ticks);
+  T('spin — and always comes to rest on its own', a1.ticks < PP.MAXTICKS && draw.ticks < PP.MAXTICKS);
+}
+
 { /* solo: both seats, one thumb, zero network — for the bench, and for testing */
   const t = bootPool();
   const { B, NET, run } = t;
