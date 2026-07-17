@@ -22,24 +22,26 @@
 (function (global) {
   'use strict';
 
-  var RULEBOOK = '2026-07-16-wpa-nocall';
+  var RULEBOOK = '2026-07-16-wpa-nocall-uk';
 
-  var SOLIDS = [1, 2, 3, 4, 5, 6, 7];
-  var STRIPES = [9, 10, 11, 12, 13, 14, 15];
+  /* pub colours: seven reds, seven yellows, and the black. The dress code changed
+     on 2026-07-16; the law (WPA minus calling) did not. */
+  var REDS = [1, 2, 3, 4, 5, 6, 7];
+  var YELLOWS = [9, 10, 11, 12, 13, 14, 15];
   var EIGHT = 8;
 
   /* The regulation colours, so every client paints the same table. */
   var BALL_COLORS = {
-    1: '#F2C230', 2: '#2457C5', 3: '#D03B30', 4: '#6E3AA8',
-    5: '#E87722', 6: '#1E8A4C', 7: '#8A2F33', 8: '#1B1B1F',
-    9: '#F2C230', 10: '#2457C5', 11: '#D03B30', 12: '#6E3AA8',
-    13: '#E87722', 14: '#1E8A4C', 15: '#8A2F33',
+    1: '#C8342B', 2: '#C8342B', 3: '#C8342B', 4: '#C8342B',
+    5: '#C8342B', 6: '#C8342B', 7: '#C8342B', 8: '#1B1B1F',
+    9: '#F2C230', 10: '#F2C230', 11: '#F2C230', 12: '#F2C230',
+    13: '#F2C230', 14: '#F2C230', 15: '#F2C230',
   };
 
   function groupOf(id) {
     if (id === EIGHT) return 'eight';
-    if (id >= 1 && id <= 7) return 'solid';
-    if (id >= 9 && id <= 15) return 'stripe';
+    if (id >= 1 && id <= 7) return 'red';
+    if (id >= 9 && id <= 15) return 'yellow';
     return null;   // the cue belongs to nobody
   }
 
@@ -59,19 +61,19 @@
      carry one of each group — regulation. */
   function rackOrder(seed) {
     var r = rng(seed);
-    var pool = SOLIDS.concat(STRIPES);
+    var pool = REDS.concat(YELLOWS);
     for (var i = pool.length - 1; i > 0; i--) {
       var j = Math.floor(r() * (i + 1));
       var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
     }
     var seats = new Array(15);
     seats[4] = EIGHT;
-    var solids = pool.filter(function (id) { return groupOf(id) === 'solid'; });
-    var stripes = pool.filter(function (id) { return groupOf(id) === 'stripe'; });
-    seats[10] = solids.pop();
-    seats[14] = stripes.pop();
+    var reds = pool.filter(function (id) { return groupOf(id) === 'red'; });
+    var yellows = pool.filter(function (id) { return groupOf(id) === 'yellow'; });
+    seats[10] = reds.pop();
+    seats[14] = yellows.pop();
     if (r() < 0.5) { var s = seats[10]; seats[10] = seats[14]; seats[14] = s; }
-    var rest = solids.concat(stripes);
+    var rest = reds.concat(yellows);
     for (var k = rest.length - 1; k > 0; k--) {
       var m = Math.floor(r() * (k + 1));
       var u = rest[k]; rest[k] = rest[m]; rest[m] = u;
@@ -84,7 +86,7 @@
   /* The judgement. Everything it needs arrives as plain data:
        breakShot        — is this the opening shot of a rack
        open             — is the table still open
-       myGroup          — 'solid' | 'stripe' | null while open
+       myGroup          — 'red' | 'yellow' | null while open
        ballsBefore      — object-ball ids on the table before the stroke (no cue)
        events           — the physics report: { firstHit, pocketed, railsAfterContact, railBalls }
      It answers with what the game must now do. It never touches the game to do it. */
@@ -105,11 +107,11 @@
     if (ev.firstHit == null) foul = 'never touched a ball';
     else if (!input.breakShot) {
       if (input.open) {
-        if (ev.firstHit === EIGHT) foul = 'struck the 8 first on an open table';
+        if (ev.firstHit === EIGHT) foul = 'struck the black first on an open table';
       } else {
         var need = onEight ? 'eight' : input.myGroup;
         if (groupOf(ev.firstHit) !== need) {
-          foul = onEight ? 'must strike the 8 first' : 'struck the wrong group first';
+          foul = onEight ? 'must strike the black first' : 'struck the wrong colour first';
         }
       }
     } else if (pottedObjs.length === 0 && railBallCount < 4) {
@@ -134,7 +136,7 @@
     if (eightDown) {
       if (input.breakShot) out.respotEight = true;   // never a decider on the break
       else if (foul) { out.lose = true; return out; }
-      else if (!onEight) { out.lose = true; out.foul = out.foul || 'pocketed the 8 early'; return out; }
+      else if (!onEight) { out.lose = true; out.foul = out.foul || 'pocketed the black early'; return out; }
       else { out.win = true; return out; }
     }
 
@@ -163,7 +165,7 @@
 
   var PoolRules = {
     RULEBOOK: RULEBOOK,
-    SOLIDS: SOLIDS, STRIPES: STRIPES, EIGHT: EIGHT,
+    REDS: REDS, YELLOWS: YELLOWS, EIGHT: EIGHT,
     BALL_COLORS: BALL_COLORS,
     groupOf: groupOf,
     rackOrder: rackOrder,

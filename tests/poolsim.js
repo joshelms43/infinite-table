@@ -155,10 +155,10 @@ function checkTable(balls, label) {
 
 /* ---- the rulebook, clause by clause ---- */
 {
-  const all = PR.SOLIDS.concat([8]).concat(PR.STRIPES);
+  const all = PR.REDS.concat([8]).concat(PR.YELLOWS);
   const ev = (over) => Object.assign({ firstHit: 1, pocketed: [], railsAfterContact: 3, railBalls: {} }, over);
   const J = (over, evOver) => PR.judge(Object.assign({
-    breakShot: false, open: false, myGroup: 'solid', ballsBefore: all.slice(), events: ev(evOver),
+    breakShot: false, open: false, myGroup: 'red', ballsBefore: all.slice(), events: ev(evOver),
   }, over));
 
   let r = J({}, { pocketed: [0] });
@@ -166,9 +166,9 @@ function checkTable(balls, label) {
   r = J({}, { firstHit: null });
   T('an air ball is a foul', !!r.foul && r.ballInHand);
   r = J({}, { firstHit: 9 });
-  T('striking the wrong group first is a foul', /wrong group/.test(r.foul || ''));
+  T('striking the wrong colour first is a foul', /wrong colour/.test(r.foul || ''));
   r = J({ open: true, myGroup: null }, { firstHit: 8 });
-  T('striking the 8 first on an open table is a foul', /8 first/.test(r.foul || ''));
+  T('striking the black first on an open table is a foul', /black first/.test(r.foul || ''));
   r = J({}, { pocketed: [], railsAfterContact: 0 });
   T('nothing to a rail after contact is a foul', /rail/.test(r.foul || ''));
   r = J({}, { pocketed: [3] });
@@ -176,18 +176,18 @@ function checkTable(balls, label) {
   r = J({}, { pocketed: [11] });
   T('potting only theirs hands the table over', !r.foul && !r.again);
   r = J({ open: true, myGroup: null }, { firstHit: 9, pocketed: [9] });
-  T('the first legal pot closes the table', r.assignShooter === 'stripe' && r.nowOpen === false && r.again);
+  T('the first legal pot closes the table', r.assignShooter === 'yellow' && r.nowOpen === false && r.again);
   r = J({ open: true, myGroup: null }, { firstHit: 2, pocketed: [] });
   T('a dry open shot keeps the table open', !r.foul && r.nowOpen === true && r.assignShooter === null && !r.again);
   r = J({}, { pocketed: [8] });
   T('the early 8 loses the game', r.lose === true);
   r = J({}, { pocketed: [8, 0] });
   T('the 8 with a scratch loses the game', r.lose === true);
-  r = J({ ballsBefore: [8].concat(PR.STRIPES) }, { firstHit: 8, pocketed: [8] });
+  r = J({ ballsBefore: [8].concat(PR.YELLOWS) }, { firstHit: 8, pocketed: [8] });
   T('the clean 8 wins the game', r.win === true && !r.lose);
-  r = J({ ballsBefore: [8].concat(PR.STRIPES) }, { firstHit: 9 });
-  T('on the 8, the 8 must be struck first', /8 first/.test(r.foul || ''));
-  r = J({ ballsBefore: [8].concat(PR.STRIPES) }, { firstHit: 8, pocketed: [8, 0] });
+  r = J({ ballsBefore: [8].concat(PR.YELLOWS) }, { firstHit: 9 });
+  T('on the black, the black must be struck first', /black first/.test(r.foul || ''));
+  r = J({ ballsBefore: [8].concat(PR.YELLOWS) }, { firstHit: 8, pocketed: [8, 0] });
   T('the 8 falling with the cue still loses', r.lose === true);
 
   const BR = (evOver) => PR.judge({ breakShot: true, open: true, myGroup: null, ballsBefore: all.slice(), events: ev(evOver) });
@@ -251,7 +251,7 @@ function checkTable(balls, label) {
         eight.pocketed = false; eight.x = spot.x; eight.y = spot.y;
       }
       if (out.events.firstHit != null || out.events.pocketed.length) st.breakShot = false;
-      if (res.assignShooter) { st.groups[st.turn] = res.assignShooter; st.groups[1 - st.turn] = res.assignShooter === 'solid' ? 'stripe' : 'solid'; }
+      if (res.assignShooter) { st.groups[st.turn] = res.assignShooter; st.groups[1 - st.turn] = res.assignShooter === 'red' ? 'yellow' : 'red'; }
       st.open = res.nowOpen;
       if (res.win) return { verdict: 'win', shots: shot + 1 };
       if (res.lose) return { verdict: 'lose', shots: shot + 1 };

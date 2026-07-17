@@ -81,7 +81,7 @@ HTML.forEach(rel => {
 
   const game = fs.readFileSync(path.join(ROOT, 'pool', 'index.html'), 'utf8');
   T('the pool game reads the rulebook rather than carrying its own copy',
-    !/const\s+(SOLIDS|STRIPES|BALL_COLORS|EIGHT|POCKETS|RULEBOOK|ENGINE)\s*=/.test(game));
+    !/const\s+(REDS|YELLOWS|SOLIDS|STRIPES|BALL_COLORS|EIGHT|POCKETS|RULEBOOK|ENGINE)\s*=/.test(game));
   T('and it actually loads the rulebook', /shared\/pool-rules\.js/.test(game));
   T('and the engine', /shared\/pool-physics\.js/.test(game));
 }

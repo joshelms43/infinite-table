@@ -1,5 +1,16 @@
 # 8-Ball — Changelog
 
+## v0.4.0 — 2026-07-16
+**Reds and yellows.** The table dresses for the pub: seven reds, seven yellows, and the black. The rulebook re-stamps to `2026-07-16-wpa-nocall-uk` — the dress code changed, the law did not: this is still WPA-minus-calling underneath (one shot after a foul, ball in hand anywhere), just wearing the colours every Australian pub table wears.
+
+What that meant everywhere:
+- **The rulebook** renames its groups end to end — `REDS`/`YELLOWS`, `groupOf` answers `'red'`/`'yellow'`, and the fouls speak the language: *struck the wrong colour first*, *must strike the black first*, *pocketed the black early*.
+- **The balls go unnumbered**, as pub balls are. The roll still reads: each ball carries a tonal pole stamp — a darker circle of its own colour, honestly foreshortened as it turns — the cue keeps its red dot, and only the black keeps a number, its white-capped 8.
+- **The log counts colours instead of listing numbers**: "pockets 2 reds and stays on", "pockets a yellow and the black". The badges read REDS / YELLOWS / ON THE BLACK; the win line is "the black, clean".
+- The rack keeps its law: black in the heart, one of each colour on the back corners.
+
+Every fixture translated with it, and the colour balance on the rendered break was audited by pixel: 174 red to 179 yellow. Fair rack.
+
 ## v0.3.2 — 2026-07-16
 **The balls roll.** Every ball now carries a render-side orientation — a unit vector to its number pole — and when it moves, the vector rolls the honest way: Rodrigues rotation about the axis perpendicular to travel, angle = distance over radius. Numbers slide across the crown, foreshorten toward the limb, vanish around the far side and come back; a stripe's band is the true great-circle projection — an ellipse whose minor axis is the pole's tilt — flat across the face when seen edge-on, a rim ring when the pole faces up. The cue ball wears the classic red dot so its roll reads too. Fast balls clamp their per-frame spin so they smear like motion instead of strobing. None of it touches the wire: orientation is cosmetic and lives entirely in the renderer, so both phones may see different rolls of the same true shot — as two people standing at a real table do.
 
