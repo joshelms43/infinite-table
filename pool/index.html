@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.6.1
+<!-- Infinite Table — 8-Ball. Version: 0.6.2
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -169,7 +169,7 @@
 <div id="wrap">
 <header>
   <h1><span class="orb"></span>EIGHT BALL</h1>
-  <span class="ver">v0.6.1</span>
+  <span class="ver">v0.6.2</span>
 </header>
 
 <div id="home" class="screen on">
@@ -218,10 +218,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.6.1"></script>
-<script src="../shared/tablekit.js?v=0.6.1"></script>
-<script src="../shared/pool-rules.js?v=0.6.1"></script>
-<script src="../shared/pool-physics.js?v=0.6.1"></script>
+<script src="../shared/config.js?v=0.6.2"></script>
+<script src="../shared/tablekit.js?v=0.6.2"></script>
+<script src="../shared/pool-rules.js?v=0.6.2"></script>
+<script src="../shared/pool-physics.js?v=0.6.2"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -745,20 +745,28 @@ function paintTable(g, pxw, pxh, S){
     g.strokeStyle='rgba(0,0,0,0.55)'; g.lineWidth=Math.max(1,S*0.005);
     g.beginPath(); g.arc(x,y,r2*1.02,0,7); g.stroke();
   };
-  /* corner stations */
-  const CSZ = 0.165*S;
+  /* corner stations, layered as the photograph has them: the cream cap hugs the
+     OUTER corner of the frame, and the black hole is drawn over it, opening into
+     the cloth — the mouth eats the felt corner, the cream only ever shows behind
+     the hole, never between hole and table. */
+  const CD = RAILPAD*S - LIP*1.2;    // casting depth: the full rail band, inside the lip — never the cloth
+  const CL = 0.185*S;                // and each cap runs this far along both rails, the reference's L
   [[cx,cy,-1,-1],[cx+cw,cy,1,-1],[cx,cy+ch,-1,1],[cx+cw,cy+ch,1,1]].forEach(([kx,ky,dx,dy])=>{
-    const bx = kx + (dx<0 ? -CSZ + S*0.065 : -S*0.065);
-    const by = ky + (dy<0 ? -CSZ + S*0.065 : -S*0.065);
-    casting(bx, by, CSZ, CSZ, S*0.05);
-    hole(kx + dx*S*0.010, ky + dy*S*0.010, 0.048*S);
+    const hx = dx<0 ? kx - CD : kx + CD - CL;      // the arm along the horizontal rail
+    const hy = dy<0 ? ky - CD : ky;
+    casting(hx, hy, CL, CD, S*0.03);
+    const vx = dx<0 ? kx - CD : kx;                // and along the vertical rail
+    const vy = dy<0 ? ky - CD : ky + CD - CL;
+    casting(vx, vy, CD, CL, S*0.03);
+    hole(kx + dx*S*0.018, ky + dy*S*0.018, 0.056*S);
   });
-  /* side stations, mid left and mid right */
-  const SW = RAILPAD*0.94*S, SH = 0.19*S;
+  /* side stations: a slim cream plate against the outer lip, the hole over it at
+     the cushion line, mouth bulging into the cloth */
+  const SPW = RAILPAD*S - LIP*1.3, SPH = 0.16*S;
   [[cx,-1],[cx+cw,1]].forEach(([kx,dx])=>{
-    const bx = dx<0 ? kx - SW - S*0.004 : kx + S*0.004;
-    casting(bx, cy+ch/2 - SH/2, SW, SH, S*0.045);
-    hole(kx + dx*S*0.010, cy+ch/2, 0.045*S);
+    const bx = dx<0 ? kx - RAILPAD*S + LIP*0.65 : kx + RAILPAD*S - LIP*0.65 - SPW;
+    casting(bx, cy+ch/2 - SPH/2, SPW, SPH, S*0.045);
+    hole(kx + dx*S*0.012, cy+ch/2, 0.05*S);
   });
   g.restore();
 }

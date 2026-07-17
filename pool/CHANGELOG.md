@@ -1,5 +1,10 @@
 # 8-Ball — Changelog
 
+## v0.6.2 — 2026-07-16
+**The pocket layering, corrected against the photograph.** v0.6.1 read the reference's cream but not its order: the plates wrapped around the hole on the cloth side, which from inside the table looked like the casting was covering the mouth. The photograph's actual layering: the black hole opens INTO the cloth — the mouth eats the felt corner — and the cream is strictly the outer hardware behind it, an L-shaped cap running along both rails past the hole, never between hole and table. Rebuilt in that order: L-arms confined to the rail band inside the lip, hole drawn last on top.
+
+Proven by walking pixels along three lines on the render: along each rail from the corner reads hole → cream → wood; the diagonal from inside the cloth reads felt → black mouth → wood, with zero cream inboard of the hole. Silhouette audit still zero break-outs.
+
 ## v0.6.1 — 2026-07-16
 **Pockets, from the photograph.** With the reference board finally in hand, the real answer was visible: GamePigeon's pockets aren't cuts in the wood at all — every hole is framed in a **cream casting**, ivory plates set into the mahogany at the four corners and both side stations, with the black drop inside the plate. The pocket is hardware. Rebuilt accordingly: gradient ivory plates with their own shadow on the wood and a dark keyline, holes sized to sit inside them, everything still clipped behind the outer lip so the slab's silhouette remains law (re-audited: zero break-outs).
 
