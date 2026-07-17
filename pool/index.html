@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.6.0
+<!-- Infinite Table — 8-Ball. Version: 0.6.1
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -169,7 +169,7 @@
 <div id="wrap">
 <header>
   <h1><span class="orb"></span>EIGHT BALL</h1>
-  <span class="ver">v0.6.0</span>
+  <span class="ver">v0.6.1</span>
 </header>
 
 <div id="home" class="screen on">
@@ -218,10 +218,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.6.0"></script>
-<script src="../shared/tablekit.js?v=0.6.0"></script>
-<script src="../shared/pool-rules.js?v=0.6.0"></script>
-<script src="../shared/pool-physics.js?v=0.6.0"></script>
+<script src="../shared/config.js?v=0.6.1"></script>
+<script src="../shared/tablekit.js?v=0.6.1"></script>
+<script src="../shared/pool-rules.js?v=0.6.1"></script>
+<script src="../shared/pool-physics.js?v=0.6.1"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -719,28 +719,46 @@ function paintTable(g, pxw, pxh, S){
   };
   for(let i=1;i<8;i++){ if(i===4) continue; dia(PP.W*i/8, -RAILPAD*0.52); dia(PP.W*i/8, PP.H+RAILPAD*0.52); }
   for(let j=1;j<4;j++){ dia(-RAILPAD*0.52, PP.H*j/4); dia(PP.W+RAILPAD*0.52, PP.H*j/4); }
-  /* pockets: crisp GamePigeon circles, and the frame never breaks. The holes are
-     clipped behind a solid outer lip of wood, so however the geometry falls, the
-     table's silhouette stays a clean rounded slab — exactly the reference board. */
+  /* pockets, from the reference photo at last: GamePigeon frames every hole in a
+     cream casting — ivory corner plates and side plates set into the mahogany,
+     with the black drop inside the plate. The pocket is hardware, not a cut.
+     Everything still clips behind the outer lip: the slab's silhouette is law. */
   const LIP = S*0.028;
   g.save();
   g.beginPath();
   const rr2=(x,y,w2,h2,rad)=>{ g.moveTo(x+rad,y); g.arcTo(x+w2,y,x+w2,y+h2,rad); g.arcTo(x+w2,y+h2,x,y+h2,rad); g.arcTo(x,y+h2,x,y,rad); g.arcTo(x,y,x+w2,y,rad); g.closePath(); };
   rr2(LIP, LIP, (VIEW.gutX||pxw)-2*LIP, pxh-2*LIP, S*0.03);
   g.clip();
-  PP.POCKETS.forEach(p=>{
-    const side = p.x>0 && p.x<PP.W;
-    const ox = side ? 0 : (p.x===0?-1:1)*0.004;
-    const oy = side ? (p.y<0?-1:1)*0.004 : (p.y===0?-1:1)*0.004;
-    const px=X(p.x+ox,p.y+oy), py=Y(p.x+ox,p.y+oy), pr=p.cap*S*1.04;
-    g.fillStyle='#1a0e05';
-    g.beginPath(); g.arc(px,py,pr*1.1,0,7); g.fill();
-    const hg=g.createRadialGradient(px-pr*0.12,py-pr*0.12,pr*0.06,px,py,pr);
-    hg.addColorStop(0,'#000000'); hg.addColorStop(0.78,'#050607'); hg.addColorStop(1,'#0c0a07');
-    g.fillStyle=hg; g.beginPath(); g.arc(px,py,pr,0,7); g.fill();
-    const toC = Math.atan2(Y(PP.W/2,PP.H/2)-py, X(PP.W/2,PP.H/2)-px);
-    g.strokeStyle='rgba(255,218,160,0.11)'; g.lineWidth=Math.max(1,S*0.006);
-    g.beginPath(); g.arc(px,py,pr*0.93, toC-0.8, toC+0.8); g.stroke();
+  const casting=(x,y,w2,h2,rad)=>{
+    const cg=g.createLinearGradient(x,y,x,y+h2);
+    cg.addColorStop(0,'#f2ebd6'); cg.addColorStop(0.55,'#e2d7ba'); cg.addColorStop(1,'#c9bd9d');
+    g.beginPath(); rr2(x,y,w2,h2,rad);
+    g.fillStyle='rgba(0,0,0,0.28)'; g.save(); g.translate(1.5,2); g.fill(); g.restore();   // its shadow on the wood
+    g.beginPath(); rr2(x,y,w2,h2,rad); g.fillStyle=cg; g.fill();
+    g.strokeStyle='rgba(60,38,18,0.5)'; g.lineWidth=Math.max(1,S*0.004);
+    g.beginPath(); rr2(x,y,w2,h2,rad); g.stroke();
+  };
+  const hole=(x,y,r2)=>{
+    const hg=g.createRadialGradient(x-r2*0.15,y-r2*0.15,r2*0.05,x,y,r2);
+    hg.addColorStop(0,'#000000'); hg.addColorStop(0.8,'#060708'); hg.addColorStop(1,'#111');
+    g.fillStyle=hg; g.beginPath(); g.arc(x,y,r2,0,7); g.fill();
+    g.strokeStyle='rgba(0,0,0,0.55)'; g.lineWidth=Math.max(1,S*0.005);
+    g.beginPath(); g.arc(x,y,r2*1.02,0,7); g.stroke();
+  };
+  /* corner stations */
+  const CSZ = 0.165*S;
+  [[cx,cy,-1,-1],[cx+cw,cy,1,-1],[cx,cy+ch,-1,1],[cx+cw,cy+ch,1,1]].forEach(([kx,ky,dx,dy])=>{
+    const bx = kx + (dx<0 ? -CSZ + S*0.065 : -S*0.065);
+    const by = ky + (dy<0 ? -CSZ + S*0.065 : -S*0.065);
+    casting(bx, by, CSZ, CSZ, S*0.05);
+    hole(kx + dx*S*0.010, ky + dy*S*0.010, 0.048*S);
+  });
+  /* side stations, mid left and mid right */
+  const SW = RAILPAD*0.94*S, SH = 0.19*S;
+  [[cx,-1],[cx+cw,1]].forEach(([kx,dx])=>{
+    const bx = dx<0 ? kx - SW - S*0.004 : kx + S*0.004;
+    casting(bx, cy+ch/2 - SH/2, SW, SH, S*0.045);
+    hole(kx + dx*S*0.010, cy+ch/2, 0.045*S);
   });
   g.restore();
 }

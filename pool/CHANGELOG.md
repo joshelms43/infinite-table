@@ -1,5 +1,10 @@
 # 8-Ball — Changelog
 
+## v0.6.1 — 2026-07-16
+**Pockets, from the photograph.** With the reference board finally in hand, the real answer was visible: GamePigeon's pockets aren't cuts in the wood at all — every hole is framed in a **cream casting**, ivory plates set into the mahogany at the four corners and both side stations, with the black drop inside the plate. The pocket is hardware. Rebuilt accordingly: gradient ivory plates with their own shadow on the wood and a dark keyline, holes sized to sit inside them, everything still clipped behind the outer lip so the slab's silhouette remains law (re-audited: zero break-outs).
+
+One for the tooling ledger: the previous audit was reading a **stale render** — piping the render tool through `head -1` sent it SIGPIPE after the first still, so the break frame on disk was from the prior design and the corner probes chased a ghost for a round. Render logs go to a file now.
+
 ## v0.6.0 — 2026-07-16
 **Engine r4: the honest ball.** The r3 spin — a canned impulse along the cue's original line — felt weird because it *was* weird: on any cut it shoved the cue somewhere no real cue goes. Replaced wholesale with the real model. Every ball now carries a surface-roll state beside its velocity; sliding friction drags the two together at true sphere ratios (1 : 2.5), and only a rolling ball feels rolling resistance. Draw and follow stop being special cases: they are simply backspin and topspin struck into the cue — it stuns through the contact, the spin *grabs* the cloth, and the cue curves away along the genuine tangent-line arc. A drawn cue arrives softer (the cloth taxes the approach — the fixture asserts the object ball honestly shows it); a stunned ball checks up then gathers natural roll; object balls slide-then-roll like real balls, which quietly improves every plain shot too. Close-range power draw screws back half a metre. Top speed rises to 8.5 m/s because the slide phase eats ~30% of a stun shot and the break must stay a break. Nine r4 fixtures pin all of it, determinism and guaranteed rest included.
 
