@@ -1,5 +1,12 @@
 # 8-Ball — Changelog
 
+## v0.7.0 — 2026-07-17
+**The table is the artwork.** After a long campaign of drawing the reference — measured geometry, colour-class maps, traced silhouettes, a full repaint to a commissioned design — the honest final answer was simpler: ship the commissioned artwork itself. The table is now a single bitmap (`table.png`, quantized to 116 KB from 1.4 MB, page background flood-filled to transparency), blitted each frame under the balls.
+
+The engineering that makes it a game and not a picture: the drawn cushion-nose rectangle was measured off the asset and the physics cloth maps exactly onto it — balls rebound precisely where the art says the cushion is, verified by pixel at the nose transition. Pocket capture, spin, rolling balls, shadows and all controls ride on top unchanged. Until the image loads (and in headless test sandboxes) a plain fallback table draws; the render tool loads the real asset so dev stills show the true frame.
+
+Also in this line's history, unshipped but recorded: the measured teal palette, segmented cushions with mitred noses, traced-mask stations, and horseshoe collars all live on the `pocket-experiments` branch — a museum of ways to almost draw a pocket.
+
 ## v0.6.3 — 2026-07-16
 **Measured, not imagined.** Three releases guessed at the reference board; this one measured it. The photograph was analysed numerically — colour samples, run-length scans, blob centroids — and the table repainted to the numbers:
 

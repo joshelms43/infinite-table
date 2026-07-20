@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.6.3
+<!-- Infinite Table — 8-Ball. Version: 0.7.0
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -169,7 +169,7 @@
 <div id="wrap">
 <header>
   <h1><span class="orb"></span>EIGHT BALL</h1>
-  <span class="ver">v0.6.3</span>
+  <span class="ver">v0.7.0</span>
 </header>
 
 <div id="home" class="screen on">
@@ -218,10 +218,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.6.3"></script>
-<script src="../shared/tablekit.js?v=0.6.3"></script>
-<script src="../shared/pool-rules.js?v=0.6.3"></script>
-<script src="../shared/pool-physics.js?v=0.6.3"></script>
+<script src="../shared/config.js?v=0.7.0"></script>
+<script src="../shared/tablekit.js?v=0.7.0"></script>
+<script src="../shared/pool-rules.js?v=0.7.0"></script>
+<script src="../shared/pool-physics.js?v=0.7.0"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -631,7 +631,7 @@ function rosterName(key){ const r=G.roster.find(x=>x.key===key); return r&&r.nam
 const cv = $('#cv');
 const ctx = cv && cv.getContext ? (cv.getContext('2d')||null) : null;
 let VIEW = { s:1, ox:0, oy:0, rot:false, pxw:0, pxh:0 };
-const RAILPAD = 0.205;   // rail width in table metres — measured off the reference: 0.19 of cloth width
+const RAILPAD = 0.3124;  // slab margin in table metres — the art's own proportion, nose-aligned
 
 const GUTTER = 0.24;   // metres-equivalent of wood beside the table, where the power bar lives — never over the cloth
 function fit(){
@@ -665,101 +665,40 @@ let PREVPOCK = '';   // last frame's pocketed set, to notice the moment a ball d
 
 function lcg(seed){ let x=seed>>>0; return ()=>((x = (x*1664525+1013904223)>>>0)/4294967296); }
 
+/* The table is the commissioned artwork itself, blitted with the physics
+   aligned to its drawn cushion noses: the nose rect below was measured off the
+   asset, and the cloth (0..W, 0..H) maps exactly onto it, so balls rebound
+   precisely where the picture says they should. */
+const TABLE_ART = { w:760, h:1283, x0:135.9, y0:140.5, x1:623.1, y1:1147.8 };
+let TABLEIMG = null;
+function setTableImage(img){ TABLEIMG = img; buildSurface(); try{ draw(); }catch(e){} }
+(function loadTableArt(){
+  try{
+    if(typeof Image === 'undefined') return;
+    const i = new Image();
+    i.onload = ()=> setTableImage(i);
+    i.src = './table.png?v=0.7.0';
+  }catch(e){}
+})();
 function paintTable(g, pxw, pxh, S){
-  /* Every colour and ratio below is measured off the reference photograph, not
-     guessed: cloth teal (10,132,127), mahogany (84,38,40), rails 0.19 of cloth
-     width, corner holes r=0.075 CW centred (-0.05,-0.065) CW outside the corner,
-     side holes r=0.075 CW centred 0.084 CW outside the edge, one cream block per
-     corner with the hole embedded in it, a cream tab outside each side hole. */
-  const CW = PP.H;   // cloth width in table metres — the reference's measuring stick
-  /* the mahogany bed */
-  const wg = g.createLinearGradient(0,0,pxw,pxh);
-  wg.addColorStop(0,'#7c2b2d'); wg.addColorStop(0.5,'#5e2023'); wg.addColorStop(1,'#471a1c');
-  g.fillStyle = wg; g.fillRect(0,0,pxw,pxh);
-  const rnd = lcg(8);
-  for(let i=0;i<24;i++){
-    const gx = rnd()*pxw;
-    g.strokeStyle = rnd()<0.5 ? 'rgba(0,0,0,0.10)' : 'rgba(190,90,88,0.10)';
-    g.lineWidth = 1 + rnd()*2.2;
-    g.beginPath(); g.moveTo(gx + (rnd()-0.5)*8, 0); g.lineTo(gx + (rnd()-0.5)*18, pxh); g.stroke();
-  }
-  /* the teal cloth */
+  g.clearRect(0,0,pxw,pxh);
   const x0=X(0,0), y0=Y(0,0), x1=X(PP.W,PP.H), y1=Y(PP.W,PP.H);
   const cx=Math.min(x0,x1), cy=Math.min(y0,y1), cw=Math.abs(x1-x0), ch=Math.abs(y1-y0);
-  g.fillStyle='#07655e'; g.fillRect(cx,cy,cw,ch);
-  const fg=g.createRadialGradient(cx+cw/2, cy+ch*0.42, ch*0.05, cx+cw/2, cy+ch/2, ch*0.72);
-  fg.addColorStop(0,'#0b8d84'); fg.addColorStop(0.62,'#087a72'); fg.addColorStop(1,'#05534d');
-  g.fillStyle=fg; g.fillRect(cx,cy,cw,ch);
-  const sp = lcg(41);
-  for(let i=0;i<1400;i++){
-    const nx=cx+sp()*cw, ny=cy+sp()*ch;
-    g.fillStyle = sp()<0.5 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)';
-    g.fillRect(nx, ny, 1.4, 1.4);
+  if(TABLEIMG){
+    const kx = cw/(TABLE_ART.x1-TABLE_ART.x0);
+    const ky = ch/(TABLE_ART.y1-TABLE_ART.y0);
+    g.drawImage(TABLEIMG, cx - TABLE_ART.x0*kx, cy - TABLE_ART.y0*ky, TABLE_ART.w*kx, TABLE_ART.h*ky);
+  } else {
+    /* pre-load (and stub-environment) fallback: a plain but honest table */
+    g.fillStyle='#591717'; g.fillRect(0,0,(VIEW.gutX||pxw),pxh);
+    g.fillStyle='#017a74'; g.fillRect(cx,cy,cw,ch);
+    g.fillStyle='#050607';
+    PP.POCKETS.forEach(p=>{ g.beginPath(); g.arc(X(p.x,p.y),Y(p.x,p.y),p.cap*S,0,7); g.fill(); });
   }
-  /* cushions: a slightly darker teal band with a lit nose */
-  const CU = S*0.034;
-  g.fillStyle='rgba(0,0,0,0.16)';
-  g.fillRect(cx,cy,cw,CU); g.fillRect(cx,cy+ch-CU,cw,CU);
-  g.fillRect(cx,cy,CU,ch); g.fillRect(cx+cw-CU,cy,CU,ch);
-  g.strokeStyle='rgba(255,255,255,0.09)'; g.lineWidth=Math.max(1,S*0.005);
-  g.strokeRect(cx+CU, cy+CU, cw-2*CU, ch-2*CU);
-  /* the rails meet the cloth */
-  g.strokeStyle='rgba(0,0,0,0.4)'; g.lineWidth=S*0.014;
-  g.strokeRect(cx+S*0.007, cy+S*0.007, cw-S*0.014, ch-S*0.014);
-  g.strokeStyle='rgba(255,205,200,0.12)'; g.lineWidth=S*0.008;
-  g.strokeRect(cx-S*0.006, cy-S*0.006, cw+S*0.012, ch+S*0.012);
-  /* the marks of the game */
-  g.strokeStyle='#ffffff22'; g.lineWidth=Math.max(1,S*0.004);
+  /* the marks of the game, whispered over the art */
+  g.strokeStyle='#ffffff17'; g.lineWidth=Math.max(1,S*0.004);
   g.beginPath(); g.moveTo(X(PP.HEADSTRING,0),Y(PP.HEADSTRING,0)); g.lineTo(X(PP.HEADSTRING,PP.H),Y(PP.HEADSTRING,PP.H)); g.stroke();
-  g.fillStyle='#ffffff2c'; g.beginPath(); g.arc(X(PP.FOOTSPOT.x,PP.FOOTSPOT.y),Y(PP.FOOTSPOT.x,PP.FOOTSPOT.y),S*0.008,0,7); g.fill();
-  /* diamond sights */
-  const dia=(tx,ty)=>{
-    const dx2=X(tx,ty), dy2=Y(tx,ty), r=S*0.011;
-    g.save(); g.translate(dx2,dy2); g.rotate(Math.PI/4);
-    g.fillStyle='rgba(0,0,0,0.3)'; g.fillRect(-r+1,-r+1,2*r,2*r);
-    const pg=g.createLinearGradient(-r,-r,r,r);
-    pg.addColorStop(0,'#f4efe2'); pg.addColorStop(1,'#cdc2a6');
-    g.fillStyle=pg; g.fillRect(-r,-r,2*r,2*r);
-    g.restore();
-  };
-  for(let i=1;i<8;i++){ if(i===4) continue; dia(PP.W*i/8, -RAILPAD*0.5); dia(PP.W*i/8, PP.H+RAILPAD*0.5); }
-  for(let j=1;j<4;j++){ dia(-RAILPAD*0.5, PP.H*j/4); dia(PP.W+RAILPAD*0.5, PP.H*j/4); }
-  /* pocket stations, to the measurements. Silhouette law still holds. */
-  const LIP = S*0.03;
-  g.save();
-  g.beginPath();
-  const rr2=(x,y,w2,h2,rad)=>{ g.moveTo(x+rad,y); g.arcTo(x+w2,y,x+w2,y+h2,rad); g.arcTo(x+w2,y+h2,x,y+h2,rad); g.arcTo(x,y+h2,x,y,rad); g.arcTo(x,y,x+w2,y,rad); g.closePath(); };
-  rr2(LIP, LIP, (VIEW.gutX||pxw)-2*LIP, pxh-2*LIP, S*0.075);
-  g.clip();
-  const cream=(x,y,w2,h2,rad)=>{
-    const cg=g.createLinearGradient(x,y,x,y+h2);
-    cg.addColorStop(0,'#f1e9d4'); cg.addColorStop(0.6,'#e0d5b8'); cg.addColorStop(1,'#c6ba9b');
-    g.beginPath(); rr2(x,y,w2,h2,rad); g.fillStyle=cg; g.fill();
-    g.strokeStyle='rgba(45,20,18,0.5)'; g.lineWidth=Math.max(1,S*0.004);
-    g.beginPath(); rr2(x,y,w2,h2,rad); g.stroke();
-  };
-  const hole=(x,y,r2)=>{
-    const hg=g.createRadialGradient(x-r2*0.15,y-r2*0.15,r2*0.05,x,y,r2);
-    hg.addColorStop(0,'#000000'); hg.addColorStop(0.8,'#060708'); hg.addColorStop(1,'#101010');
-    g.fillStyle=hg; g.beginPath(); g.arc(x,y,r2,0,7); g.fill();
-  };
-  const HR = 0.075*CW*S;      // hole radius, measured
-  const OFF = 0.058*CW*S;     // corner hole centre, outside the corner on both axes
-  /* corners: one cream block, the hole embedded in it */
-  const BLK = 0.21*CW*S;
-  [[cx,cy,-1,-1],[cx+cw,cy,1,-1],[cx,cy+ch,-1,1],[cx+cw,cy+ch,1,1]].forEach(([kx,ky,dx,dy])=>{
-    const hx = kx + dx*OFF, hy = ky + dy*OFF;
-    cream(hx - BLK/2 + dx*BLK*0.12, hy - BLK/2 + dy*BLK*0.12, BLK, BLK, S*0.06);
-    hole(hx, hy, HR);
-  });
-  /* sides: hole in the rail kissing the cloth edge, a cream tab outside it */
-  const SOFF = 0.082*CW*S;
-  [[cx,-1],[cx+cw,1]].forEach(([kx,dx])=>{
-    const hx = kx + dx*SOFF, hy = cy+ch/2;
-    cream(hx + dx*HR*0.35 - (dx<0?0.09*CW*S:0), hy - 0.105*CW*S, 0.09*CW*S, 0.21*CW*S, S*0.045);
-    hole(hx, hy, HR*0.96);
-  });
-  g.restore();
+  g.fillStyle='#ffffff20'; g.beginPath(); g.arc(X(PP.FOOTSPOT.x,PP.FOOTSPOT.y),Y(PP.FOOTSPOT.x,PP.FOOTSPOT.y),S*0.007,0,7); g.fill();
 }
 function buildSurface(){
   TSURF = null;

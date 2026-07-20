@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { createCanvas } = require('@napi-rs/canvas');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { partsFor } = require('../tests/_document');
 
 const OUT = process.env.RENDER_OUT || '/mnt/user-data/outputs';
@@ -62,9 +62,11 @@ function boot(cssW, innerW, innerH) {
 
 function stage(sandbox, script) { return vm.runInContext(script, sandbox); }
 
+let ART = null;
 function still(name, cssW, innerW, innerH, setup) {
   const { sandbox, cv } = boot(cssW, innerW, innerH);
   stage(sandbox, setup);
+  if (ART) { sandbox.__ART = ART; stage(sandbox, 'setTableImage(__ART);'); }
   stage(sandbox, 'fit(); draw();');
   fs.writeFileSync(path.join(OUT, name), cv.toBuffer('image/png'));
   console.log('wrote', name, cv.width + 'x' + cv.height);
@@ -87,6 +89,7 @@ const MIDGAME = `
   G.breakShot=false; G.inHand=null;
 `;
 
+loadImage(path.join(__dirname, '../pool/table.png')).then(img => { ART = img; }).catch(()=>{}).then(() => {
 still('pool-aim.png', 380, 380, 780, MIDGAME + `
   const cue = G.balls.find(b=>b.id===0);
   AIMDIR = { angle: Math.atan2(-0.18, 0.5) };      // a sticky aim with the guide up
@@ -112,3 +115,4 @@ still('pool-break.png', 380, 380, 780, `
 `);
 
 console.log('done — the table, seen.');
+});
