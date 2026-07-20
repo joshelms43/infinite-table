@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — 8-Ball. Version: 0.7.0
+<!-- Infinite Table — 8-Ball. Version: 0.7.1
 
      The first continuous-physics game with turn-based rules on the platform. The wire
      never carries ball positions in flight: a shot is an intent {angle, power}, the host
@@ -169,7 +169,7 @@
 <div id="wrap">
 <header>
   <h1><span class="orb"></span>EIGHT BALL</h1>
-  <span class="ver">v0.7.0</span>
+  <span class="ver">v0.7.1</span>
 </header>
 
 <div id="home" class="screen on">
@@ -218,10 +218,10 @@
 </div>
 <div id="banner"></div>
 
-<script src="../shared/config.js?v=0.7.0"></script>
-<script src="../shared/tablekit.js?v=0.7.0"></script>
-<script src="../shared/pool-rules.js?v=0.7.0"></script>
-<script src="../shared/pool-physics.js?v=0.7.0"></script>
+<script src="../shared/config.js?v=0.7.1"></script>
+<script src="../shared/tablekit.js?v=0.7.1"></script>
+<script src="../shared/pool-rules.js?v=0.7.1"></script>
+<script src="../shared/pool-physics.js?v=0.7.1"></script>
 <script>
 'use strict';
 /* ---------- little helpers, house style ---------- */
@@ -677,7 +677,7 @@ function setTableImage(img){ TABLEIMG = img; buildSurface(); try{ draw(); }catch
     if(typeof Image === 'undefined') return;
     const i = new Image();
     i.onload = ()=> setTableImage(i);
-    i.src = './table.png?v=0.7.0';
+    i.src = './table.png?v=0.7.1';
   }catch(e){}
 })();
 function paintTable(g, pxw, pxh, S){

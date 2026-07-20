@@ -17,7 +17,7 @@
 (function (global) {
   'use strict';
 
-  var ENGINE = '2026-07-16-roll-r4';   /* r4: the honest ball. Every ball carries a
+  var ENGINE = '2026-07-17-mouths-r5';   /* r4: the honest ball. Every ball carries a
      surface-roll state (w) beside its velocity; sliding friction drags the two
      together at sphere ratios (1 : 2.5), and only a rolling ball feels rolling
      resistance. Draw and follow are nothing special any more — they are just
@@ -51,12 +51,19 @@
   /* Pockets. Corner mouths sit on the corner points, side mouths just outside the
      long rails. A ball inside a mouth zone gets no cushion; inside the capture
      radius it drops. */
+  /* r5: the pockets are where the artwork draws them. Corner holes sit outside
+     the cloth corner on the diagonal, side holes outside the long rails; their
+     rims kiss the nose line, so nothing is swallowed on the felt. */
   var POCKETS = [
-    { x: 0, y: 0, cap: 0.062 }, { x: W, y: 0, cap: 0.062 },
-    { x: 0, y: H, cap: 0.062 }, { x: W, y: H, cap: 0.062 },
-    { x: W / 2, y: -0.012, cap: 0.055 }, { x: W / 2, y: H + 0.012, cap: 0.055 },
+    { x: -0.045, y: -0.045, cap: 0.062 }, { x: W + 0.045, y: -0.045, cap: 0.062 },
+    { x: -0.045, y: H + 0.045, cap: 0.062 }, { x: W + 0.045, y: H + 0.045, cap: 0.062 },
+    { x: W / 2, y: -0.067, cap: 0.062 }, { x: W / 2, y: H + 0.067, cap: 0.062 },
   ];
-  var MOUTH = 1.4;                   // the no-cushion zone extends this far past the capture radius
+  /* rail openings, matching the drawn mouths: the cushion simply is not there */
+  var CGAP = 0.115;                  // opening reach from each corner, along both rails
+  var SGAP = 0.10;                   // opening half-width at the side pockets
+  function openLong(x)  { return x < CGAP || x > W - CGAP || Math.abs(x - W / 2) < SGAP; }
+  function openShort(y) { return y < CGAP || y > H - CGAP; }
 
   function speedFor(power) {
     var p = Math.max(0, Math.min(1, +power || 0));
@@ -119,10 +126,9 @@
   }
 
   function inMouth(x, y) {
-    for (var i = 0; i < POCKETS.length; i++) {
-      var p = POCKETS[i], dx = p.x - x, dy = p.y - y, m = p.cap * MOUTH;
-      if (dx * dx + dy * dy < m * m) return p;
-    }
+    /* true where the rails are open: past-the-line travel here means the drop */
+    if ((y < R && openLong(x)) || (y > H - R && openLong(x))) return nearestPocket(x, y);
+    if ((x < R && openShort(y)) || (x > W - R && openShort(y))) return nearestPocket(x, y);
     return null;
   }
 
@@ -163,22 +169,29 @@
     for (i = 0; i < balls.length; i++) {
       b = balls[i];
       if (b.pocketed) continue;
-      var mouth = inMouth(b.x, b.y);
-      if (mouth) {
-        var pdx = mouth.x - b.x, pdy = mouth.y - b.y;
-        if (pdx * pdx + pdy * pdy < mouth.cap * mouth.cap ||
-            b.x < 0 || b.x > W || b.y < 0 || b.y > H) {   // over the edge inside a mouth: it fell
-          b.pocketed = true; b.vx = 0; b.vy = 0;
-          ev.pocketed.push(b.id);
-        }
-        continue;                    // no cushion inside the mouth zone
+      /* capture: on the pocket rim, or fallen over an open edge */
+      var fell = null, pi, pp, pdx, pdy;
+      for (pi = 0; pi < POCKETS.length; pi++) {
+        pp = POCKETS[pi]; pdx = pp.x - b.x; pdy = pp.y - b.y;
+        if (pdx * pdx + pdy * pdy < pp.cap * pp.cap) { fell = pp; break; }
+      }
+      if (!fell) {
+        var deep = 0.5 * R;
+        if ((b.y < -deep || b.y > H + deep) && openLong(b.x)) fell = nearestPocket(b.x, b.y);
+        else if ((b.x < -deep || b.x > W + deep) && openShort(b.y)) fell = nearestPocket(b.x, b.y);
+      }
+      if (fell) {
+        b.pocketed = true; b.vx = 0; b.vy = 0;
+        ev.pocketed.push(b.id);
+        continue;
       }
       var railed = false;
       var english = (b.id === 0 && spin.z !== 0);
-      if (b.x < R)      { b.x = R;     if (b.vx < 0) { b.vx = -b.vx * E_RAIL; b.wx = -b.wx * W_RAIL_N; b.wy *= W_RAIL_T; railed = true; if (english) { b.vy += spin.z * SIDE_K * b.vx;  spin.z *= SIDE_FADE; } } }
-      if (b.x > W - R)  { b.x = W - R; if (b.vx > 0) { b.vx = -b.vx * E_RAIL; b.wx = -b.wx * W_RAIL_N; b.wy *= W_RAIL_T; railed = true; if (english) { b.vy += -spin.z * SIDE_K * (-b.vx); spin.z *= SIDE_FADE; } } }
-      if (b.y < R)      { b.y = R;     if (b.vy < 0) { b.vy = -b.vy * E_RAIL; b.wy = -b.wy * W_RAIL_N; b.wx *= W_RAIL_T; railed = true; if (english) { b.vx += -spin.z * SIDE_K * b.vy;  spin.z *= SIDE_FADE; } } }
-      if (b.y > H - R)  { b.y = H - R; if (b.vy > 0) { b.vy = -b.vy * E_RAIL; b.wy = -b.wy * W_RAIL_N; b.wx *= W_RAIL_T; railed = true; if (english) { b.vx += spin.z * SIDE_K * (-b.vy); spin.z *= SIDE_FADE; } } }
+      var oS = openShort(b.y), oL = openLong(b.x);
+      if (b.x < R && !oS)      { b.x = R;     if (b.vx < 0) { b.vx = -b.vx * E_RAIL; b.wx = -b.wx * W_RAIL_N; b.wy *= W_RAIL_T; railed = true; if (english) { b.vy += spin.z * SIDE_K * b.vx;  spin.z *= SIDE_FADE; } } }
+      if (b.x > W - R && !oS)  { b.x = W - R; if (b.vx > 0) { b.vx = -b.vx * E_RAIL; b.wx = -b.wx * W_RAIL_N; b.wy *= W_RAIL_T; railed = true; if (english) { b.vy += -spin.z * SIDE_K * (-b.vx); spin.z *= SIDE_FADE; } } }
+      if (b.y < R && !oL)      { b.y = R;     if (b.vy < 0) { b.vy = -b.vy * E_RAIL; b.wy = -b.wy * W_RAIL_N; b.wx *= W_RAIL_T; railed = true; if (english) { b.vx += -spin.z * SIDE_K * b.vy;  spin.z *= SIDE_FADE; } } }
+      if (b.y > H - R && !oL)  { b.y = H - R; if (b.vy > 0) { b.vy = -b.vy * E_RAIL; b.wy = -b.wy * W_RAIL_N; b.wx *= W_RAIL_T; railed = true; if (english) { b.vx += spin.z * SIDE_K * (-b.vy); spin.z *= SIDE_FADE; } } }
       if (railed) {
         if (ev.firstHit != null) ev.railsAfterContact++;
         if (b.id !== 0) ev.railBalls[b.id] = true;

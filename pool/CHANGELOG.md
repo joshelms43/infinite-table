@@ -1,5 +1,10 @@
 # 8-Ball — Changelog
 
+## v0.7.1 — 2026-07-17
+**Engine r5: the physics learns the artwork's pockets.** Play-testing v0.7.0 found the seam between picture and physics: balls sank while still on the felt near corners, and bounced off invisible walls across the drawn pocket mouths. Both had one cause — the capture circles and rails still described the old hand-drawn table.
+
+Now the pocket centres sit where the art paints them (corners 45mm outside the cloth corner, sides 67mm outside the long rails) with capture rims that kiss the nose line, so nothing is swallowed on the felt. And the rails gained true openings matching the drawn mouths — corner gaps of 115mm along each rail, 100mm half-width at the sides — where the cushion simply does not exist: balls pass through and drop on crossing the edge. A ball rolled along a cushion into the corner falls in, a soft shot can die overhanging the lip as a jaw-hanger, and shots beyond the openings still bounce true, english intact. Engine stamp `2026-07-17-mouths-r5`; all suites and eight behavioural probes green.
+
 ## v0.7.0 — 2026-07-17
 **The table is the artwork.** After a long campaign of drawing the reference — measured geometry, colour-class maps, traced silhouettes, a full repaint to a commissioned design — the honest final answer was simpler: ship the commissioned artwork itself. The table is now a single bitmap (`table.png`, quantized to 116 KB from 1.4 MB, page background flood-filled to transparency), blitted each frame under the balls.
 
