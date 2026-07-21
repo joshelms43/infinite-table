@@ -57,3 +57,6 @@
 ## 0.8.1
 - Touchscreen laptops are not phones. Boot mode now follows the primary pointer only (`pointer: coarse`), not the mere presence of touch hardware — the check that put thumb buttons on a desktop with a touchscreen. From there the truth is live: an actual touch brings the thumb UI up, an actual mouse click puts it away and restores pointer-lock aiming. Hybrids get both, whichever is in hand.
 - The Landscape button follows the live mode instead of a boot-time verdict.
+
+## 0.8.2
+- Space after Play Again no longer restarts the match forever. Clicked buttons kept keyboard focus, and Space activates the focused button — so the first jump of the rematch clicked Play Again again. Buttons now blur on use, and Space is reserved for jumping during play.
