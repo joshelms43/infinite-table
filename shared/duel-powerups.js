@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  var CATALOG_VERSION = '2026-07-21-duel-r2';
+  var CATALOG_VERSION = '2026-07-21-duel-r3';
 
   function baseStats() {
     return {
@@ -27,6 +27,10 @@
       bulletStyle: 'default',
       wobble: 0, burstOnWall: false, echo: false, selfPush: false,
       dice: false, rage: false,
+      bounceBonus: false, homingAfterBounce: false, lastShotBoom: false,
+      kbImmune: false, execute: false, fastStart: false, momentum: false,
+      refundOnHit: false, stillGuard: false, airShot: false, payback: false,
+      emptyReload: false, zoomies: false,
       /* on-hit effects */
       lifesteal: 0, poison: 0, poisonDur: 0, burn: 0, burnDur: 0,
       slowOnHit: 0, slowDur: 0, blindDur: 0
@@ -181,7 +185,37 @@
       apply: function (s) { s.bulletCount += 2; s.homing += 1.4; s.bulletSize *= 0.55;
         s.damage *= 0.5; s.bulletStyle = 'bee'; } },
     { id: 'soreloser', name: 'Sore Loser', text: '+45% damage while you are below 30 HP',
-      apply: function (s) { s.rage = true; } }
+      apply: function (s) { s.rage = true; } },
+
+    /* ---- the third wave ---- */
+    { id: 'trickshot', name: 'Trickshot', text: 'Bullets that have bounced hit +75% harder',
+      apply: function (s) { s.bounceBonus = true; s.bounces = Math.max(s.bounces, 1); } },
+    { id: 'pinball', name: 'Pinball Wizard', text: '+1 bounce, and bounced bullets start homing',
+      apply: function (s) { s.bounces += 1; s.homingAfterBounce = true; } },
+    { id: 'finale', name: 'Grand Finale', text: 'The last shot of every mag explodes',
+      apply: function (s) { s.lastShotBoom = true; } },
+    { id: 'anchor', name: 'Anchor', text: 'Immune to knockback and pull, −10% move speed',
+      apply: function (s) { s.kbImmune = true; s.moveSpeed *= 0.9; } },
+    { id: 'executioner', name: 'Executioner', text: '+60% damage while they are below 35% HP',
+      apply: function (s) { s.execute = true; } },
+    { id: 'faststart', name: 'Fast Start', text: '+50% move and fire rate for the first 3s of every round',
+      apply: function (s) { s.fastStart = true; } },
+    { id: 'momentum', name: 'Momentum', text: '+4% damage per second you stay alive, up to +60%',
+      apply: function (s) { s.momentum = true; } },
+    { id: 'scavenger', name: 'Scavenger', text: 'Landing a hit refunds one round',
+      apply: function (s) { s.refundOnHit = true; } },
+    { id: 'stand', name: 'Stand Your Ground', text: 'Take 30% less damage while standing still',
+      apply: function (s) { s.stillGuard = true; } },
+    { id: 'showtime', name: 'Showtime', text: 'Shots fired mid-air hit +40% harder',
+      apply: function (s) { s.airShot = true; } },
+    { id: 'payback', name: 'Payback', text: 'After you take a hit, your next shot hits +80%',
+      apply: function (s) { s.payback = true; } },
+    { id: 'hoarder', name: 'Hoarder', text: '+6 max HP for every powerup you own, this one included',
+      apply: function (s, ctx) { s.hp += 6 * ((ctx && ctx.count) || 1); } },
+    { id: 'panichands', name: 'Panic Hands', text: 'Reloads are twice as fast when the mag runs dry',
+      apply: function (s) { s.emptyReload = true; } },
+    { id: 'zoomies', name: 'Zoomies', text: 'Every few seconds you just go faster',
+      apply: function (s) { s.zoomies = true; } }
   ];
 
   var BY_ID = {};
@@ -213,9 +247,10 @@
 
   function statsFor(pickIds) {
     var s = baseStats();
+    var ctx = { count: (pickIds || []).length };
     (pickIds || []).forEach(function (id) {
       var p = BY_ID[id];
-      if (p) p.apply(s);
+      if (p) p.apply(s, ctx);
     });
     return finalize(s);
   }

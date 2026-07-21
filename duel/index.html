@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.5.0
+<!-- Duel — Infinite Table. Version: 0.6.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -127,6 +127,11 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   color:var(--text-ivory);font-family:'Lilita One',cursive;font-size:17px;letter-spacing:5px;
   text-transform:uppercase;text-align:center;padding:12px;outline:none;min-width:0}
 .joinrow .quietbtn{flex:0 0 auto;padding:12px 18px}
+.lvlgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:18px}
+.lvlgrid button{font-family:'Lilita One',cursive;font-size:18px;color:var(--text-ivory);
+  background:rgba(255,255,255,.07);border:1px solid var(--line-soft);border-radius:12px;padding:13px 0}
+.lvlgrid button:active{background:rgba(255,255,255,.16)}
+.lvlgrid button.last{border-color:rgba(190,143,65,.55);color:var(--money-gold)}
 #neterr{font-size:12px;font-weight:800;color:var(--primary-coral);margin-top:12px;min-height:16px}
 .codebig{font-family:'Lilita One',cursive;font-size:52px;letter-spacing:10px;color:var(--money-gold);
   margin:18px 0 4px;text-shadow:0 3px 10px rgba(8,12,10,.6)}
@@ -232,6 +237,14 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
+<div class="sheetwrap hide" id="levels">
+  <div class="panel">
+    <div class="overline">Practice</div>
+    <div class="lvlgrid" id="lvlgrid"></div>
+    <div class="btncol"><button class="quietbtn" id="lvlback">Back</button></div>
+  </div>
+</div>
+
 <div class="sheetwrap hide" id="draft">
   <div class="panel" style="max-width:440px">
     <div class="overline" id="draftline">Pick A Powerup</div>
@@ -252,9 +265,9 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.5.0"></script>
-<script src="../shared/tablekit.js?v=0.5.0"></script>
-<script src="../shared/duel-powerups.js?v=0.5.0"></script>
+<script src="../shared/config.js?v=0.6.0"></script>
+<script src="../shared/tablekit.js?v=0.6.0"></script>
+<script src="../shared/duel-powerups.js?v=0.6.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -263,22 +276,23 @@ var ROUNDS_TO_WIN = 10;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.5.0' });
+TableKit.watchErrors({ game: 'duel', version: '0.6.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
 ['heavy','rapid','buckshot','twin','slug','needle','longbarrel','akimbo','lucky','overcharge','lastcall','marksman',
- 'freight','jackhammer','handcannon','dice','soreloser']
+ 'freight','jackhammer','handcannon','dice','soreloser','trickshot','executioner','momentum','showtime','payback']
   .forEach(function(id){ CAT[id]='#E26A4B'; });
 ['bounce','superball','phantom','homing','bloodhound','mortar','grenadier','shortfuse','cluster','split','boomerang','gravitywell','chicken',
- 'helium','drunk','popcorn','echo','confetti','sneaky','bees']
+ 'helium','drunk','popcorn','echo','confetti','sneaky','bees','pinball','finale']
   .forEach(function(id){ CAT[id]='#6394B6'; });
 ['frost','venom','incendiary','flash','riot','leech'].forEach(function(id){ CAT[id]='#7F6595'; });
-['tank','glass','regen','aegis','battery','thorns','pocket','unit','deflector','secondwind']
+['tank','glass','regen','aegis','battery','thorns','pocket','unit','deflector','secondwind','anchor','stand','hoarder']
   .forEach(function(id){ CAT[id]='#3B8B82'; });
-['sprinter','moonboots','doublejump','airshow','dash','blink','castle','adrenaline','rocketboots']
+['sprinter','moonboots','doublejump','airshow','dash','blink','castle','adrenaline','rocketboots',
+ 'faststart','zoomies']
   .forEach(function(id){ CAT[id]='#E0AB52'; });
-['mag','quickhands','beltfeed','sugarrush'].forEach(function(id){ CAT[id]='#BE8F41'; });
+['mag','quickhands','beltfeed','sugarrush','scavenger','panichands'].forEach(function(id){ CAT[id]='#BE8F41'; });
 
 /* ---- renderer / scene ---- */
 var canvas = document.getElementById('gl');
@@ -357,7 +371,10 @@ ARENA.forEach(function (b) {
 
 /* ---- collision helpers ---- */
 function collideBox(px, py, pz, hx, hy, hz, b) {
-  return Math.abs(px-b[0]) < hx+b[3] && Math.abs(py-b[1]) < hy+b[4] && Math.abs(pz-b[2]) < hz+b[5];
+  /* a hair of skin so exact contact never reads as overlap — resting on a box
+     top must not trip the side check and fire the step-up */
+  var EPS = 1e-4;
+  return Math.abs(px-b[0]) < hx+b[3]-EPS && Math.abs(py-b[1]) < hy+b[4]-EPS && Math.abs(pz-b[2]) < hz+b[5]-EPS;
 }
 function anyCollide(px, py, pz, hx, hy, hz) {
   for (var i = 0; i < ARENA.length; i++) if (collideBox(px,py,pz,hx,hy,hz,ARENA[i])) return ARENA[i];
@@ -390,7 +407,8 @@ function newFighterState() {
     hp: 100, shield: 0, alive: true, wound: false,
     mag: 8, reload: 0, fireCd: 0, shotsInMag: 0,
     picks: [], stats: PU.statsFor([]),
-    slow: 0, slowT: 0, dots: [], sinceHit: 99
+    slow: 0, slowT: 0, dots: [], sinceHit: 99,
+    swUsed: false, payback: false
   };
 }
 
@@ -408,8 +426,8 @@ var G = {
   phase: 'menu',          /* menu | countdown | fight | intermission | draft | over */
   myScore: 0, foeScore: 0, round: 0,
   host: false, tx: null, seed: 0,
-  myPick: null, foePickId: null, pendingFoePick: null, countdownT: 0, secondWindUsed: false,
-  botBrain: null
+  myPick: null, foePickId: null, pendingFoePick: null, countdownT: 0, fightT: 0,
+  botBrain: null, botLevel: 1
 };
 
 var $ = function(id){ return document.getElementById(id); };
@@ -497,93 +515,100 @@ canvas.addEventListener('pointerdown', function(e){ audio();
 });
 $('clickcatch').addEventListener('click', function(){ audio(); grabPointer(); });
 
-/* ---- movement (self) ---- */
-function spawnMe() {
-  var west = G.host || G.mode==='bot';
-  me.pos.set(west ? -12 : 12, 0.01, west ? -6 : 6);
-  me.yaw = west ? -Math.PI/4 : Math.PI*3/4;
-  me.pitch = 0; me.vel.set(0,0,0);
-  me.hp = me.stats.hp; me.shield = me.stats.shieldStart;
-  me.mag = me.stats.magSize; me.reload = 0; me.fireCd = 0; me.shotsInMag = 0;
-  me.alive = true; me.slow = 0; me.dots = []; me.sinceHit = 99;
-  G.secondWindUsed = false;
+/* ---- movement: one body of rules for both fighters ---- */
+function spawnFighter(f, west) {
+  f.pos.set(west ? -12 : 12, 0.01, west ? -6 : 6);
+  f.yaw = west ? -Math.PI/4 : Math.PI*3/4;
+  f.pitch = 0; f.vel.set(0,0,0);
+  f.hp = f.stats.hp; f.shield = f.stats.shieldStart;
+  f.mag = f.stats.magSize; f.reload = 0; f.fireCd = 0; f.shotsInMag = 0;
+  f.alive = true; f.slow = 0; f.slowT = 0; f.dots = []; f.sinceHit = 99;
+  f.swUsed = false; f.payback = false;
+  f.onGround = false; f.airJumps = 0; f.dashCd = 0;
 }
+function spawnMe() { spawnFighter(me, G.host || G.mode==='bot'); }
 function spawnFoe() {
-  var west = !(G.host || G.mode==='bot');
-  foe.pos.set(west ? -12 : 12, 0.01, west ? -6 : 6);
-  foe.hp = foe.stats.hp; foe.alive = true;
+  spawnFighter(foe, !(G.host || G.mode==='bot'));
   foeNet.pos.copy(foe.pos); foeNet.has = true;
 }
 
+/* inp: { f, r (-1..1), jump, dash } — keyboard, thumbs, and the bot brain all
+   speak this and only this. If the player can't do it, there is no way to ask. */
+function moveFighter(fi, inp, dt) {
+  var s = fi.stats;
+  var adren = s.adrenaline && fi.hp < 40 ? 1.3 : 1;
+  var speed = s.moveSpeed * adren * (1 - fi.slow);
+  if (s.fastStart && G.fightT < 3) speed *= 1.5;
+  if (s.zoomies && (G.fightT % 4) < 1) speed *= 1.8;
+  var f = inp.f || 0, r = inp.r || 0;
+  var sin = Math.sin(fi.yaw), cos = Math.cos(fi.yaw);
+  var wx = (-sin*f + cos*r), wz = (-cos*f - sin*r);
+  var len = Math.max(1, Math.hypot(wx, wz));
+  var ax = wx/len*speed, az = wz/len*speed;
+  var ground = fi.onGround ? 14 : 4;
+  fi.vel.x += (ax - fi.vel.x) * Math.min(1, dt*ground);
+  fi.vel.z += (az - fi.vel.z) * Math.min(1, dt*ground);
+
+  /* jumping */
+  if (inp.jump && !fi._jumpHeld) {
+    if (fi.onGround) { fi.vel.y = s.jumpPower; fi.onGround = false; }
+    else if (fi.airJumps < s.extraJumps) { fi.vel.y = s.jumpPower*0.92; fi.airJumps++; }
+  }
+  fi._jumpHeld = !!inp.jump;
+
+  /* dash / blink — only if the sheet grants it, same cooldown for everyone */
+  fi.dashCd = Math.max(0, fi.dashCd - dt);
+  if (inp.dash && s.dashCharges > 0 && fi.dashCd <= 0) {
+    fi.dashCd = 2;
+    var dx = -sin*(f||1), dz = -cos*(f||1);
+    if (f===0 && r!==0){ dx = cos*r; dz = -sin*r; }
+    if (s.dashTeleport) {
+      var h = bodyHalf(fi);
+      var tx = fi.pos.x + dx*4.5, tz = fi.pos.z + dz*4.5;
+      if (!anyCollide(tx, fi.pos.y+h.hy, tz, h.hx, h.hy, h.hx)) { fi.pos.x = tx; fi.pos.z = tz; }
+      if (fi === me) sTone(1200, 0.1, 0.18);
+    } else {
+      fi.vel.x += dx*14; fi.vel.z += dz*14;
+      if (fi === me) sNoise(0.12, 900, 0.15);
+    }
+  }
+
+  fi.vel.y -= 22 * (fi.vel.y < 0 ? s.fallFactor : 1) * dt;
+
+  var half = bodyHalf(fi);
+  var hx = half.hx, hy = half.hy;
+  var cy = function(){ return fi.pos.y + hy; };
+
+  /* x with step-up */
+  var nx = fi.pos.x + fi.vel.x*dt;
+  if (!anyCollide(nx, cy(), fi.pos.z, hx, hy, hx)) fi.pos.x = nx;
+  else if (!anyCollide(nx, cy()+0.55, fi.pos.z, hx, hy, hx) && fi.onGround) { fi.pos.x = nx; fi.pos.y += 0.55; }
+  else fi.vel.x = 0;
+  /* z with step-up */
+  var nz = fi.pos.z + fi.vel.z*dt;
+  if (!anyCollide(fi.pos.x, cy(), nz, hx, hy, hx)) fi.pos.z = nz;
+  else if (!anyCollide(fi.pos.x, cy()+0.55, nz, hx, hy, hx) && fi.onGround) { fi.pos.z = nz; fi.pos.y += 0.55; }
+  else fi.vel.z = 0;
+  /* y */
+  var ny = fi.pos.y + fi.vel.y*dt;
+  var hitBox = anyCollide(fi.pos.x, ny+hy, fi.pos.z, hx, hy, hx);
+  if (!hitBox) { fi.pos.y = ny; fi.onGround = false; }
+  else {
+    if (fi.vel.y <= 0) {
+      fi.pos.y = hitBox[1] + hitBox[4];
+      if (s.floorBounce && fi.vel.y < -9) { fi.vel.y = -fi.vel.y*0.55; if (fi === me) sTone(300,0.1,0.15); }
+      else { fi.vel.y = 0; fi.onGround = true; fi.airJumps = 0; }
+    } else { fi.vel.y = 0; }
+  }
+  if (fi.pos.y < -6) { fi.pos.y = 0.01; fi.vel.set(0,0,0); }
+}
+
 function moveSelf(dt) {
-  var s = me.stats;
-  var adren = s.adrenaline && me.hp < 40 ? 1.3 : 1;
-  var speed = s.moveSpeed * adren * (1 - me.slow);
   var f = 0, r = 0;
   if (keys.KeyW) f += 1; if (keys.KeyS) f -= 1;
   if (keys.KeyD) r += 1; if (keys.KeyA) r -= 1;
   if (touch.active) { f = -touch.my; r = touch.mx; }   /* analog: a half stick is a walk */
-  var sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
-  var wx = (-sin*f + cos*r), wz = (-cos*f - sin*r);
-  var len = Math.max(1, Math.hypot(wx, wz));
-  var ax = wx/len*speed, az = wz/len*speed;
-  var ground = me.onGround ? 14 : 4;
-  me.vel.x += (ax - me.vel.x) * Math.min(1, dt*ground);
-  me.vel.z += (az - me.vel.z) * Math.min(1, dt*ground);
-
-  /* jumping */
-  if (keys.Space && !me._jumpHeld) {
-    if (me.onGround) { me.vel.y = s.jumpPower; me.onGround = false; }
-    else if (me.airJumps < s.extraJumps) { me.vel.y = s.jumpPower*0.92; me.airJumps++; }
-  }
-  me._jumpHeld = !!keys.Space;
-
-  /* dash / blink */
-  me.dashCd = Math.max(0, me.dashCd - dt);
-  if (keys.ShiftLeft && s.dashCharges > 0 && me.dashCd <= 0) {
-    me.dashCd = 2;
-    var dx = -sin*(f||1), dz = -cos*(f||1);
-    if (f===0 && r!==0){ dx = cos*r; dz = -sin*r; }
-    if (s.dashTeleport) {
-      var h = bodyHalf(me);
-      var tx = me.pos.x + dx*4.5, tz = me.pos.z + dz*4.5;
-      if (!anyCollide(tx, me.pos.y+h.hy, tz, h.hx, h.hy, h.hx)) { me.pos.x = tx; me.pos.z = tz; }
-      sTone(1200, 0.1, 0.18);
-    } else {
-      me.vel.x += dx*14; me.vel.z += dz*14;
-      sNoise(0.12, 900, 0.15);
-    }
-  }
-
-  me.vel.y -= 22 * (me.vel.y < 0 ? s.fallFactor : 1) * dt;
-
-  var half = bodyHalf(me);
-  var hx = half.hx, hy = half.hy;
-  var cy = function(){ return me.pos.y + hy; };
-
-  /* x with step-up */
-  var nx = me.pos.x + me.vel.x*dt;
-  if (!anyCollide(nx, cy(), me.pos.z, hx, hy, hx)) me.pos.x = nx;
-  else if (!anyCollide(nx, cy()+0.55, me.pos.z, hx, hy, hx) && me.onGround) { me.pos.x = nx; me.pos.y += 0.55; }
-  else me.vel.x = 0;
-  /* z with step-up */
-  var nz = me.pos.z + me.vel.z*dt;
-  if (!anyCollide(me.pos.x, cy(), nz, hx, hy, hx)) me.pos.z = nz;
-  else if (!anyCollide(me.pos.x, cy()+0.55, nz, hx, hy, hx) && me.onGround) { me.pos.z = nz; me.pos.y += 0.55; }
-  else me.vel.z = 0;
-  /* y */
-  var ny = me.pos.y + me.vel.y*dt;
-  var hitBox = anyCollide(me.pos.x, ny+hy, me.pos.z, hx, hy, hx);
-  if (!hitBox) { me.pos.y = ny; me.onGround = false; }
-  else {
-    if (me.vel.y <= 0) {
-      me.pos.y = hitBox[1] + hitBox[4];
-      if (s.floorBounce && me.vel.y < -9) { me.vel.y = -me.vel.y*0.55; sTone(300,0.1,0.15); }
-      else { me.vel.y = 0; me.onGround = true; me.airJumps = 0; }
-    } else { me.vel.y = 0; }
-  }
-  if (me.pos.y < -6) { me.pos.y = 0.01; me.vel.set(0,0,0); }
-
+  moveFighter(me, { f: f, r: r, jump: !!keys.Space, dash: !!keys.ShiftLeft }, dt);
   camera.position.set(me.pos.x, me.pos.y + eyeHeight(me), me.pos.z);
   camera.rotation.order = 'YXZ';
   camera.rotation.y = me.yaw; camera.rotation.x = me.pitch;
@@ -638,59 +663,72 @@ function spawnBullet(owner, origin, dir, stats, opts) {
     pos: origin.clone(), vel: dir.clone().multiplyScalar(stats.bulletSpeed),
     life: 3.2, bounces: stats.bounces,
     split: stats.splitCount > 0 && !opts.noSplit ? 0.32 : 0,
-    boom: opts.fromCluster ? 0 : stats.explosionRadius,
+    boom: opts.boom !== undefined ? opts.boom : (opts.fromCluster ? 0 : stats.explosionRadius),
     returning: false, dmgScale: opts.dmgScale || 1,
-    fromCluster: !!opts.fromCluster
+    fromCluster: !!opts.fromCluster, bouncedN: 0, homingBoost: 0
   });
   return bullets[bullets.length-1];
 }
 
-function startReload() {
-  me.reload = me.stats.reloadTime;
-  $('reloadtag').classList.add('show');
-  sTone(500, 0.06, 0.12, 'square');
+function startReloadFor(f) {
+  f.reload = f.stats.reloadTime;
+  if (f.stats.emptyReload && f.mag === 0) f.reload *= 0.5;   /* panic hands */
+  if (f === me) { $('reloadtag').classList.add('show'); sTone(500, 0.06, 0.12, 'square'); }
 }
+function startReload() { startReloadFor(me); }
 
-function fire() {
-  if (!me.alive || G.phase !== 'fight') return;
-  if (me.reload > 0 || me.fireCd > 0) return;
-  if (me.mag <= 0) { if (!me.stats.noReload) startReload(); return; }
-  var s = me.stats;
-  var adren = s.adrenaline && me.hp < 40 ? 1.3 : 1;
-  me.fireCd = 1 / (s.fireRate * adren);
-  if (!s.noReload) me.mag--;
-  me.shotsInMag++;
+/* the whole trigger: mag, cooldown, bonuses, echo — the bot pulls this same one */
+function fireFighter(f, owner, baseDir) {
+  if (!f.alive || G.phase !== 'fight') return false;
+  if (f.reload > 0 || f.fireCd > 0) return false;
+  if (f.mag <= 0) { if (!f.stats.noReload) startReloadFor(f); return false; }
+  var s = f.stats;
+  var adren = s.adrenaline && f.hp < 40 ? 1.3 : 1;
+  var rate = s.fireRate * adren;
+  if (s.fastStart && G.fightT < 3) rate *= 1.5;
+  f.fireCd = 1 / rate;
+  if (!s.noReload) f.mag--;
+  f.shotsInMag++;
 
   var dmgScale = 1;
-  if (me.shotsInMag === 1 && s.firstShotBonus) dmgScale += s.firstShotBonus;
-  if (me.mag === 0 && s.lastShotBonus) dmgScale += s.lastShotBonus;
+  if (f.shotsInMag === 1 && s.firstShotBonus) dmgScale += s.firstShotBonus;
+  if (f.mag === 0 && s.lastShotBonus) dmgScale += s.lastShotBonus;
+  if (s.airShot && !f.onGround) dmgScale *= 1.4;             /* showtime */
+  if (s.payback && f.payback) { dmgScale *= 1.8; f.payback = false; }
+  var boom;                                                  /* grand finale */
+  if (s.lastShotBoom && f.mag === 0 && !s.noReload) boom = Math.max(s.explosionRadius, 1.3);
 
-  var origin = camera.position.clone();
+  var origin = f.pos.clone(); origin.y += eyeHeight(f);
   var shots = [];
   for (var i = 0; i < s.bulletCount; i++) {
-    var dir = new THREE.Vector3(0,0,-1).applyEuler(camera.rotation);
+    var dir = baseDir.clone();
     dir.x += (Math.random()-0.5)*2*s.spread;
     dir.y += (Math.random()-0.5)*2*s.spread;
     dir.z += (Math.random()-0.5)*2*s.spread;
     dir.normalize();
-    spawnBullet('me', origin, dir, s, { dmgScale: dmgScale });
+    spawnBullet(owner, origin, dir, s, { dmgScale: dmgScale, boom: boom });
     shots.push([dir.x, dir.y, dir.z]);
   }
-  if (s.bulletStyle==='chicken') sCluck(); else sShot();
-  me.pitch += 0.006; /* tiny kick */
-  if (G.tx) G.tx.send('shoot', { o: [origin.x,origin.y,origin.z], d: shots, ds: dmgScale });
+  if (s.bulletStyle==='chicken') sCluck();
+  else if (f === me) sShot(); else sNoise(0.07, 1000, 0.12);
+  if (f === me && G.tx) G.tx.send('shoot', { o: [origin.x,origin.y,origin.z], d: shots, ds: dmgScale, bm: boom });
   if (s.echo) {
-    var eo = origin.clone(), eShots = shots.slice(), eScale = dmgScale;
+    var eo = origin.clone(), eShots = shots.slice(), eScale = dmgScale, eBoom = boom;
     setTimeout(function () {
-      if (G.phase !== 'fight' || !me.alive) return;
-      eShots.forEach(function (d) { spawnBullet('me', eo, new THREE.Vector3(d[0],d[1],d[2]), s, { dmgScale: eScale }); });
-      if (G.tx) G.tx.send('shoot', { o: [eo.x,eo.y,eo.z], d: eShots, ds: eScale });
+      if (G.phase !== 'fight' || !f.alive) return;
+      eShots.forEach(function (d) { spawnBullet(owner, eo, new THREE.Vector3(d[0],d[1],d[2]), s, { dmgScale: eScale, boom: eBoom }); });
+      if (f === me && G.tx) G.tx.send('shoot', { o: [eo.x,eo.y,eo.z], d: eShots, ds: eScale, bm: eBoom });
       sTone(340, 0.07, 0.12);
     }, 170);
   }
-  if (me.mag === 0 && !s.noReload) startReload();
+  if (f.mag === 0 && !s.noReload) startReloadFor(f);
+  if (f === me) updateAmmoHud();
+  return true;
+}
 
-  updateAmmoHud();
+function fire() {
+  var dir = new THREE.Vector3(0,0,-1).applyEuler(camera.rotation);
+  if (fireFighter(me, 'me', dir)) me.pitch += 0.006; /* tiny kick */
 }
 
 /* segment-to-segment closest distance: bullet path vs body axis */
@@ -730,12 +768,13 @@ function targetOf(owner){ return owner === 'me' ? foe : me; }
 
 function stepBullet(b, dt) {
   var s = b.stats;
-  /* homing */
-  if (s.homing > 0 && !b.returning) {
+  /* homing (pinball wizard bullets pick it up after a bounce) */
+  var hm = s.homing + (b.homingBoost || 0);
+  if (hm > 0 && !b.returning) {
     var tgt = targetOf(b.owner);
     var want = tgt.pos.clone(); want.y += 1.0*tgt.stats.scale;
     want.sub(b.pos).normalize().multiplyScalar(b.vel.length());
-    b.vel.lerp(want, Math.min(1, s.homing * dt));
+    b.vel.lerp(want, Math.min(1, hm * dt));
   }
   /* boomerang */
   if (s.boomerang && !b.returning && b.life < 2.5) {
@@ -790,7 +829,8 @@ function stepBullet(b, dt) {
       var box = anyCollide(b.pos.x, b.pos.y, b.pos.z, s.bulletSize, s.bulletSize, s.bulletSize);
       if (box) {
         if (b.bounces > 0) {
-          b.bounces--;
+          b.bounces--; b.bouncedN++;
+          if (s.homingAfterBounce) b.homingBoost = 2.5;
           /* reflect off the axis we penetrated least along */
           var dx=(Math.abs(b.pos.x-box[0])-box[3])/1, dy=(Math.abs(b.pos.y-box[1])-box[4]),
               dz=(Math.abs(b.pos.z-box[2])-box[5]);
@@ -849,97 +889,101 @@ function explode(b, at) {
 }
 
 /* shooter side: a hit landed on the opponent */
-function landHit(b, at, scale, headshot) {
-  scale = scale || 1;
-  if (b.owner !== 'me') {
-    sparkFx(at, false);
-    if (G.mode === 'bot') {
-      /* practice: the bot's client is this client — judge its hit here */
-      var bs = foe.stats;
-      var bd = Math.round(bs.damage * b.dmgScale * scale * (headshot ? 2 : 1));
-      takeHit({ dmg: bd, crit: !!headshot, kb: bs.knockback,
-        pull: bs.pull ? [at.x, at.y, at.z] : null,
-        poison: bs.poison ? [bs.poison, bs.poisonDur] : null,
-        burn: bs.burn ? [bs.burn, bs.burnDur] : null,
-        slow: bs.slowOnHit ? [bs.slowOnHit, bs.slowDur] : null,
-        blind: bs.blindDur || 0,
-        from: [foe.pos.x, foe.pos.y + 1.4, foe.pos.z] });
-    }
-    return;
-  }
-  var s = me.stats;
+/* every hit — mine, the bot's, headshot or graze — goes through one damage
+   calculation and one delivery. There is no bot-only maths anywhere. */
+function computeHitDamage(shooter, victim, b, scale, headshot) {
+  var s = shooter.stats;
   var dmg = s.damage * b.dmgScale * scale;
   if (headshot) dmg *= 2;
   if (s.dice) dmg *= 0.25 + Math.random()*2.25;
-  if (s.rage && me.hp < 30) dmg *= 1.45;
+  if (s.rage && shooter.hp < 30) dmg *= 1.45;
+  if (s.execute && victim.hp < 0.35 * victim.stats.hp) dmg *= 1.6;
+  if (s.momentum) dmg *= 1 + Math.min(0.6, 0.04 * G.fightT);
+  if (s.bounceBonus && b.bouncedN > 0) dmg *= 1 + 0.75 * Math.min(2, b.bouncedN);
   var crit = Math.random() < s.crit;
   if (crit) dmg *= 2;
-  dmg = Math.round(dmg);
+  return { dmg: Math.round(dmg), crit: crit };
+}
+
+function landHit(b, at, scale, headshot) {
+  scale = scale || 1;
+  if (b.owner === 'foe' && G.mode === 'net') { sparkFx(at, false); return; }  /* their client judges */
+  var shooter = b.owner === 'me' ? me : foe;
+  var victim  = b.owner === 'me' ? foe : me;
+  var s = shooter.stats;
+  var roll = computeHitDamage(shooter, victim, b, scale, headshot);
+  var from = shooter.pos.clone(); from.y += eyeHeight(shooter);
   var fx = {
-    dmg: dmg, crit: crit,
+    dmg: roll.dmg, crit: roll.crit || !!headshot,
     kb: s.knockback, pull: s.pull ? [at.x, at.y, at.z] : null,
     poison: s.poison ? [s.poison, s.poisonDur] : null,
     burn: s.burn ? [s.burn, s.burnDur] : null,
     slow: s.slowOnHit ? [s.slowOnHit, s.slowDur] : null,
     blind: s.blindDur || 0,
-    from: [camera.position.x, camera.position.y, camera.position.z]
+    from: [from.x, from.y, from.z]
   };
-  if (G.mode === 'net' && G.tx) G.tx.send('hit', fx);
-  else botTakeHit(fx);
-  if (s.lifesteal > 0) healSelf(dmg * s.lifesteal);
-  sparkFx(at, true);
-  sHit(crit || headshot);
-  $('xh').classList.remove('mark'); void $('xh').offsetWidth; $('xh').classList.add('mark');
-  dmgPop(at, dmg, crit || headshot);
+  if (shooter === me) {
+    if (G.mode === 'net' && G.tx) G.tx.send('hit', fx);
+    else applyHit(foe, fx, false);
+    if (s.lifesteal > 0) healFighter(me, roll.dmg * s.lifesteal);
+    if (s.refundOnHit && !s.noReload) { me.mag = Math.min(s.magSize, me.mag + 1); updateAmmoHud(); }
+    sparkFx(at, true);
+    sHit(fx.crit);
+    $('xh').classList.remove('mark'); void $('xh').offsetWidth; $('xh').classList.add('mark');
+    dmgPop(at, roll.dmg, fx.crit);
+  } else {
+    /* practice: the bot's client is this client — same delivery, same rules */
+    sparkFx(at, false);
+    if (s.lifesteal > 0) healFighter(foe, roll.dmg * s.lifesteal);
+    if (s.refundOnHit && !s.noReload) foe.mag = Math.min(s.magSize, foe.mag + 1);
+    applyHit(me, fx, false);
+  }
 }
 
-function healSelf(n) {
-  me.hp = Math.min(me.stats.hp, me.hp + n);
-  updateHpHud();
+function healFighter(f, n) {
+  f.hp = Math.min(f.stats.hp, f.hp + n);
+  if (f === me) updateHpHud();
 }
 
-/* victim side: I take a hit that the other client (or the bot sim) judged */
-function takeHit(fx, silentThorns) {
-  if (!me.alive || G.phase !== 'fight') return;
-  if (Math.random() < me.stats.deflect) { sTone(1500, 0.08, 0.15); return; }
+/* the victim's side of any hit, for either fighter */
+function applyHit(f, fx, silentThorns) {
+  if (!f.alive || G.phase !== 'fight') return;
+  if (Math.random() < f.stats.deflect) { if (f === me) sTone(1500, 0.08, 0.15); return; }
   var dmg = fx.dmg;
-  if (me.shield > 0) {
-    var absorbed = Math.min(me.shield, dmg);
-    me.shield -= absorbed; dmg -= absorbed;
+  if (f.stats.stillGuard && Math.hypot(f.vel.x, f.vel.z) < 0.6) dmg = Math.round(dmg * 0.7);
+  if (f.shield > 0) {
+    var absorbed = Math.min(f.shield, dmg);
+    f.shield -= absorbed; dmg -= absorbed;
   }
-  me.hp -= dmg;
-  me.sinceHit = 0;
-  if (fx.poison) me.dots.push({ dps: fx.poison[0], t: fx.poison[1], kind: 'poison' });
-  if (fx.burn) me.dots.push({ dps: fx.burn[0], t: fx.burn[1], kind: 'burn' });
-  if (fx.slow) { me.slow = Math.max(me.slow, fx.slow[0]); me.slowT = Math.max(me.slowT, fx.slow[1]); }
-  if (fx.blind) { $('blind').style.opacity = 0.92; setTimeout(function(){ $('blind').style.opacity = 0; }, fx.blind*1000); }
-  if (fx.from) {
-    var away = me.pos.clone().sub(new THREE.Vector3(fx.from[0], me.pos.y, fx.from[2])).normalize();
+  f.hp -= dmg;
+  f.sinceHit = 0;
+  if (f.stats.payback) f.payback = true;
+  if (fx.poison) f.dots.push({ dps: fx.poison[0], t: fx.poison[1], kind: 'poison' });
+  if (fx.burn) f.dots.push({ dps: fx.burn[0], t: fx.burn[1], kind: 'burn' });
+  if (fx.slow) { f.slow = Math.max(f.slow, fx.slow[0]); f.slowT = Math.max(f.slowT, fx.slow[1]); }
+  if (fx.blind && f === me) { $('blind').style.opacity = 0.92; setTimeout(function(){ $('blind').style.opacity = 0; }, fx.blind*1000); }
+  if (fx.from && !f.stats.kbImmune) {
+    var away = f.pos.clone().sub(new THREE.Vector3(fx.from[0], f.pos.y, fx.from[2])).normalize();
     if (fx.pull) away.multiplyScalar(-1);
-    me.vel.addScaledVector(away, fx.kb || 0);
-    me.vel.y += (fx.kb||0)*0.15;
+    f.vel.addScaledVector(away, fx.kb || 0);
+    f.vel.y += (fx.kb||0)*0.15;
   }
-  if (me.stats.thorns > 0 && !silentThorns) {
-    var back = Math.round(fx.dmg * me.stats.thorns);
+  if (f.stats.thorns > 0 && !silentThorns) {
+    var back = Math.round(fx.dmg * f.stats.thorns);
     if (back > 0) {
-      if (G.mode === 'net' && G.tx) G.tx.send('hit', { dmg: back, crit: false, kb: 0, thorn: true });
-      else { foe.hp -= back; checkBotDeath(); }
+      if (f === me && G.mode === 'net' && G.tx) G.tx.send('hit', { dmg: back, crit: false, kb: 0, thorn: true });
+      else applyHit(f === me ? foe : me, { dmg: back, crit: false, kb: 0 }, true);
     }
   }
-  sHurt();
-  $('hurt').style.opacity = 1;
-  setTimeout(function(){ $('hurt').style.opacity = 0; }, 120);
-  if (me.hp <= 0) {
-    if (me.stats.secondWind && !G.secondWindUsed) {
-      G.secondWindUsed = true; me.hp = 1; sTone(392,0.3,0.25); sTone(523,0.3,0.2);
-    } else {
-      me.hp = 0; me.alive = false;
-      if (G.tx) G.tx.send('death', {});
-      roundOver(false);
-    }
+  if (f === me) {
+    sHurt();
+    $('hurt').style.opacity = 1;
+    setTimeout(function(){ $('hurt').style.opacity = 0; }, 120);
   }
-  updateHpHud();
+  checkDown(f);
+  if (f === me) updateHpHud();
 }
+function takeHit(fx, silentThorns) { applyHit(me, fx, silentThorns); }
 
 /* ---- effects ---- */
 var fx = [];
@@ -1003,7 +1047,8 @@ function banner(big, small, ms) {
 /* ---- rounds & draft ---- */
 function startCountdown() {
   G.phase = 'countdown'; G.round++;
-  hide('draft'); hide('matchover'); hide('menu'); hide('hostwait');
+  hide('draft'); hide('matchover'); hide('menu'); hide('hostwait'); hide('levels');
+  G.fightT = 0;
   document.body.classList.add('fighting');
   me.stats = PU.statsFor(me.picks);
   foe.stats = PU.statsFor(foe.picks);
@@ -1068,7 +1113,12 @@ function openDraft() {
     setTimeout(function () {
       var foeSeed = (G.seed ^ (G.round*2654435761)) ^ 0x79B9;
       var foeOpts = PU.deal(foe.picks, PU.seededRng(foeSeed >>> 0));
-      receivePick(foeOpts[Math.floor(Math.random()*foeOpts.length)]);
+      var pick = foeOpts[Math.floor(Math.random()*foeOpts.length)];
+      if (G.botLevel >= 6) {                        /* judgement, not luck, at the top */
+        var good = foeOpts.filter(function (id) { return BOT_TIERS.indexOf(id) >= 0; });
+        if (good.length) pick = good[Math.floor(Math.random()*good.length)];
+      }
+      receivePick(pick);
     }, 900 + Math.random()*1200);
   }
 }
@@ -1109,7 +1159,7 @@ function onWire(ev, p) {
   } else if (ev === 'shoot') {
     var o = new THREE.Vector3(p.o[0], p.o[1], p.o[2]);
     p.d.forEach(function (d) {
-      spawnBullet('foe', o, new THREE.Vector3(d[0], d[1], d[2]), foe.stats, { dmgScale: p.ds });
+      spawnBullet('foe', o, new THREE.Vector3(d[0], d[1], d[2]), foe.stats, { dmgScale: p.ds, boom: p.bm });
     });
     if (foe.stats.bulletStyle==='chicken') sCluck(); else sNoise(0.07, 1000, 0.12);
   } else if (ev === 'hit') {
@@ -1190,21 +1240,118 @@ $('cancelhost').onclick = function () {
 $('rematchbtn').onclick = function () {
   audio();
   hide('matchover');
-  if (G.mode === 'bot') { startBot(); return; }
+  if (G.mode === 'bot') { startBot(G.botLevel); return; }
   if (G.host) hostBegin();
   else { G.tx.send('rematch', {}); banner('Asked For A Rematch', null, 1600); }
 };
 
 /* ---- practice bot ---- */
-function startBot() {
+(function () {
+  var saved = 1;
+  try { saved = parseInt(localStorage.getItem('duel_lvl') || '1', 10) || 1; } catch (e) {}
+  G.botLevel = Math.max(1, Math.min(10, saved));
+  var grid = $('lvlgrid');
+  for (var L = 1; L <= 10; L++) (function (L) {
+    var b = document.createElement('button');
+    b.textContent = String(L);
+    if (L === G.botLevel) b.className = 'last';
+    b.onclick = function () { audio(); startBot(L); };
+    grid.appendChild(b);
+  })(L);
+  $('practicebtn').onclick = function () { audio(); hide('menu'); show('levels'); };
+  $('lvlback').onclick = function () { hide('levels'); show('menu'); };
+})();
+
+/* levels 1-10 scale skill, never rules: aim error, reaction lag, turn speed,
+   trigger discipline, movement and draft judgement. The bot's body, gun, and
+   sheet obey exactly the code the player's do — there is nothing else to call. */
+function botParams(L) {
+  var t = (L - 1) / 9;
+  return {
+    aimErr:   0.20  + (0.014 - 0.20) * t,   /* radians of per-shot scatter */
+    turnSpd:  2.2   + (9.5  - 2.2)  * t,    /* max radians/s the aim can swing */
+    reactT:   0.60  + (0.12 - 0.60) * t,    /* it shoots at where you were */
+    fireGate: 0.35  + (0.06 - 0.35) * t,    /* won't fire until aim is this close */
+    pause:    0.55 * (1 - t),               /* thinking time between bursts */
+    jumpRate: 0.05  + (0.55 - 0.05) * t,    /* jumps per second, roughly */
+    iq:       t
+  };
+}
+var BOT_TIERS = ['heavy','rapid','longbarrel','marksman','tank','sprinter','aegis',
+  'lucky','homing','mag','quickhands','leech','doublejump','executioner','regen','battery'];
+
+function startBot(level) {
+  level = Math.max(1, Math.min(10, level || G.botLevel || 1));
+  G.botLevel = level;
+  try { localStorage.setItem('duel_lvl', String(level)); } catch (e) {}
   G.mode = 'bot'; G.host = true; G.tx = null;
   G.seed = (Math.random()*4294967296) >>> 0;
   G.myScore = 0; G.foeScore = 0; G.round = 0;
   me.picks = []; foe.picks = [];
-  G.botBrain = { wanderT: 0, dir: new THREE.Vector3(), fireT: 1.2, jumpT: 2 };
+  G.botBrain = { p: botParams(level), hist: [], wanderT: 0, mv: { f: 0, r: 0 },
+    pauseT: 0.8, jump: false, dash: false };
+  hide('levels');
   startCountdown();
 }
-$('practicebtn').onclick = function () { audio(); startBot(); };
+
+function angDiff(a, b) {
+  var d = (a - b) % (Math.PI*2);
+  if (d > Math.PI) d -= Math.PI*2;
+  if (d < -Math.PI) d += Math.PI*2;
+  return d;
+}
+
+function stepBot(dt) {
+  var B = G.botBrain; if (!B || !foe.alive) return;
+  var s = foe.stats, P = B.p;
+
+  /* remember where the player was; the bot reacts to the past, like a human */
+  B.hist.push({ t: G.fightT, x: me.pos.x, y: me.pos.y, z: me.pos.z });
+  if (B.hist.length > 90) B.hist.shift();
+  var seen = B.hist[0];
+  for (var i = B.hist.length-1; i >= 0; i--) {
+    if (B.hist[i].t <= G.fightT - P.reactT) { seen = B.hist[i]; break; }
+  }
+
+  /* swing the aim at a human turn speed */
+  var eye = foe.pos.clone(); eye.y += eyeHeight(foe);
+  var to = new THREE.Vector3(seen.x, seen.y + 1.3, seen.z).sub(eye);
+  var horiz = Math.hypot(to.x, to.z) || 1e-6;
+  var wantYaw = Math.atan2(-to.x, -to.z);
+  var wantPitch = Math.atan2(to.y, horiz);
+  var dy = angDiff(wantYaw, foe.yaw);
+  foe.yaw += Math.max(-P.turnSpd*dt, Math.min(P.turnSpd*dt, dy));
+  var dp = wantPitch - foe.pitch;
+  foe.pitch += Math.max(-P.turnSpd*dt, Math.min(P.turnSpd*dt, dp));
+  foe.pitch = Math.max(-1.45, Math.min(1.45, foe.pitch));
+
+  /* footwork */
+  B.wanderT -= dt;
+  var dist = me.pos.distanceTo(foe.pos);
+  if (B.wanderT <= 0) {
+    B.wanderT = (0.5 + Math.random()*1.1) * (1.2 - P.iq*0.5);
+    var press = dist > 11 ? 1 : (dist < 4.5 ? -0.8 : (P.iq > 0.5 ? 0.2 : 0));
+    B.mv.f = press;
+    B.mv.r = (Math.random() < 0.5 ? 1 : -1) * (0.6 + Math.random()*0.4);
+  }
+  B.jump = Math.random() < P.jumpRate * dt;
+  B.dash = s.dashCharges > 0 && P.iq > 0.4 && foe.dashCd <= 0 && Math.random() < dt * 0.5;
+  moveFighter(foe, { f: B.mv.f, r: B.mv.r, jump: B.jump, dash: B.dash }, dt);
+  foeNet.pos.copy(foe.pos); foeNet.yaw = foe.yaw; foeNet.has = true;
+
+  /* trigger discipline: fire only when the aim has actually arrived */
+  B.pauseT = Math.max(0, B.pauseT - dt);
+  var offTarget = Math.abs(angDiff(wantYaw, foe.yaw)) + Math.abs(wantPitch - foe.pitch);
+  if (B.pauseT <= 0 && me.alive && offTarget < P.fireGate) {
+    var cp = Math.cos(foe.pitch);
+    var dir = new THREE.Vector3(-Math.sin(foe.yaw)*cp, Math.sin(foe.pitch), -Math.cos(foe.yaw)*cp);
+    dir.x += (Math.random()-0.5) * 2 * P.aimErr;
+    dir.y += (Math.random()-0.5) * 2 * P.aimErr;
+    dir.z += (Math.random()-0.5) * 2 * P.aimErr;
+    dir.normalize();
+    if (fireFighter(foe, 'foe', dir)) B.pauseT = P.pause * (0.5 + Math.random());
+  }
+}
 
 /* landscape: a native orientation lock where the platform has one; where it doesn't
    (iOS Safari ships type/angle/onchange but no lock), rotate the whole game 90
@@ -1236,79 +1383,53 @@ $('practicebtn').onclick = function () { audio(); startBot(); };
   });
 })();
 
-function botTakeHit(fxp) {
-  /* practice: the bot has no client, so its health lives here */
-  foe.hp -= fxp.dmg;
-  checkBotDeath();
-}
-function checkBotDeath() {
-  if (foe.alive && foe.hp <= 0) { foe.alive = false; roundOver(true); }
-}
-function stepBot(dt) {
-  var B = G.botBrain; if (!B || !foe.alive) return;
-  var s = foe.stats;
-  B.wanderT -= dt;
-  if (B.wanderT <= 0) {
-    B.wanderT = 0.7 + Math.random()*1.2;
-    var toMe = me.pos.clone().sub(foe.pos).setY(0).normalize();
-    var strafe = new THREE.Vector3(-toMe.z, 0, toMe.x).multiplyScalar(Math.random() < 0.5 ? 1 : -1);
-    var dist = me.pos.distanceTo(foe.pos);
-    B.dir.copy(strafe).addScaledVector(toMe, dist > 10 ? 0.8 : (dist < 5 ? -0.6 : 0)).normalize();
-  }
-  var sp = s.moveSpeed * 0.8;
-  var nx = foe.pos.x + B.dir.x*sp*dt, nz = foe.pos.z + B.dir.z*sp*dt;
-  if (!anyCollide(nx, foe.pos.y+0.9*s.scale, foe.pos.z, 0.38*s.scale, 0.9*s.scale, 0.38*s.scale)) foe.pos.x = nx;
-  else B.wanderT = 0;
-  if (!anyCollide(foe.pos.x, foe.pos.y+0.9*s.scale, nz, 0.38*s.scale, 0.9*s.scale, 0.38*s.scale)) foe.pos.z = nz;
-  else B.wanderT = 0;
-  foe.pos.x = Math.max(-14.5, Math.min(14.5, foe.pos.x));
-  foe.pos.z = Math.max(-9.5, Math.min(9.5, foe.pos.z));
-  foeNet.pos.copy(foe.pos); foeNet.yaw = Math.atan2(me.pos.x-foe.pos.x, me.pos.z-foe.pos.z);
-
-  B.fireT -= dt;
-  if (B.fireT <= 0 && me.alive && G.phase==='fight') {
-    B.fireT = Math.max(0.35, 1.6/s.fireRate) + Math.random()*0.4;
-    var origin = foe.pos.clone(); origin.y += 1.45*s.scale;
-    var aim = camera.position.clone();
-    aim.x += (Math.random()-0.5)*2.2; aim.y += (Math.random()-0.5)*1.4; aim.z += (Math.random()-0.5)*2.2;
-    var dir = aim.sub(origin).normalize();
-    spawnBullet('foe', origin, dir, s, {});
-    if (s.bulletStyle==='chicken') sCluck(); else sNoise(0.07, 1000, 0.12);
-  }
-}
-/* the bot's bullets are judged here too: stepBullet targets 'me' for owner 'foe' */
 
 /* ---- self status ticks ---- */
-function stepSelfStatus(dt) {
-  me.sinceHit += dt;
-  if (me.slowT > 0) { me.slowT -= dt; if (me.slowT <= 0) me.slow = 0; }
+function checkDown(f) {
+  if (f.hp <= 0 && f.alive) {
+    if (f.stats.secondWind && !f.swUsed) {
+      f.swUsed = true; f.hp = 1;
+      if (f === me) { sTone(392,0.3,0.25); sTone(523,0.3,0.2); }
+    } else {
+      f.hp = 0; f.alive = false;
+      if (f === me) { if (G.tx) G.tx.send('death', {}); roundOver(false); }
+      else roundOver(true);
+    }
+  }
+}
+
+function stepFighterStatus(f, dt) {
+  f.sinceHit += dt;
+  if (f.slowT > 0) { f.slowT -= dt; if (f.slowT <= 0) f.slow = 0; }
   var dotDmg = 0;
-  for (var i = me.dots.length-1; i >= 0; i--) {
-    var d = me.dots[i];
+  for (var i = f.dots.length-1; i >= 0; i--) {
+    var d = f.dots[i];
     d.t -= dt; dotDmg += d.dps*dt;
-    if (d.t <= 0) me.dots.splice(i, 1);
+    if (d.t <= 0) f.dots.splice(i, 1);
   }
   if (dotDmg > 0) {
-    me.hp -= dotDmg; me.sinceHit = 0;
-    if (me.hp <= 0 && me.alive) {
-      if (me.stats.secondWind && !G.secondWindUsed) { G.secondWindUsed = true; me.hp = 1; }
-      else { me.hp = 0; me.alive = false; if (G.tx) G.tx.send('death', {}); roundOver(false); }
-    }
-    updateHpHud();
+    f.hp -= dotDmg; f.sinceHit = 0;
+    checkDown(f);
+    if (f === me) updateHpHud();
   }
-  if (me.stats.regen > 0 && me.sinceHit > me.stats.regenDelay && me.hp < me.stats.hp && me.alive) {
-    me.hp = Math.min(me.stats.hp, me.hp + me.stats.regen*dt); updateHpHud();
+  if (f.stats.regen > 0 && f.sinceHit > f.stats.regenDelay && f.hp < f.stats.hp && f.alive) {
+    f.hp = Math.min(f.stats.hp, f.hp + f.stats.regen*dt);
+    if (f === me) updateHpHud();
   }
-  if (me.stats.shieldRegen > 0 && me.sinceHit > 3 && me.shield < Math.max(me.stats.shieldStart, 30)) {
-    me.shield = Math.min(Math.max(me.stats.shieldStart, 30), me.shield + me.stats.shieldRegen*dt);
-    updateHpHud();
+  if (f.stats.shieldRegen > 0 && f.sinceHit > 3 && f.shield < Math.max(f.stats.shieldStart, 30)) {
+    f.shield = Math.min(Math.max(f.stats.shieldStart, 30), f.shield + f.stats.shieldRegen*dt);
+    if (f === me) updateHpHud();
   }
-  if (me.reload > 0) {
-    me.reload -= dt;
-    if (me.reload <= 0) { me.reload = 0; me.mag = me.stats.magSize; me.shotsInMag = 0;
-      $('reloadtag').classList.remove('show'); updateAmmoHud(); sTone(700,0.05,0.1,'square'); }
+  if (f.reload > 0) {
+    f.reload -= dt;
+    if (f.reload <= 0) { f.reload = 0; f.mag = f.stats.magSize; f.shotsInMag = 0;
+      if (f === me) { $('reloadtag').classList.remove('show'); updateAmmoHud(); sTone(700,0.05,0.1,'square'); } }
   }
-  me.fireCd = Math.max(0, me.fireCd - dt);
+  f.fireCd = Math.max(0, f.fireCd - dt);
+}
+
+function stepSelfStatus(dt) {
+  stepFighterStatus(me, dt);
   if (((keys.Mouse0 || mouseDown) && locked) || touch.firing) fire();
 }
 var mouseDown = false;
@@ -1417,12 +1538,13 @@ function tick() {
     var n = Math.ceil(G.countdownT);
     if (n !== tick._lastN && n > 0) { banner(String(n), null, 700); sTone(440, 0.1, 0.15); tick._lastN = n; }
     moveSelf(dt);
-    if (G.countdownT <= 0) { G.phase = 'fight'; banner('Fight', null, 700); sTone(880, 0.2, 0.2); }
+    if (G.countdownT <= 0) { G.phase = 'fight'; G.fightT = 0; banner('Fight', null, 700); sTone(880, 0.2, 0.2); }
   }
   if (G.phase === 'fight') {
+    G.fightT += dt;
     moveSelf(dt);
     stepSelfStatus(dt);
-    if (G.mode === 'bot') stepBot(dt);
+    if (G.mode === 'bot') { stepBot(dt); stepFighterStatus(foe, dt); }
     stateAcc += dt;
     if (G.tx && stateAcc > STATE_HZ) {
       stateAcc = 0;
@@ -1459,6 +1581,9 @@ window.DuelDebug = {
   ARENA: ARENA, anyCollide: anyCollide, segSegDist: segSegDist,
   hitsFighter: hitsFighter, hitsHead: hitsHead, spawnBullet: spawnBullet, stepBullet: stepBullet,
   startBot: startBot, moveSelf: moveSelf, keys: keys,
+  moveFighter: moveFighter, fireFighter: fireFighter, applyHit: applyHit,
+  computeHitDamage: computeHitDamage, stepFighterStatus: stepFighterStatus,
+  stepBot: stepBot, botParams: botParams,
   PU: PU,
   touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
   setRot: setRot, tp: tp, vw: vw, vh: vh, isRot: function(){ return ROT; },

@@ -227,6 +227,104 @@ T('holding Fire empties rounds through the real gate',
 T('held fire respects the fire-rate cooldown',
   magBefore - D.me.mag <= 3, 'shots=' + (magBefore - D.me.mag));
 
+/* ---- parity: the bot's body and gun are the player's body and gun ---- */
+{
+  D.G.mode = 'bot'; D.G.phase = 'fight'; D.G.fightT = 5;
+  D.foe.stats = D.PU.statsFor([]);
+  D.foe.pos.set(2.6, 3, 8); D.foe.vel.set(0,0,0); D.foe.alive = true;   /* open floor below */
+  for (let i = 0; i < 90; i++) D.moveFighter(D.foe, {}, 1/60);
+  T('gravity owns the bot too', D.foe.onGround === true && D.foe.pos.y < 0.05,
+    'y=' + D.foe.pos.y.toFixed(2));
+
+  /* the sheet's fire rate is a ceiling the bot cannot buy past */
+  D.foe.mag = D.foe.stats.magSize; D.foe.reload = 0; D.foe.fireCd = 0; D.foe.shotsInMag = 0;
+  D.me.alive = true; D.me.pos.set(-8, 0.01, 5);
+  let shots = 0;
+  for (let i = 0; i < 60; i++) {           /* one second of a trigger held every frame */
+    if (D.fireFighter(D.foe, 'foe', V(-1, 0, 0))) shots++;
+    D.stepFighterStatus(D.foe, 1/60);
+  }
+  T('the bot cannot fire past its sheet', shots <= Math.ceil(D.foe.stats.fireRate) + 1,
+    shots + ' vs rate ' + D.foe.stats.fireRate.toFixed(1));
+  T('the bot spends real ammunition', D.foe.mag < D.foe.stats.magSize || D.foe.reload > 0,
+    'mag=' + D.foe.mag + ' reload=' + D.foe.reload.toFixed(2));
+
+  /* empty the mag: the bot waits out the same reload the player would */
+  D.foe.mag = 1; D.foe.fireCd = 0; D.foe.reload = 0;
+  D.fireFighter(D.foe, 'foe', V(-1, 0, 0));
+  T('an empty bot mag forces a reload', D.foe.reload > 0, String(D.foe.reload.toFixed(2)));
+  let rl = 0;
+  while (D.foe.reload > 0 && rl++ < 400) D.stepFighterStatus(D.foe, 1/60);
+  T('the reload takes the sheet time and refills', rl >= 60 && D.foe.mag === D.foe.stats.magSize,
+    'frames=' + rl + ' mag=' + D.foe.mag);
+
+  /* no drafted dash, no dash — drafted blink, blink */
+  D.foe.dashCd = 0;
+  D.moveFighter(D.foe, { dash: true }, 1/60);
+  T('the bot cannot dash without drafting it', D.foe.dashCd === 0);
+  D.foe.stats = D.PU.statsFor(['blink']);
+  const bx = D.foe.pos.x;
+  D.moveFighter(D.foe, { f: 1, dash: true }, 1/60);
+  T('a drafted blink works for the bot on the same cooldown',
+    D.foe.dashCd > 1.9 && Math.abs(D.foe.pos.x - bx) > 2,
+    'cd=' + D.foe.dashCd.toFixed(1) + ' moved=' + Math.abs(D.foe.pos.x - bx).toFixed(1));
+  D.foe.stats = D.PU.statsFor([]);
+
+  /* poison eats the bot through the same status ticks */
+  D.foe.hp = 100; D.foe.dots.push({ dps: 8, t: 1, kind: 'poison' });
+  for (let i = 0; i < 60; i++) D.stepFighterStatus(D.foe, 1/60);
+  T('poison ticks the bot down like anyone else', D.foe.hp < 93.5 && D.foe.hp > 90,
+    D.foe.hp.toFixed(1));
+
+  /* aim is a turret with a human neck: one frame cannot snap it */
+  D.startBot(5);
+  D.G.phase = 'fight'; D.G.fightT = 1;
+  D.foe.alive = true; D.me.alive = true;
+  D.me.pos.set(10, 0.01, 5); D.foe.pos.set(-10, 0.01, 5);
+  D.foe.yaw = Math.PI;                     /* facing dead away */
+  const yaw0 = D.foe.yaw;
+  D.stepBot(1/60);
+  const turned = Math.abs(D.G.botBrain.p.turnSpd * (1/60));
+  T('one frame cannot snap the bot around',
+    Math.abs(D.foe.yaw - yaw0) <= turned + 1e-6,
+    'moved ' + Math.abs(D.foe.yaw - yaw0).toFixed(4) + ' cap ' + turned.toFixed(4));
+
+  /* levels scale skill monotonically, nothing else */
+  const p1 = D.botParams(1), p10 = D.botParams(10);
+  T('level 10 aims tighter, reacts faster, turns quicker',
+    p10.aimErr < p1.aimErr && p10.reactT < p1.reactT && p10.turnSpd > p1.turnSpd &&
+    p10.fireGate < p1.fireGate && p10.pause < p1.pause);
+}
+
+/* ---- the third wave's engine hooks ---- */
+{
+  const st = D.PU.statsFor(['trickshot']);
+  const tb = D.spawnBullet('me', V(-13.8, 1.2, 8), V(-1, 0, 0), st, {});
+  D.foe.alive = false;
+  for (let i = 0; i < 10; i++) D.stepBullet(tb, 1/60);
+  T('bounce history rides the bullet', tb.bouncedN === 1, String(tb.bouncedN));
+  const pw = D.PU.statsFor(['pinball']);
+  const pb2 = D.spawnBullet('me', V(-13.8, 1.2, 8), V(-1, 0, 0), pw, {});
+  for (let i = 0; i < 10; i++) D.stepBullet(pb2, 1/60);
+  T('a pinball bullet starts homing after the wall', pb2.homingBoost > 0, String(pb2.homingBoost));
+  /* grand finale: last round leaves the muzzle already armed */
+  D.me.stats = D.PU.statsFor(['finale']); D.me.alive = true; D.G.phase = 'fight';
+  D.me.mag = 1; D.me.reload = 0; D.me.fireCd = 0; D.me.pos.set(0, 0.01, 5);
+  const before = D.bullets.length;
+  D.fireFighter(D.me, 'me', V(1, 0, 0));
+  const armed = D.bullets[D.bullets.length-1];
+  T('the last shot of the mag is a grenade', D.bullets.length > before && armed.boom >= 1.3,
+    'boom=' + armed.boom);
+  D.me.stats = D.PU.statsFor([]);
+  /* executioner reads the victim's actual health */
+  D.foe.stats = D.PU.statsFor([]); D.foe.hp = 20;
+  const fakeB = { dmgScale: 1, bouncedN: 0 };
+  const low = D.computeHitDamage({ stats: D.PU.statsFor(['executioner']), hp: 100 }, D.foe, fakeB, 1, false);
+  D.foe.hp = 100;
+  const high = D.computeHitDamage({ stats: D.PU.statsFor(['executioner']), hp: 100 }, D.foe, fakeB, 1, false);
+  T('executioner only bites the wounded', low.dmg > high.dmg, low.dmg + ' vs ' + high.dmg);
+}
+
 /* ---- headshots and the bot's teeth ---- */
 {
   D.G.mode = 'bot'; D.G.phase = 'fight';
@@ -254,7 +352,7 @@ T('held fire respects the fire-rate cooldown',
 }
 
 /* ---- the dumb batch behaves ---- */
-T('catalog grew to 66', D.PU.POWERUPS.length === 66, String(D.PU.POWERUPS.length));
+T('catalog grew to 80', D.PU.POWERUPS.length === 80, String(D.PU.POWERUPS.length));
 
 /* helium floats a bullet upward */
 {
