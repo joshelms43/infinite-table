@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.4.1
+<!-- Duel — Infinite Table. Version: 0.5.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -69,6 +69,10 @@ body.fighting #hud{display:block}
 #foehp{position:fixed;pointer-events:none;z-index:5;width:64px;height:5px;border-radius:3px;
   background:rgba(8,12,10,.55);overflow:hidden;display:none}
 #foehpfill{height:100%;background:var(--primary-coral)}
+
+/* ---- forced landscape (Safari has no orientation lock — we rotate the world instead) ---- */
+body.rot90{position:fixed;top:0;left:0;width:100vh;height:100vw;
+  transform:rotate(90deg) translateY(-100%);transform-origin:top left}
 
 /* ---- touch controls ---- */
 #touchui{display:none}
@@ -248,9 +252,9 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.4.1"></script>
-<script src="../shared/tablekit.js?v=0.4.1"></script>
-<script src="../shared/duel-powerups.js?v=0.4.1"></script>
+<script src="../shared/config.js?v=0.5.0"></script>
+<script src="../shared/tablekit.js?v=0.5.0"></script>
+<script src="../shared/duel-powerups.js?v=0.5.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -259,7 +263,7 @@ var ROUNDS_TO_WIN = 10;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.4.1' });
+TableKit.watchErrors({ game: 'duel', version: '0.5.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
@@ -284,7 +288,12 @@ renderer.setClearColor(COL.fog);
 var scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(COL.fog, 0.028);
 var camera = new THREE.PerspectiveCamera(72, 1, 0.08, 120);
-function size(){ var w=window.innerWidth,h=window.innerHeight;
+function size(){
+  if (ROT && window.innerWidth > window.innerHeight) {
+    ROT = false; document.body.classList.remove('rot90');   /* they rotated the phone — stand down */
+    if ($('landbtn')) $('landbtn').textContent = 'Landscape';
+  }
+  var w=vw(),h=vh();
   renderer.setSize(w,h,false); camera.aspect=w/h;
   camera.fov = h > w ? 92 : 72;   /* portrait needs the width back */
   camera.updateProjectionMatrix(); }
@@ -434,6 +443,18 @@ function sHit(crit){ sTone(crit?1320:880, 0.18, 0.22); }
 function sHurt(){ sTone(220, 0.15, 0.2, 'sawtooth'); }
 function sCluck(){ sTone(740, 0.06, 0.18, 'square'); setTimeout(function(){ sTone(590,0.09,0.15,'square'); }, 60); }
 function sPick(){ sTone(660, 0.12, 0.2); setTimeout(function(){ sTone(990,0.16,0.2); }, 90); }
+
+/* ---- logical viewport: when the world is rotated, width and height trade places ---- */
+var ROT = false;
+function vw(){ return ROT ? window.innerHeight : window.innerWidth; }
+function vh(){ return ROT ? window.innerWidth : window.innerHeight; }
+function tp(t){ return ROT ? { x: t.clientY, y: window.innerWidth - t.clientX }
+                           : { x: t.clientX, y: t.clientY }; }
+function setRot(on) {
+  ROT = !!on;
+  document.body.classList.toggle('rot90', ROT);
+  size();
+}
 
 /* ---- touch ---- */
 var TOUCH = false;
@@ -946,8 +967,8 @@ function dmgPop(worldPos, n, crit) {
   var d = document.createElement('div');
   d.className = 'dmg' + (crit ? ' crit' : '');
   d.textContent = String(n);
-  d.style.left = ((p.x*0.5+0.5)*window.innerWidth) + 'px';
-  d.style.top = ((-p.y*0.5+0.5)*window.innerHeight) + 'px';
+  d.style.left = ((p.x*0.5+0.5)*vw()) + 'px';
+  d.style.top = ((-p.y*0.5+0.5)*vh()) + 'px';
   document.body.appendChild(d);
   setTimeout(function(){ d.remove(); }, 720);
 }
@@ -1185,26 +1206,33 @@ function startBot() {
 }
 $('practicebtn').onclick = function () { audio(); startBot(); };
 
-/* landscape is a fullscreen lock where the platform allows it; iPhones rotate by hand */
+/* landscape: a native orientation lock where the platform has one; where it doesn't
+   (iOS Safari ships type/angle/onchange but no lock), rotate the whole game 90
+   degrees and remap the thumbs — same trick every web game pulls on iPhones */
 (function () {
-  var lockable = TOUCH && screen.orientation && typeof screen.orientation.lock === 'function';
-  if (!lockable) { $('landbtn').style.display = 'none'; return; }
+  if (!TOUCH) { $('landbtn').style.display = 'none'; return; }
+  var lockable = window.screen && screen.orientation && typeof screen.orientation.lock === 'function';
   var on = false;
   $('landbtn').onclick = function () {
     audio();
-    if (!on) {
+    if (lockable && !on) {
       document.documentElement.requestFullscreen()
         .then(function () { return screen.orientation.lock('landscape'); })
         .then(function () { on = true; $('landbtn').textContent = 'Portrait'; })
-        .catch(function () {});
-    } else {
+        .catch(function () { setRot(!ROT); on = ROT;   /* lock refused — rotate instead */
+          $('landbtn').textContent = on ? 'Portrait' : 'Landscape'; });
+    } else if (lockable && on) {
       try { screen.orientation.unlock(); } catch (e) {}
       if (document.exitFullscreen) document.exitFullscreen().catch(function () {});
+      if (ROT) setRot(false);
       on = false; $('landbtn').textContent = 'Landscape';
+    } else {
+      setRot(!ROT); on = ROT;
+      $('landbtn').textContent = on ? 'Portrait' : 'Landscape';
     }
   };
   document.addEventListener('fullscreenchange', function () {
-    if (!document.fullscreenElement && on) { on = false; $('landbtn').textContent = 'Landscape'; }
+    if (!document.fullscreenElement && on && !ROT) { on = false; $('landbtn').textContent = 'Landscape'; }
   });
 })();
 
@@ -1294,17 +1322,18 @@ function onTouchStart(e) {
   for (var i = 0; i < e.changedTouches.length; i++) {
     var t = e.changedTouches[i];
     if (t.target && t.target.closest && t.target.closest('.tbtn, button, a, input')) continue;
-    if (t.clientX < window.innerWidth * 0.45 && touch.moveId === null) {
+    var q = tp(t);
+    if (q.x < vw() * 0.45 && touch.moveId === null) {
       touch.moveId = t.identifier;
-      touch.ax = t.clientX; touch.ay = t.clientY;
+      touch.ax = q.x; touch.ay = q.y;
       setStickVec(0, 0);
       var st = $('stick');
       st.style.display = 'block';
-      st.style.left = t.clientX + 'px'; st.style.top = t.clientY + 'px';
+      st.style.left = q.x + 'px'; st.style.top = q.y + 'px';
       $('sticknub').style.transform = 'translate(0px,0px)';
     } else if (touch.lookId === null) {
       touch.lookId = t.identifier;
-      touch.lx = t.clientX; touch.ly = t.clientY;
+      touch.lx = q.x; touch.ly = q.y;
     }
   }
   e.preventDefault();
@@ -1312,15 +1341,16 @@ function onTouchStart(e) {
 function onTouchMove(e) {
   for (var i = 0; i < e.changedTouches.length; i++) {
     var t = e.changedTouches[i];
+    var q = tp(t);
     if (t.identifier === touch.moveId) {
-      var dx = t.clientX - touch.ax, dy = t.clientY - touch.ay;
+      var dx = q.x - touch.ax, dy = q.y - touch.ay;
       var d = Math.hypot(dx, dy);
       if (d > 52) { dx *= 52/d; dy *= 52/d; }
       setStickVec(dx/52, dy/52);
       $('sticknub').style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
     } else if (t.identifier === touch.lookId) {
-      applyLook(t.clientX - touch.lx, t.clientY - touch.ly);
-      touch.lx = t.clientX; touch.ly = t.clientY;
+      applyLook(q.x - touch.lx, q.y - touch.ly);
+      touch.lx = q.x; touch.ly = q.y;
     }
   }
   e.preventDefault();
@@ -1368,8 +1398,8 @@ function stepFoeVisual(dt) {
     var p = top.project(camera);
     if (p.z < 1) {
       el.style.display = 'block';
-      el.style.left = ((p.x*0.5+0.5)*window.innerWidth - 32) + 'px';
-      el.style.top = ((-p.y*0.5+0.5)*window.innerHeight - 8) + 'px';
+      el.style.left = ((p.x*0.5+0.5)*vw() - 32) + 'px';
+      el.style.top = ((-p.y*0.5+0.5)*vh() - 8) + 'px';
       $('foehpfill').style.width = Math.max(0, foe.hp/foe.stats.hp*100) + '%';
     } else el.style.display = 'none';
   } else el.style.display = 'none';
@@ -1431,6 +1461,7 @@ window.DuelDebug = {
   startBot: startBot, moveSelf: moveSelf, keys: keys,
   PU: PU,
   touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
+  setRot: setRot, tp: tp, vw: vw, vh: vh, isRot: function(){ return ROT; },
   stepSelfStatus: stepSelfStatus, fire: fire
 };
 </script>

@@ -31,3 +31,7 @@
 
 ## 0.4.1
 - Landscape button on the menu for phones that support orientation lock: fullscreens and locks landscape, toggles back to Portrait. Hidden where the platform can't lock (iPhone Safari) — rotating by hand already works, the FOV adapts either way.
+
+## 0.5.0
+- The Landscape button now works on every phone. Where the platform has a real orientation lock it fullscreens and locks; where it doesn't — iOS Safari ships ScreenOrientation type/angle/onchange but no lock() — the game rotates itself 90° with a transform and remaps both thumbs, the stick zone, the look drag, and every screen-space projection into the rotated frame. Physically rotating the phone stands the forced rotation down automatically.
+- Headless proof covers the coordinate mapping: axis trade, aspect follow, touch remap, origin placement, and the stand-down.

@@ -172,6 +172,27 @@ D.foe.stats = D.PU.statsFor([]);
 const grazeSmall = D.hitsFighter(V(-2, 1.0, 0.62), V(2, 1.0, 0.62), D.foe, 0.12);
 T('the base fighter does not', grazeSmall === false);
 
+/* ---- the rotated world maps thumbs correctly ---- */
+{
+  sandbox.innerWidth = 390; sandbox.innerHeight = 844;   /* a portrait phone */
+  D.setRot(true);
+  T('forced landscape holds in physical portrait', D.isRot() === true);
+  T('logical viewport trades axes', D.vw() === 844 && D.vh() === 390,
+    D.vw() + 'x' + D.vh());
+  T('renderer aspect follows the rotated world',
+    Math.abs(D.camera.aspect - 844/390) < 1e-6, String(D.camera.aspect));
+  const m = D.tp({ clientX: 10, clientY: 100 });
+  T('a physical touch lands at the rotated spot', m.x === 100 && m.y === 380,
+    m.x + ',' + m.y);
+  const tr = D.tp({ clientX: 390, clientY: 0 });
+  T('physical top-right is the rotated origin', tr.x === 0 && tr.y === 0, tr.x + ',' + tr.y);
+  sandbox.innerWidth = 844; sandbox.innerHeight = 390;   /* they rotated the phone by hand */
+  D.setRot(true);                                        /* size() runs inside and stands down */
+  T('a physically rotated phone cancels the forced rotation', D.isRot() === false);
+  sandbox.innerWidth = W; sandbox.innerHeight = H;
+  D.setRot(false);
+}
+
 /* ---- touch controls drive the same movement ---- */
 D.me.pos.set(2.6, 0.01, 8); D.me.vel.set(0,0,0); D.me.yaw = 0; D.me.pitch = 0;  /* a clear lane */
 for (let i = 0; i < 30; i++) D.moveSelf(1/60);   /* settle */
