@@ -6,7 +6,7 @@
     "test": "node tests/test.js",
     "test:drops": "node tests/repro2.js",
     "test:flows": "node tests/repro3.js",
-    "check": "node tests/lint.js && node tests/bootsim.js && node tests/kitsim.js && node tests/revivesim.js && node tests/test.js && node tests/netsim.js && node tests/netsoak.js && node tests/repro3.js && node tests/repro2.js && node tests/mafiasim.js && node tests/poolsim.js",
+    "check": "node tests/lint.js && node tests/bootsim.js && node tests/kitsim.js && node tests/revivesim.js && node tests/test.js && node tests/netsim.js && node tests/netsoak.js && node tests/repro3.js && node tests/repro2.js && node tests/mafiasim.js && node tests/poolsim.js && node tests/duelsim.js",
     "test:wire": "node tests/netsim.js",
     "test:soak": "node tests/netsoak.js",
     "test:pool": "node tests/poolsim.js",

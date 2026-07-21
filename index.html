@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Infinite Table — platform lobby. Version: 1.4.0 -->
+<!-- Infinite Table — platform lobby. Version: 1.5.0 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -116,6 +116,10 @@ footer{margin-top:auto;padding-top:40px;font-size:10.5px;font-weight:700;opacity
 .game.hero.rangecard .gname,.game.hero.rangecard .gdesc{color:var(--card-ivory)}
 .game.hero.rangecard .gdesc{opacity:.8}
 .game.hero.rangecard .gplayers{color:var(--card-ivory);opacity:.45}
+.game.hero.duelcard{padding-top:16px;background:linear-gradient(168deg,#3D2019 0%,#2B1712 55%,#170C09 100%);border-color:rgba(226,106,75,.3)}
+.game.hero.duelcard .gname,.game.hero.duelcard .gdesc{color:var(--card-ivory)}
+.game.hero.duelcard .gdesc{opacity:.8}
+.game.hero.duelcard .gplayers{color:var(--card-ivory);opacity:.45}
 .game.soon{display:flex;align-items:center;justify-content:space-between;padding:16px 18px}
 .soonname{font-weight:800;font-size:14px;opacity:.55}
 .soondesc{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;opacity:.3}
@@ -253,14 +257,25 @@ button{font-family:inherit;border:none;cursor:pointer;background:none;color:inhe
       <span class="gplay">PLAY</span>
     </div>
   </a>
+
+  <a class="game hero duelcard" href="./duel/">
+    <div class="gbody">
+      <div class="ginfo">
+        <div class="gname">Duel</div>
+        <div class="gdesc">First to four. Draft a power every round.</div>
+        <div class="gplayers">2 Players</div>
+      </div>
+      <span class="gplay">PLAY</span>
+    </div>
+  </a>
 </main>
 
 <footer>Infinite Table</footer>
 
 <div id="overlay" onclick="if(event.target===this){ID.sheetOpen=false;closeSheet()}"><div id="sheet"></div></div>
 
-<script src="./shared/config.js?v=1.4.0"></script>
-<script src="./shared/identity.js?v=1.4.0"></script>
+<script src="./shared/config.js?v=1.5.0"></script>
+<script src="./shared/identity.js?v=1.5.0"></script>
 <script>
 /* ---- minimal host-page adapter for the shared identity module ---- */
 function $(q){ return document.querySelector(q); }

@@ -15,7 +15,8 @@ function T(name, cond, detail) {
 }
 
 const ROOT = path.join(__dirname, '..');
-const HTML = ['index.html', 'coastline/index.html', 'mafia/index.html', 'pool/index.html', 'range/index.html'];
+const HTML = ['index.html', 'coastline/index.html', 'mafia/index.html', 'pool/index.html', 'range/index.html',
+  'duel/index.html'];
 const SHARED = fs.readdirSync(path.join(ROOT, 'shared')).filter(f => f.endsWith('.js'));
 
 /* ---- shared modules must parse ---- */
