@@ -20,6 +20,7 @@ const PAGES = {
   penalty: 'penalty/index.html',
   penaltylab: 'penalty/lab/index.html',
   pool: 'pool/index.html',
+  lastcard: 'lastcard/index.html',
   lobby: 'index.html',
 };
 
