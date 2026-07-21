@@ -28,3 +28,6 @@
 ## 0.4.0
 - Headshots land double. The head zone is a sphere at the top of the capsule, scaled with body size — Pocket Size shrinks it, Absolute Unit grows it. Headshots ring and pop like crits.
 - Practice bot bug: its bullets sparked but never damaged the player — the hit-judging path dropped non-player owners entirely. The bot draws blood now, with its full effect set (poison, slow, knockback, the lot).
+
+## 0.4.1
+- Landscape button on the menu for phones that support orientation lock: fullscreens and locks landscape, toggles back to Portrait. Hidden where the platform can't lock (iPhone Safari) — rotating by hand already works, the FOV adapts either way.
