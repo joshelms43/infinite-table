@@ -63,3 +63,11 @@
 
 ## 0.8.3
 - Double-joining a table is impossible now. The Join button's busy lock had CSS for the wrong button class, so a double-click opened two live channels — every event then processed twice or more: single shots rendered as shotgun volleys, and each hit applied to health repeatedly, one-shotting from round one with no powerups involved. joinRoom now refuses to run concurrently, closes any existing channel before opening one, quiet buttons actually lock while busy, and a dead table releases its channel instead of leaving it subscribed.
+
+## 0.9.0
+- Teams. Hosting now opens a team room: the code, two sides — Coral and Teal — and live counts. Up to eight people join and pick their own side; the host starts once both sides have at least one. 1v1, 4v4, or a lopsided 1v3 if that's what you choose.
+- Rounds end when a side is wiped; the standing side scores. First team to ten. Everyone drafts secretly after every round; the host advances when all picks are in, or after twenty seconds so nobody can stall the table.
+- Netcode scales the same honest way: favor-the-shooter with hits addressed to a specific victim's key — only that player applies them — and every player stays the sole authority on their own health. Friendly fire does not exist: teammates are never targets, and shots pass through them to the enemy behind.
+- Homing and boomerangs resolve against the nearest living enemy. Spawns are deterministic slots along your side's wall. Down mid-round? You hold position and watch; your team can still take it.
+- Departures handled: a leaver mid-round counts as down, an emptied side loses the round, and a vanished host ends the table cleanly. The gate proves rosters, wipes, addressed hits, friendly-fire immunity, slot spread, per-key draft seeds, and nearest-enemy retargeting.
+- Practice mode is untouched 1v1 against the bot.

@@ -355,6 +355,66 @@ T('held fire respects the fire-rate cooldown',
   T('executioner only bites the wounded', low.dmg > high.dmg, low.dmg + ' vs ' + high.dmg);
 }
 
+/* ---- teams: rosters, wipes, friendly fire, addressed hits ---- */
+{
+  D.G.mode = 'net'; D.G.myKey = 'JOSH'; D.G.myTeam = 'coral';
+  D.me.alive = true;
+  const A = D.ensurePeer('AAAA'); A.team = 'coral'; A.f.alive = true; A.f.stats = D.PU.statsFor([]);
+  const B = D.ensurePeer('BBBB'); B.team = 'teal';  B.f.alive = true; B.f.stats = D.PU.statsFor([]);
+  const C = D.ensurePeer('CCCC'); C.team = 'teal';  C.f.alive = true; C.f.stats = D.PU.statsFor([]);
+  T('alive counts follow the roster',
+    D.teamAliveCount('coral') === 2 && D.teamAliveCount('teal') === 2,
+    D.teamAliveCount('coral') + 'v' + D.teamAliveCount('teal'));
+  T('enemies are only the other side', D.enemiesOfMine().length === 2);
+  B.f.alive = false; C.f.alive = false;
+  T('a wiped side counts to zero', D.teamAliveCount('teal') === 0);
+  B.f.alive = true; C.f.alive = true;
+
+  /* friendly fire does not exist: teammate stands in front of the enemy */
+  D.G.phase = 'fight';
+  A.f.pos.set(-1, 0, 6);                       /* my teammate, in the line of fire */
+  B.f.pos.set(3, 0, 6);                        /* the enemy behind them */
+  C.f.pos.set(12, 0, -6); B.f.hp = 100; A.f.hp = 100;
+  const sent = [];
+  D.G.tx = { send: function (ev, pl) { sent.push([ev, pl]); }, close: function(){}, presence: function(){ return []; } };
+  const shot = D.spawnBullet('me', new THREE.Vector3(-4, 1.0, 6), V(1, 0, 0), D.PU.statsFor([]), {});
+  let sAlive = true;
+  for (let i = 0; i < 120 && sAlive; i++) sAlive = D.stepBullet(shot, 1/60);
+  const hits = sent.filter(function (e) { return e[0] === 'hit'; });
+  T('a shot passes the teammate and addresses the enemy',
+    hits.length === 1 && hits[0][1].to === 'BBBB' && hits[0][1].dmg > 0,
+    JSON.stringify(hits.map(function (h) { return h[1].to; })));
+  D.G.tx = null;
+
+  /* hits are addressed: one for someone else never touches me */
+  D.me.hp = 100; D.me.stats.deflect = 0; D.me.shield = 0;
+  D.onWire('hit', { to: 'BBBB', dmg: 50, kb: 0, k: 'CCCC' });
+  T('a hit addressed to another key is not mine', D.me.hp === 100);
+  D.onWire('hit', { to: 'JOSH', dmg: 10, kb: 0, k: 'BBBB' });
+  T('a hit addressed to me lands', D.me.hp === 90, String(D.me.hp));
+  D.me.alive = true; D.me.hp = 100;
+
+  /* spawn slots spread a side deterministically */
+  const s1 = D.spawnSlot('coral', 0), s2 = D.spawnSlot('coral', 1), s3 = D.spawnSlot('teal', 0);
+  T('teammates spawn on the same wall, spread out',
+    s1.x === s2.x && s1.z !== s2.z && s3.x === -s1.x);
+
+  /* per-key draft seeds differ, and replay identically */
+  const k1 = D.hashKey('JOSH'), k2 = D.hashKey('AAAA');
+  T('key hashes separate the deals', k1 !== k2 && D.hashKey('JOSH') === k1);
+
+  /* nearest enemy resolves for homing */
+  B.f.pos.set(2, 0, 6); C.f.pos.set(9, 0, 6);
+  T('homing hunts the nearest living enemy',
+    D.nearestEnemyTo(new THREE.Vector3(0, 1, 6)) === B.f);
+  C.f.pos.set(1, 0, 6);
+  T('and retargets when someone is closer',
+    D.nearestEnemyTo(new THREE.Vector3(0, 1, 6)) === C.f);
+
+  D.dropPeer('AAAA'); D.dropPeer('BBBB'); D.dropPeer('CCCC');
+  D.G.mode = 'bot'; D.G.myTeam = null;
+}
+
 /* ---- the silly batch behaves ---- */
 {
   D.G.mode = 'bot'; D.G.phase = 'fight'; D.foe.alive = false; D.me.alive = true;

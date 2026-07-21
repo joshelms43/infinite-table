@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.8.3
+<!-- Duel — Infinite Table. Version: 0.9.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -69,6 +69,9 @@ body.fighting #hud{display:block}
 #foehp{position:fixed;pointer-events:none;z-index:5;width:64px;height:5px;border-radius:3px;
   background:rgba(8,12,10,.55);overflow:hidden;display:none}
 #foehpfill{height:100%;background:var(--primary-coral)}
+.peerbar{position:fixed;pointer-events:none;z-index:5;width:64px;height:5px;border-radius:3px;
+  background:rgba(8,12,10,.55);overflow:hidden;display:none}
+.peerbar>div{height:100%}
 
 /* ---- forced landscape (Safari has no orientation lock — we rotate the world instead) ---- */
 body.rot90{position:fixed;top:0;left:0;width:100vh;height:100vw;
@@ -136,6 +139,16 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
 #neterr{font-size:12px;font-weight:800;color:var(--primary-coral);margin-top:12px;min-height:16px}
 .codebig{font-family:'Lilita One',cursive;font-size:52px;letter-spacing:10px;color:var(--money-gold);
   margin:18px 0 4px;text-shadow:0 3px 10px rgba(8,12,10,.6)}
+.teamcols{display:flex;gap:12px;margin:16px 0 14px}
+.teamcol{flex:1;border-radius:14px;padding:18px 0 14px;border:2px solid var(--line-soft);
+  background:rgba(255,255,255,.05);display:flex;flex-direction:column;gap:6px;align-items:center;
+  transition:border-color .15s, background .15s}
+.teamcol .tname{font-family:'Lilita One',cursive;font-size:19px}
+.teamcol .tcount{font-family:'Lilita One',cursive;font-size:30px;opacity:.85}
+.teamcol.coral .tname{color:var(--primary-coral)}
+.teamcol.teal .tname{color:var(--p-teal)}
+.teamcol.mine.coral{border-color:var(--primary-coral);background:rgba(226,106,75,.12)}
+.teamcol.mine.teal{border-color:var(--p-teal);background:rgba(59,139,130,.12)}
 .waitline{font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;opacity:.5}
 .overline{font-size:11px;font-weight:800;letter-spacing:2.4px;text-transform:uppercase;opacity:.5}
 .bigword{font-family:'Lilita One',cursive;font-size:52px;line-height:1.05;margin:8px 0 2px;
@@ -201,6 +214,7 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   <div id="rounds"></div>
   <div id="mypicks"></div>
   <div id="foehp"><div id="foehpfill" style="width:100%"></div></div>
+  <div id="peerbars"></div>
   <div id="touchui">
     <div id="stick"><div id="sticknub"></div></div>
     <button class="tbtn" id="fireBtn">Fire</button>
@@ -229,12 +243,23 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<div class="sheetwrap hide" id="hostwait">
-  <div class="panel">
-    <div class="waitline">Your Table Code</div>
+<div class="sheetwrap hide" id="teamroom">
+  <div class="panel" style="max-width:400px">
+    <div class="waitline">Table Code</div>
     <div class="codebig" id="codeshow"></div>
-    <div class="waitline" id="waitpulse">Waiting For A Challenger</div>
-    <div class="btncol"><button class="quietbtn" id="cancelhost">Cancel</button></div>
+    <div class="teamcols">
+      <button class="teamcol coral" id="pickcoral">
+        <span class="tname">Coral</span><span class="tcount" id="coralcount">0</span>
+      </button>
+      <button class="teamcol teal" id="pickteal">
+        <span class="tname">Teal</span><span class="tcount" id="tealcount">0</span>
+      </button>
+    </div>
+    <div class="waitline" id="roomline">Pick A Side</div>
+    <div class="btncol">
+      <button class="bigbtn" id="startmatch" style="display:none">Start Match</button>
+      <button class="quietbtn" id="cancelhost">Leave</button>
+    </div>
   </div>
 </div>
 
@@ -266,9 +291,9 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.8.3"></script>
-<script src="../shared/tablekit.js?v=0.8.3"></script>
-<script src="../shared/duel-powerups.js?v=0.8.3"></script>
+<script src="../shared/config.js?v=0.9.0"></script>
+<script src="../shared/tablekit.js?v=0.9.0"></script>
+<script src="../shared/duel-powerups.js?v=0.9.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -277,7 +302,7 @@ var ROUNDS_TO_WIN = 10;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.8.3' });
+TableKit.watchErrors({ game: 'duel', version: '0.9.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
@@ -415,9 +440,66 @@ function newFighterState() {
 }
 
 var me = newFighterState();
+/* the bot's body, practice mode only */
 var foe = newFighterState();
 var foeMesh = makeFighter(COL.coral);
 var foeNet = { pos: new THREE.Vector3(), yaw: 0, has: false };
+
+/* net mode: everyone else at the table, keyed by their wire key */
+var TEAM_COLOR = { coral: COL.coral, teal: COL.teal };
+var peers = {};
+function ensurePeer(k) {
+  if (peers[k]) return peers[k];
+  var P = { key: k, f: newFighterState(), team: null,
+    mesh: makeFighter(COL.coral),
+    net: { pos: new THREE.Vector3(), yaw: 0, has: false },
+    bar: null };
+  var bar = document.createElement('div');
+  bar.className = 'peerbar';
+  bar.innerHTML = '<div></div>';
+  $('peerbars').appendChild(bar);
+  P.bar = bar;
+  peers[k] = P;
+  return P;
+}
+function dropPeer(k) {
+  var P = peers[k]; if (!P) return;
+  scene.remove(P.mesh);
+  if (P.bar && P.bar.remove) P.bar.remove();
+  delete peers[k];
+}
+function peerColor(P) {
+  return TEAM_COLOR[P.team] || COL.coral;
+}
+function tintPeer(P) {
+  var c = peerColor(P);
+  P.mesh.traverse && P.mesh.traverse(function (o) {
+    if (o.material && o.material.color && o.material.roughness !== undefined) o.material.color.setHex(c);
+  });
+  if (P.bar) P.bar.firstChild.style.background = P.team === 'teal' ? '#3B8B82' : '#E26A4B';
+}
+function eachPeer(fn) { Object.keys(peers).forEach(function (k) { fn(peers[k], k); }); }
+function enemiesOfMine() {
+  var out = [];
+  eachPeer(function (P) { if (P.team !== G.myTeam && P.f.alive) out.push(P); });
+  return out;
+}
+function teamAliveCount(team) {
+  var n = 0;
+  if (G.myTeam === team && me.alive) n++;
+  eachPeer(function (P) { if (P.team === team && P.f.alive) n++; });
+  return n;
+}
+function hashKey(k) {
+  var h = 2166136261;
+  for (var i = 0; i < k.length; i++) { h ^= k.charCodeAt(i); h = (h * 16777619) >>> 0; }
+  return h >>> 0;
+}
+/* spawn slots: your side, spread along the wall */
+function spawnSlot(team, idx) {
+  var west = team === 'coral';
+  return { x: west ? -12 : 12, z: -6 + (idx % 4) * 4, yaw: west ? -Math.PI/4 : Math.PI*3/4 };
+}
 
 function eyeHeight(f){ return 1.62 * f.stats.scale; }
 function bodyHalf(f){ return { hx: 0.38*f.stats.scale, hy: 0.9*f.stats.scale }; }
@@ -429,7 +511,8 @@ var G = {
   myScore: 0, foeScore: 0, round: 0,
   host: false, tx: null, seed: 0,
   myPick: null, foePickId: null, pendingFoePick: null, countdownT: 0, fightT: 0,
-  botBrain: null, botLevel: 1
+  botBrain: null, botLevel: 1,
+  myKey: null, myTeam: null, roster: {}, hostKey: null, code: null, picked: {}
 };
 
 var $ = function(id){ return document.getElementById(id); };
@@ -542,9 +625,9 @@ canvas.addEventListener('pointerdown', function(e){ audio();
 $('clickcatch').addEventListener('click', function(){ audio(); grabPointer(); });
 
 /* ---- movement: one body of rules for both fighters ---- */
-function spawnFighter(f, west) {
-  f.pos.set(west ? -12 : 12, 0.01, west ? -6 : 6);
-  f.yaw = west ? -Math.PI/4 : Math.PI*3/4;
+function spawnFighter(f, west, slot) {
+  if (slot) { f.pos.set(slot.x, 0.01, slot.z); f.yaw = slot.yaw; }
+  else { f.pos.set(west ? -12 : 12, 0.01, west ? -6 : 6); f.yaw = west ? -Math.PI/4 : Math.PI*3/4; }
   f.pitch = 0; f.vel.set(0,0,0);
   f.hp = f.stats.hp; f.shield = f.stats.shieldStart;
   f.mag = f.stats.magSize; f.reload = 0; f.fireCd = 0; f.shotsInMag = 0;
@@ -780,13 +863,13 @@ function fireFighter(f, owner, baseDir) {
   }
   if (s.bulletStyle==='chicken') sCluck();
   else if (f === me) sShot(); else sNoise(0.07, 1000, 0.12);
-  if (f === me && G.tx) G.tx.send('shoot', { o: [origin.x,origin.y,origin.z], d: shots, ds: dmgScale, bm: boom });
+  if (f === me && G.tx) G.tx.send('shoot', { k: G.myKey, o: [origin.x,origin.y,origin.z], d: shots, ds: dmgScale, bm: boom });
   if (s.echo) {
     var eo = origin.clone(), eShots = shots.slice(), eScale = dmgScale, eBoom = boom;
     setTimeout(function () {
       if (G.phase !== 'fight' || !f.alive) return;
       eShots.forEach(function (d) { spawnBullet(owner, eo, new THREE.Vector3(d[0],d[1],d[2]), s, { dmgScale: eScale, boom: eBoom }); });
-      if (f === me && G.tx) G.tx.send('shoot', { o: [eo.x,eo.y,eo.z], d: eShots, ds: eScale, bm: eBoom });
+      if (f === me && G.tx) G.tx.send('shoot', { k: G.myKey, o: [eo.x,eo.y,eo.z], d: eShots, ds: eScale, bm: eBoom });
       sTone(340, 0.07, 0.12);
     }, 170);
   }
@@ -837,17 +920,33 @@ function hitsHead(prev, next, f, radiusBonus) {
   var hc = f.pos.clone(); hc.y += 1.58 * f.stats.scale;
   return segSegDist(prev, next, hc, hc) <= 0.34 * f.stats.scale + radiusBonus;
 }
-function targetOf(owner){ return owner === 'me' ? foe : me; }
+function targetOf(owner){ return owner === 'me' ? foe : me; }   /* practice mode */
+/* net mode: the nearest living enemy, for homing and boomerangs */
+function nearestEnemyTo(pos) {
+  if (G.mode === 'bot') return foe;
+  var best = null, bd = 1e9;
+  enemiesOfMine().forEach(function (P) {
+    var d = P.f.pos.distanceTo(pos);
+    if (d < bd) { bd = d; best = P.f; }
+  });
+  return best;
+}
+function bulletTargetFighter(b) {
+  if (b.owner === 'me') return G.mode === 'bot' ? foe : nearestEnemyTo(b.pos);
+  return me;
+}
 
 function stepBullet(b, dt) {
   var s = b.stats;
   /* homing (pinball wizard bullets pick it up after a bounce) */
   var hm = s.homing + (b.homingBoost || 0);
   if (hm > 0 && !b.returning) {
-    var tgt = targetOf(b.owner);
+    var tgt = bulletTargetFighter(b);
+    if (tgt) {
     var want = tgt.pos.clone(); want.y += 1.0*tgt.stats.scale;
     want.sub(b.pos).normalize().multiplyScalar(b.vel.length());
     b.vel.lerp(want, Math.min(1, hm * dt));
+    }
   }
   /* boomerang */
   if (s.boomerang && !b.returning && b.life < 2.5) {
@@ -855,7 +954,9 @@ function stepBullet(b, dt) {
     b.vel.multiplyScalar(-1);
   }
   if (b.returning) {
-    var homeP = b.owner === 'me' ? camera.position : foe.pos.clone().setY(foe.pos.y+1.2);
+    var homeF = b.owner === 'me' ? null : (G.mode === 'bot' ? foe : (peers[b.owner] && peers[b.owner].f));
+    var homeP = b.owner === 'me' ? camera.position :
+      (homeF ? homeF.pos.clone().setY(homeF.pos.y+1.2) : camera.position.clone().setY(-99));
     var wantR = homeP.clone().sub(b.pos).normalize().multiplyScalar(s.bulletSpeed*1.2);
     b.vel.lerp(wantR, Math.min(1, dt*5));
     if (b.owner === 'me' && b.pos.distanceTo(camera.position) < 1) {
@@ -890,8 +991,8 @@ function stepBullet(b, dt) {
     b.mesh.position.copy(b.pos);
     if (b.orbitT <= 0) b.vel.copy(b.relDir).multiplyScalar(s.bulletSpeed);
     else {
-      var tgtO = targetOf(b.owner);
-      if (tgtO.alive && hitsFighter(b.pos, b.pos, tgtO, b.sizeNow)) { landHit(b, b.pos.clone()); return false; }
+      var tgtO = bulletTargetFighter(b);
+      if (tgtO && tgtO.alive && hitsFighter(b.pos, b.pos, tgtO, b.sizeNow)) { landHit(b, b.pos.clone(), 1, false, tgtO); return false; }
       return true;
     }
   }
@@ -910,11 +1011,29 @@ function stepBullet(b, dt) {
     var prev = b.pos.clone();
     b.pos.addScaledVector(dirN, step);
 
-    /* fighters — shooter judges hits on the target it can see */
-    var tgt2 = targetOf(b.owner);
-    if (tgt2.alive && hitsFighter(prev, b.pos, tgt2, b.sizeNow)) {
-      landHit(b, b.pos.clone(), 1, hitsHead(prev, b.pos, tgt2, b.sizeNow));
-      return false;
+    /* fighters — the shooter judges hits on the targets it can see.
+       Teammates are never targets: friendly fire does not exist. */
+    if (b.owner === 'me') {
+      if (G.mode === 'bot') {
+        if (foe.alive && hitsFighter(prev, b.pos, foe, b.sizeNow)) {
+          landHit(b, b.pos.clone(), 1, hitsHead(prev, b.pos, foe, b.sizeNow), foe);
+          return false;
+        }
+      } else {
+        var ens = enemiesOfMine();
+        for (var ei = 0; ei < ens.length; ei++) {
+          var ef = ens[ei].f;
+          if (hitsFighter(prev, b.pos, ef, b.sizeNow)) {
+            landHit(b, b.pos.clone(), 1, hitsHead(prev, b.pos, ef, b.sizeNow), ens[ei]);
+            return false;
+          }
+        }
+      }
+    } else if (G.mode === 'bot') {
+      if (me.alive && hitsFighter(prev, b.pos, me, b.sizeNow)) {
+        landHit(b, b.pos.clone(), 1, hitsHead(prev, b.pos, me, b.sizeNow), me);
+        return false;
+      }
     }
     /* arena */
     if (!s.phase) {
@@ -966,11 +1085,14 @@ function explode(b, at) {
       me.onGround = false;
     }
   }
-  var tgt = targetOf(b.owner);
-  var center = tgt.pos.clone(); center.y += 0.9*tgt.stats.scale;
-  if (tgt.alive && center.distanceTo(at) < b.boom + 0.5*tgt.stats.scale) {
-    landHit(b, at, 0.8);
+  function inBlast(t) {
+    var center = t.pos.clone(); center.y += 0.9*t.stats.scale;
+    return t.alive && center.distanceTo(at) < b.boom + 0.5*t.stats.scale;
   }
+  if (b.owner === 'me') {
+    if (G.mode === 'bot') { if (inBlast(foe)) landHit(b, at, 0.8, false, foe); }
+    else enemiesOfMine().forEach(function (P) { if (inBlast(P.f)) landHit(b, at, 0.8, false, P); });
+  } else if (G.mode === 'bot' && inBlast(me)) landHit(b, at, 0.8, false, me);
   if (s.clusterCount > 0 && !b.fromCluster) {
     for (var i = 0; i < s.clusterCount; i++) {
       var d = new THREE.Vector3(Math.random()-0.5, Math.random()*0.8+0.2, Math.random()-0.5).normalize();
@@ -997,11 +1119,14 @@ function computeHitDamage(shooter, victim, b, scale, headshot) {
   return { dmg: Math.round(dmg), crit: crit };
 }
 
-function landHit(b, at, scale, headshot) {
+/* victimRef: a fighter (practice) or a peer object (net). The shooter judges,
+   addresses the hit to that victim's key, and only that victim applies it. */
+function landHit(b, at, scale, headshot, victimRef) {
   scale = scale || 1;
-  if (b.owner === 'foe' && G.mode === 'net') { sparkFx(at, false); return; }  /* their client judges */
+  if (b.owner !== 'me' && G.mode === 'net') { sparkFx(at, false); return; }  /* their client judges */
   var shooter = b.owner === 'me' ? me : foe;
-  var victim  = b.owner === 'me' ? foe : me;
+  var isPeer = victimRef && victimRef.f !== undefined;
+  var victim = isPeer ? victimRef.f : (victimRef || (b.owner === 'me' ? foe : me));
   var s = shooter.stats;
   var roll = computeHitDamage(shooter, victim, b, scale, headshot);
   var from = shooter.pos.clone(); from.y += eyeHeight(shooter);
@@ -1013,11 +1138,12 @@ function landHit(b, at, scale, headshot) {
     slow: s.slowOnHit ? [s.slowOnHit, s.slowDur] : null,
     blind: s.blindDur || 0,
     up: s.launchUp || 0, spin: s.spinOnHit || 0, steal: s.pickpocket ? 1 : 0,
-    from: [from.x, from.y, from.z]
+    from: [from.x, from.y, from.z],
+    to: isPeer ? victimRef.key : undefined, k: G.myKey
   };
   if (shooter === me) {
-    if (G.mode === 'net' && G.tx) G.tx.send('hit', fx);
-    else applyHit(foe, fx, false);
+    if (G.mode === 'net') { if (G.tx) G.tx.send('hit', fx); }
+    else applyHit(victim, fx, false);
     if (s.lifesteal > 0) healFighter(me, roll.dmg * s.lifesteal);
     if (s.refundOnHit && !s.noReload) { me.mag = Math.min(s.magSize, me.mag + 1); updateAmmoHud(); }
     if (s.pickpocket && !s.noReload) { me.mag = Math.min(s.magSize, me.mag + 1); updateAmmoHud(); }
@@ -1030,7 +1156,7 @@ function landHit(b, at, scale, headshot) {
     sparkFx(at, false);
     if (s.lifesteal > 0) healFighter(foe, roll.dmg * s.lifesteal);
     if ((s.refundOnHit || s.pickpocket) && !s.noReload) foe.mag = Math.min(s.magSize, foe.mag + 1);
-    applyHit(me, fx, false);
+    applyHit(victim, fx, false);
   }
 }
 
@@ -1071,7 +1197,7 @@ function applyHit(f, fx, silentThorns) {
   if (f.stats.thorns > 0 && !silentThorns) {
     var back = Math.round(fx.dmg * f.stats.thorns);
     if (back > 0) {
-      if (f === me && G.mode === 'net' && G.tx) G.tx.send('hit', { dmg: back, crit: false, kb: 0, thorn: true });
+      if (f === me && G.mode === 'net' && G.tx) G.tx.send('hit', { dmg: back, crit: false, kb: 0, thorn: true, to: fx.k, k: G.myKey });
       else applyHit(f === me ? foe : me, { dmg: back, crit: false, kb: 0 }, true);
     }
   }
@@ -1147,14 +1273,34 @@ function banner(big, small, ms) {
 /* ---- rounds & draft ---- */
 function startCountdown() {
   G.phase = 'countdown'; G.round++;
-  hide('draft'); hide('matchover'); hide('menu'); hide('hostwait'); hide('levels');
+  hide('draft'); hide('matchover'); hide('menu'); hide('teamroom'); hide('levels');
   G.fightT = 0;
   document.body.classList.add('fighting');
   me.stats = PU.statsFor(me.picks);
-  foe.stats = PU.statsFor(foe.picks);
-  foeMesh.scale.setScalar(foe.stats.scale);
-  spawnMe(); spawnFoe();
-  foeMesh.visible = true;
+  if (G.mode === 'bot') {
+    foe.stats = PU.statsFor(foe.picks);
+    foeMesh.scale.setScalar(foe.stats.scale);
+    spawnMe(); spawnFoe();
+    foeMesh.visible = true;
+  } else {
+    /* deterministic slots: sorted roster keys, indexed within each team */
+    var slotIdx = { coral: 0, teal: 0 };
+    Object.keys(G.roster).sort().forEach(function (k) {
+      var team = G.roster[k];
+      var slot = spawnSlot(team, slotIdx[team]++);
+      if (k === G.myKey) { spawnFighter(me, team === 'coral', slot); }
+      else if (peers[k]) {
+        var Q = peers[k];
+        Q.f.stats = PU.statsFor(Q.f.picks);
+        spawnFighter(Q.f, team === 'coral', slot);
+        Q.net.pos.copy(Q.f.pos); Q.net.yaw = Q.f.yaw; Q.net.has = true;
+        Q.mesh.scale.setScalar(Q.f.stats.scale);
+        Q.mesh.visible = true;
+        tintPeer(Q);
+      }
+    });
+    foeMesh.visible = false;
+  }
   updateHpHud(); updateAmmoHud(); updateRoundsHud(); updatePicksHud();
   $('dashBtn').style.display = me.stats.dashCharges > 0 ? 'flex' : 'none';
   $('reloadBtn').style.display = me.stats.noReload ? 'none' : 'flex';
@@ -1162,8 +1308,8 @@ function startCountdown() {
   G.countdownT = 3;
   grabPointer();
 }
-function roundOver(iWon) {
-  if (G.phase !== 'fight') return;
+function roundOver(iWon) {           /* practice mode; net rounds end via the host */
+  if (G.phase !== 'fight' || G.mode === 'net') return;
   G.phase = 'intermission';
   if (iWon) { G.myScore++; } else { G.foeScore++; }
   updateRoundsHud();
@@ -1178,6 +1324,7 @@ function matchOver() {
   document.body.classList.remove('fighting');
   document.exitPointerLock && document.exitPointerLock();
   var won = G.myScore >= ROUNDS_TO_WIN;
+  eachPeer(function (P) { P.mesh.visible = false; if (P.bar) P.bar.style.display = 'none'; });
   $('matchword').textContent = won ? 'Won' : 'Lost';
   $('matchword').className = 'bigword ' + (won ? 'win' : 'loss');
   $('matchscore').textContent = G.myScore + ' — ' + G.foeScore;
@@ -1193,8 +1340,9 @@ function openDraft() {
   G.myPick = null; G.foePickId = null;
   if (G.pendingFoePick) { var pend = G.pendingFoePick; G.pendingFoePick = null; receivePick(pend); }
   $('draftwait').classList.remove('show');
-  /* both clients deal from the same seed stream: seed ^ round, per-player salt */
-  var mySeed = (G.seed ^ (G.round*2654435761)) ^ (G.host || G.mode==='bot' ? 0x9E37 : 0x79B9);
+  /* deterministic per player: match seed, round, and your own key's hash */
+  var salt = G.mode === 'bot' ? 0x9E37 : hashKey(G.myKey || 'me');
+  var mySeed = (G.seed ^ (G.round*2654435761)) ^ salt;
   var options = PU.deal(me.picks, PU.seededRng(mySeed >>> 0));
   var wrap = $('cards');
   wrap.innerHTML = '';
@@ -1208,6 +1356,14 @@ function openDraft() {
     wrap.appendChild(c);
   });
   show('draft');
+  if (G.mode === 'net' && G.host) {
+    clearTimeout(hostMaybeRound._t);
+    hostMaybeRound._t = setTimeout(function () {
+      if (G.phase !== 'draft') return;
+      G.tx && G.tx.send('round', { n: G.round, k: G.myKey });
+      startCountdown();
+    }, 20000);
+  }
   /* bot picks after a beat */
   if (G.mode === 'bot') {
     setTimeout(function () {
@@ -1227,8 +1383,12 @@ function choosePick(id, cardEl) {
   sPick();
   var kids = $('cards').children;
   for (var i = 0; i < kids.length; i++) kids[i].classList.add(kids[i] === cardEl ? 'taken' : 'dead');
-  if (G.tx) G.tx.send('pick', { id: id });
-  maybeAdvance();
+  if (G.mode === 'net') {
+    G.picked[G.myKey] = G.round;
+    if (G.tx) G.tx.send('pick', { k: G.myKey, id: id });
+    $('draftwait').classList.add('show');
+    if (G.host) hostMaybeRound();
+  } else maybeAdvance();
 }
 function receivePick(id) {
   G.foePickId = id;               /* their picks stay their secret — the fight reveals them */
@@ -1236,6 +1396,7 @@ function receivePick(id) {
   maybeAdvance();
 }
 function maybeAdvance() {
+  if (G.mode === 'net') return;      /* the host calls the next round */
   if (G.myPick && G.foePickId) {
     $('draftwait').classList.remove('show');
     setTimeout(startCountdown, 1100);
@@ -1247,61 +1408,178 @@ function maybeAdvance() {
 /* ---- the wire ---- */
 var STATE_HZ = 1/12, stateAcc = 0;
 function netEvents() {
-  return ['state','shoot','hit','death','pick','begin','rematch'];
+  return ['state','shoot','hit','death','pick','begin','rematch','team','roundend','round'];
 }
 function onWire(ev, p) {
+  var P;
   if (ev === 'state') {
-    foeNet.pos.set(p.p[0], p.p[1], p.p[2]);
-    foeNet.yaw = p.y; foeNet.has = true;
-    foe.hp = p.hp;
+    P = peers[p.k]; if (!P) return;
+    P.net.pos.set(p.p[0], p.p[1], p.p[2]);
+    P.net.yaw = p.y; P.net.has = true;
+    P.f.hp = p.hp;
   } else if (ev === 'shoot') {
+    P = peers[p.k]; if (!P) return;
     var o = new THREE.Vector3(p.o[0], p.o[1], p.o[2]);
     p.d.forEach(function (d) {
-      spawnBullet('foe', o, new THREE.Vector3(d[0], d[1], d[2]), foe.stats, { dmgScale: p.ds, boom: p.bm });
+      spawnBullet(p.k, o, new THREE.Vector3(d[0], d[1], d[2]), P.f.stats, { dmgScale: p.ds, boom: p.bm });
     });
-    if (foe.stats.bulletStyle==='chicken') sCluck(); else sNoise(0.07, 1000, 0.12);
+    if (P.f.stats.bulletStyle==='chicken') sCluck(); else sNoise(0.07, 1000, 0.12);
   } else if (ev === 'hit') {
-    takeHit(p, !!p.thorn);
+    if (p.to === G.myKey) takeHit(p, !!p.thorn);
   } else if (ev === 'death') {
-    foe.alive = false;
-    roundOver(true);
+    P = peers[p.k]; if (!P) return;
+    P.f.alive = false;
+    if (G.host) hostCheckWipe();
   } else if (ev === 'pick') {
-    if (G.phase === 'draft') receivePick(p.id);
-    else G.pendingFoePick = p.id;   /* they drafted before my draft screen opened */
+    P = peers[p.k];
+    if (P && G.picked[p.k] !== G.round) { G.picked[p.k] = G.round; P.f.picks.push(p.id); }
+    if (G.host) hostMaybeRound();
+  } else if (ev === 'team') {
+    P = ensurePeer(p.k);
+    P.team = p.team;
+    tintPeer(P);
+    updateTeamRoom();
   } else if (ev === 'begin') {
-    G.seed = p.seed;
-    G.myScore = 0; G.foeScore = 0; G.round = 0;
-    me.picks = []; foe.picks = [];
+    G.seed = p.seed; G.hostKey = p.k;
+    G.roster = p.roster;
+    Object.keys(p.roster).forEach(function (k) {
+      if (k === G.myKey) { G.myTeam = p.roster[k]; return; }
+      var Q = ensurePeer(k); Q.team = p.roster[k]; tintPeer(Q);
+    });
+    Object.keys(peers).forEach(function (k) { if (!p.roster[k]) dropPeer(k); });
+    G.myScore = 0; G.foeScore = 0; G.round = 0; G.picked = {};
+    me.picks = [];
+    eachPeer(function (Q) { Q.f.picks = []; });
+    startCountdown();
+  } else if (ev === 'roundend') {
+    onRoundEnd(p.team);
+  } else if (ev === 'round') {
     startCountdown();
   } else if (ev === 'rematch') {
-    if (G.host) hostBegin();  /* guest asked, host reseeds */
+    if (G.host) hostBegin();
   }
+}
+
+/* everyone scores the round the host called */
+function onRoundEnd(winnerTeam) {
+  if (G.phase !== 'fight' && G.phase !== 'intermission') return;
+  if (G.phase === 'intermission') return;
+  G.phase = 'intermission';
+  var mine = winnerTeam === G.myTeam;
+  if (mine) G.myScore++; else G.foeScore++;
+  updateRoundsHud();
+  banner(mine ? 'Round Yours' : 'Round Theirs', null, 1500);
+  setTimeout(function () {
+    if (G.myScore >= ROUNDS_TO_WIN || G.foeScore >= ROUNDS_TO_WIN) matchOver();
+    else openDraft();
+  }, 1600);
+}
+function hostCheckWipe() {
+  if (!G.host || G.phase !== 'fight') return;
+  var coral = teamAliveCount('coral'), teal = teamAliveCount('teal');
+  var winner = coral === 0 ? 'teal' : (teal === 0 ? 'coral' : null);
+  if (winner) {
+    G.tx && G.tx.send('roundend', { team: winner, k: G.myKey });
+    onRoundEnd(winner);
+  }
+}
+function hostMaybeRound() {
+  if (!G.host || G.phase !== 'draft') return;
+  var all = G.picked[G.myKey] === G.round;
+  Object.keys(G.roster).forEach(function (k) {
+    if (k !== G.myKey && G.picked[k] !== G.round) all = false;
+  });
+  if (all) {
+    clearTimeout(hostMaybeRound._t);
+    setTimeout(function () {
+      G.tx && G.tx.send('round', { n: G.round, k: G.myKey });
+      startCountdown();
+    }, 900);
+  }
+}
+function presentKeys() {
+  if (!G.tx) return [];
+  var seats = TableKit.seatsFrom(G.tx.presence(), 8);
+  return seats.map(function (s2) { return (s2.meta && s2.meta.key) || s2.key || s2; })
+    .filter(function (k) { return typeof k === 'string'; });
 }
 function onPresence() {
-  if (!G.tx) return;
-  var seats = TableKit.seatsFrom(G.tx.presence(), 2);
-  if (G.phase === 'menu' || G.phase === 'waiting') {
-    if (seats.length >= 2 && G.host) hostBegin();
-  } else if (seats.length < 2 && G.mode === 'net' && G.phase !== 'over') {
-    document.body.classList.remove('fighting');
-    document.exitPointerLock && document.exitPointerLock();
-    hide('draft');
-    G.phase = 'menu'; foeMesh.visible = false;
-    if (G.tx) { try { G.tx.close(); } catch (e) {} G.tx = null; }
-    G.mode = null;
-    show('menu');
-    $('hostbtn').classList.remove('busy'); $('joinbtn').classList.remove('busy');
-    $('neterr').textContent = 'They left the table.';
+  if (!G.tx || G.mode !== 'net') return;
+  var here = {};
+  presentKeys().forEach(function (k) { here[k] = 1; });
+  if (G.phase === 'waiting') {
+    /* someone new — tell them my side so their room fills in */
+    if (G.myTeam) G.tx.send('team', { k: G.myKey, team: G.myTeam });
+    Object.keys(peers).forEach(function (k) { if (!here[k]) { dropPeer(k); } });
+    updateTeamRoom();
+    return;
   }
+  /* mid-match departures */
+  var gone = [];
+  Object.keys(peers).forEach(function (k) { if (!here[k]) gone.push(k); });
+  if (!gone.length) return;
+  var hostLeft = gone.indexOf(G.hostKey) >= 0 && !G.host;
+  gone.forEach(function (k) { if (peers[k]) peers[k].f.alive = false; dropPeer(k); delete G.roster[k]; });
+  if (hostLeft || Object.keys(G.roster).length < 2) {
+    leaveToMenu('They left the table.');
+    return;
+  }
+  if (G.host) hostCheckWipe();
+}
+function leaveToMenu(msg) {
+  document.body.classList.remove('fighting');
+  document.exitPointerLock && document.exitPointerLock();
+  hide('draft'); hide('teamroom'); hide('matchover');
+  G.phase = 'menu'; foeMesh.visible = false;
+  eachPeer(function (P, k) { dropPeer(k); });
+  if (G.tx) { try { G.tx.close(); } catch (e) {} G.tx = null; }
+  G.mode = null; G.myTeam = null; G.roster = {};
+  show('menu');
+  $('hostbtn').classList.remove('busy'); $('joinbtn').classList.remove('busy');
+  $('neterr').textContent = msg || '';
 }
 function hostBegin() {
+  /* the roster is whoever's here with a side picked; both sides must exist */
+  var roster = {};
+  if (G.myTeam) roster[G.myKey] = G.myTeam;
+  eachPeer(function (P, k) { if (P.team) roster[k] = P.team; });
+  var coral = 0, teal = 0;
+  Object.keys(roster).forEach(function (k) { if (roster[k] === 'coral') coral++; else teal++; });
+  if (!coral || !teal) { $('roomline').textContent = 'Both Sides Need A Player'; return; }
   var seed = (Math.random()*4294967296) >>> 0;
-  G.seed = seed;
-  G.myScore = 0; G.foeScore = 0; G.round = 0;
-  me.picks = []; foe.picks = [];
-  G.tx.send('begin', { seed: seed });
+  G.seed = seed; G.roster = roster; G.hostKey = G.myKey;
+  G.myScore = 0; G.foeScore = 0; G.round = 0; G.picked = {};
+  me.picks = [];
+  eachPeer(function (P) { P.f.picks = []; });
+  Object.keys(peers).forEach(function (k) { if (!roster[k]) dropPeer(k); });
+  G.tx.send('begin', { seed: seed, roster: roster, k: G.myKey });
   startCountdown();
 }
+
+/* ---- the team room ---- */
+function updateTeamRoom() {
+  var coral = G.myTeam === 'coral' ? 1 : 0, teal = G.myTeam === 'teal' ? 1 : 0;
+  eachPeer(function (P) { if (P.team === 'coral') coral++; if (P.team === 'teal') teal++; });
+  $('coralcount').textContent = coral;
+  $('tealcount').textContent = teal;
+  $('pickcoral').classList.toggle('mine', G.myTeam === 'coral');
+  $('pickteal').classList.toggle('mine', G.myTeam === 'teal');
+  if (G.host) {
+    $('startmatch').style.display = '';
+    $('roomline').textContent = coral && teal ? 'Ready When You Are' : 'Pick A Side';
+  } else {
+    $('roomline').textContent = G.myTeam ? 'Waiting For The Host' : 'Pick A Side';
+  }
+}
+function pickTeam(team) {
+  audio();
+  G.myTeam = team;
+  if (G.tx) G.tx.send('team', { k: G.myKey, team: team });
+  updateTeamRoom();
+}
+$('pickcoral').onclick = function () { pickTeam('coral'); };
+$('pickteal').onclick = function () { pickTeam('teal'); };
+$('startmatch').onclick = function () { audio(); hostBegin(); };
 var joining = false;
 async function joinRoom(code, asHost) {
   if (joining) return;                     /* a second click must not open a second channel */
@@ -1309,21 +1587,18 @@ async function joinRoom(code, asHost) {
   if (G.tx) { try { G.tx.close(); } catch (e) {} G.tx = null; }
   $('neterr').textContent = '';
   try {
+    G.myKey = G.myKey || TableKit.pkey();
     G.tx = await TableKit.join({
       prefix: 'duel', code: code, events: netEvents(),
       onMessage: onWire, onPresence: onPresence,
-      meta: { key: TableKit.pkey(), host: asHost }
+      meta: { key: G.myKey, host: asHost }
     });
-    G.mode = 'net'; G.host = asHost;
-    if (asHost) {
-      hide('menu'); show('hostwait');
-      $('codeshow').textContent = code;
-      G.phase = 'waiting';
-    } else {
-      G.phase = 'waiting';
-      hide('menu');
-      banner('Joined', 'Waiting For The Host', 2500);
-    }
+    G.mode = 'net'; G.host = asHost; G.code = code; G.myTeam = null;
+    hide('menu'); show('teamroom');
+    $('codeshow').textContent = code;
+    $('startmatch').style.display = asHost ? '' : 'none';
+    G.phase = 'waiting';
+    updateTeamRoom();
   } catch (e) {
     $('neterr').textContent = String(e.message || e);
     $('hostbtn').classList.remove('busy'); $('joinbtn').classList.remove('busy');
@@ -1337,12 +1612,7 @@ $('joinbtn').onclick = function () {
   if (code.length !== 4) { $('neterr').textContent = 'Codes are four letters.'; return; }
   this.classList.add('busy'); joinRoom(code, false);
 };
-$('cancelhost').onclick = function () {
-  if (G.tx) { G.tx.close(); G.tx = null; }
-  hide('hostwait'); show('menu');
-  $('hostbtn').classList.remove('busy');
-  G.phase = 'menu';
-};
+$('cancelhost').onclick = function () { leaveToMenu(''); };
 $('rematchbtn').onclick = function () {
   audio();
   hide('matchover');
@@ -1542,7 +1812,12 @@ function checkDown(f) {
       if (f === me) { sTone(392,0.3,0.25); sTone(523,0.3,0.2); }
     } else {
       f.hp = 0; f.alive = false;
-      if (f === me) { if (G.tx) G.tx.send('death', {}); roundOver(false); }
+      if (f === me) {
+        if (G.tx) G.tx.send('death', { k: G.myKey });
+        if (G.mode === 'bot') roundOver(false);
+        else if (G.host) hostCheckWipe();
+        if (G.mode === 'net' && G.phase === 'fight') banner('Down', 'Watch The Round', 1500);
+      }
       else roundOver(true);
     }
   }
@@ -1657,8 +1932,30 @@ bindHold('reloadBtn', function () {
   if (G.phase === 'fight' && !me.stats.noReload && me.mag < me.stats.magSize && me.reload <= 0) startReload();
 });
 
-/* ---- foe presentation ---- */
+/* ---- remote presentation ---- */
+function stepPeerVisuals(dt) {
+  var showPhases = G.phase==='fight'||G.phase==='countdown'||G.phase==='intermission';
+  eachPeer(function (P) {
+    if (!P.net.has) { P.mesh.visible = false; if (P.bar) P.bar.style.display = 'none'; return; }
+    P.f.pos.lerp(P.net.pos, Math.min(1, dt*10));
+    P.mesh.position.copy(P.f.pos);
+    P.mesh.rotation.y += (P.net.yaw - P.mesh.rotation.y) * Math.min(1, dt*10);
+    P.mesh.visible = P.f.alive && showPhases;
+    if (!P.bar) return;
+    if (P.mesh.visible) {
+      var top = P.f.pos.clone(); top.y += 2.0 * P.f.stats.scale;
+      var pr = top.project(camera);
+      if (pr.z < 1) {
+        P.bar.style.display = 'block';
+        P.bar.style.left = ((pr.x*0.5+0.5)*vw() - 32) + 'px';
+        P.bar.style.top = ((-pr.y*0.5+0.5)*vh() - 8) + 'px';
+        P.bar.firstChild.style.width = Math.max(0, P.f.hp / P.f.stats.hp * 100) + '%';
+      } else P.bar.style.display = 'none';
+    } else P.bar.style.display = 'none';
+  });
+}
 function stepFoeVisual(dt) {
+  if (G.mode === 'net') { stepPeerVisuals(dt); $('foehp').style.display = 'none'; return; }
   if (!foeNet.has) return;
   foe.pos.lerp(foeNet.pos, Math.min(1, dt*10));
   foeMesh.position.copy(foe.pos);
@@ -1694,13 +1991,12 @@ function tick() {
   }
   if (G.phase === 'fight') {
     G.fightT += dt;
-    moveSelf(dt);
-    stepSelfStatus(dt);
+    if (me.alive) { moveSelf(dt); stepSelfStatus(dt); }
     if (G.mode === 'bot') { stepBot(dt); stepFighterStatus(foe, dt); }
     stateAcc += dt;
     if (G.tx && stateAcc > STATE_HZ) {
       stateAcc = 0;
-      G.tx.send('state', { p: [me.pos.x, me.pos.y, me.pos.z], y: me.yaw, hp: me.hp });
+      G.tx.send('state', { k: G.myKey, p: [me.pos.x, me.pos.y, me.pos.z], y: me.yaw, hp: me.hp });
     }
   }
   if (G.phase === 'fight' || G.phase === 'intermission' || G.phase === 'countdown') {
@@ -1738,6 +2034,9 @@ window.DuelDebug = {
   stepBot: stepBot, botParams: botParams, botDraftPick: botDraftPick,
   startReloadFor: startReloadFor,
   setTouchMode: setTouchMode, isTouch: function(){ return TOUCH; },
+  peers: peers, ensurePeer: ensurePeer, dropPeer: dropPeer, spawnSlot: spawnSlot,
+  teamAliveCount: teamAliveCount, enemiesOfMine: enemiesOfMine, hashKey: hashKey,
+  nearestEnemyTo: nearestEnemyTo, onWire: onWire, hostCheckWipe: hostCheckWipe,
   PU: PU,
   touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
   setRot: setRot, tp: tp, vw: vw, vh: vh, isRot: function(){ return ROT; },
