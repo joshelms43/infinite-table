@@ -77,3 +77,7 @@
 - A team bot is a full client living inside the host's page. It announces its own shots, addresses its hits to victim keys, applies hits addressed to it, broadcasts its own state and death, and drafts its own powerups with the level-scaled judgement — over the same wire events a human client uses. Every other phone just sees another peer; guests carry zero bot code.
 - The parity law holds by construction: hosted bots drive the same brainDrive that practice bots use, which moves through moveFighter and pulls fireFighter's trigger. Gravity, ammo, reloads, cooldowns, statuses — one physics, everyone.
 - The gate proves the wire contract: bot shots carry the bot's key, strikes on humans go out as addressed hits, strikes on the host player land directly, hits addressed to a bot are applied by the host, bots survive presence reaping, and gravity owns hosted bots too.
+
+## 0.10.1
+- No player limit. Presence and bot caps lifted — a table takes however many join.
+- Spawn slots rebuilt for any headcount: eight clear spots per rank along your wall, extra ranks stepping toward the middle, deterministic from the index. The old four-slot pattern put the z = ±2 spawns inside the stair boxes — a body born in the furniture from the fifth player on a side; the gate now proves sixteen slots a side are distinct and all stand on open floor.

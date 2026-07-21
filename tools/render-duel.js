@@ -460,10 +460,23 @@ T('held fire respects the fire-rate cooldown',
   T('a hit addressed to me lands', D.me.hp === 90, String(D.me.hp));
   D.me.alive = true; D.me.hp = 100;
 
-  /* spawn slots spread a side deterministically */
+  /* spawn slots: unique, mirrored, and standing on open floor for any headcount */
   const s1 = D.spawnSlot('coral', 0), s2 = D.spawnSlot('coral', 1), s3 = D.spawnSlot('teal', 0);
   T('teammates spawn on the same wall, spread out',
     s1.x === s2.x && s1.z !== s2.z && s3.x === -s1.x);
+  {
+    let unique = new Set(), clear = true;
+    for (let i = 0; i < 16; i++) {
+      for (const tm of ['coral', 'teal']) {
+        const sl = D.spawnSlot(tm, i);
+        unique.add(tm + sl.x + ',' + sl.z);
+        /* a fresh body at this slot must not be born inside the furniture */
+        if (D.anyCollide(sl.x, 0.01 + 0.9, sl.z, 0.38, 0.9, 0.38)) clear = false;
+      }
+    }
+    T('sixteen slots a side are all distinct', unique.size === 32, String(unique.size));
+    T('no slot spawns anyone inside the furniture', clear === true);
+  }
 
   /* per-key draft seeds differ, and replay identically */
   const k1 = D.hashKey('JOSH'), k2 = D.hashKey('AAAA');
