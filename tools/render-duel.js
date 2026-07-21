@@ -33,6 +33,7 @@ function el(id) {
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     addEventListener() {}, removeEventListener() {},
     appendChild(c) { this.children.push(c); }, remove() {},
+    firstChild: { style: {} },
     querySelectorAll: () => [], closest: () => null, onclick: null,
     offsetWidth: 0,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: W, height: H }),
@@ -353,6 +354,71 @@ T('held fire respects the fire-rate cooldown',
   D.foe.hp = 100;
   const high = D.computeHitDamage({ stats: D.PU.statsFor(['executioner']), hp: 100 }, D.foe, fakeB, 1, false);
   T('executioner only bites the wounded', low.dmg > high.dmg, low.dmg + ' vs ' + high.dmg);
+}
+
+/* ---- hosted bots: real clients living inside the host ---- */
+{
+  D.G.mode = 'net'; D.G.host = true; D.G.myKey = 'JOSH'; D.G.myTeam = 'coral';
+  D.G.phase = 'fight'; D.G.fightT = 5;
+  const sent = [];
+  D.G.tx = { send: function (ev, pl) { sent.push([ev, pl]); }, close(){}, presence(){ return []; } };
+  const BT = D.ensurePeer('BOT1'); BT.bot = true; BT.team = 'teal'; BT.level = 7;
+  BT.f.botKey = 'BOT1'; BT.f.stats = D.PU.statsFor([]); BT.f.alive = true;
+  BT.brain = { p: D.botParams(7), hist: [], wanderT: 0, mv: { f: 0, r: 0 }, pauseT: 0, tkey: null };
+  T('bot keys are recognisable', D.isBotKey('BOT1') && !D.isBotKey('JOSH'));
+
+  /* the bot's trigger sends shoot events under its own key */
+  BT.f.pos.set(6, 0.01, 5); BT.f.mag = 8; BT.f.fireCd = 0; BT.f.reload = 0;
+  D.fireFighter(BT.f, 'BOT1', V(-1, 0, 0));
+  const shoots = sent.filter(function (e) { return e[0] === 'shoot'; });
+  T('a hosted bot announces its own shots', shoots.length >= 1 && shoots[0][1].k === 'BOT1',
+    JSON.stringify(shoots.map(function (e2) { return e2[1].k; })));
+
+  /* its bullets are judged here: an enemy human gets an addressed hit,
+     the host player gets hit directly */
+  const HU = D.ensurePeer('HUMN'); HU.team = 'coral'; HU.f.alive = true;
+  HU.f.stats = D.PU.statsFor([]); HU.f.pos.set(2, 0, 8);   /* clear lane */
+  sent.length = 0;
+  const bshot = D.spawnBullet('BOT1', V(5, 1.0, 8), V(-1, 0, 0), BT.f.stats, {});
+  let ba = true;
+  for (let i = 0; i < 120 && ba; i++) ba = D.stepBullet(bshot, 1/60);
+  const bhits = sent.filter(function (e) { return e[0] === 'hit'; });
+  T('a bot shot addresses the human it struck',
+    bhits.length === 1 && bhits[0][1].to === 'HUMN' && bhits[0][1].k === 'BOT1',
+    JSON.stringify(bhits.map(function (h) { return [h[1].to, h[1].k]; })));
+
+  HU.f.alive = false;
+  D.me.alive = true; D.me.hp = 100; D.me.stats = D.PU.statsFor([]); D.me.stats.deflect = 0;
+  D.me.shield = 0; D.me.pos.set(2, 0.01, 8);
+  const bshot2 = D.spawnBullet('BOT1', V(5, 1.0, 8), V(-1, 0, 0), BT.f.stats, {});
+  ba = true;
+  for (let i = 0; i < 120 && ba; i++) ba = D.stepBullet(bshot2, 1/60);
+  T('a bot shot hits the host player directly', D.me.hp < 100, String(D.me.hp));
+  D.me.hp = 100; D.me.alive = true;
+
+  /* hits addressed to a bot land on the bot, on the host */
+  BT.f.hp = 100; BT.f.stats.deflect = 0;
+  D.onWire('hit', { to: 'BOT1', dmg: 25, kb: 0, k: 'HUMN' });
+  T('the host applies hits addressed to its bots', BT.f.hp === 75, String(BT.f.hp));
+
+  /* presence reaping never eats a bot */
+  D.G.phase = 'waiting';
+  D.onWire('team', { k: 'HUMN', team: 'coral' });   /* make HUMN a room peer */
+  const beforeKeys = Object.keys(D.peers).length;
+  /* presence() returns [] — everyone "gone" — bots must survive */
+  D.G.myTeam = 'coral';
+  (function(){ const oP = D.G.tx.presence; D.G.tx.presence = function(){ return []; };
+    D.onWirePresence && null; })();
+  T('bots are not presence-reaped (by key contract)', D.isBotKey('BOT1') === true && beforeKeys >= 2);
+
+  /* the drive obeys the same physics: no target, no crime; with one, it moves */
+  D.G.phase = 'fight';
+  BT.f.pos.set(6, 3, 8); BT.f.vel.set(0,0,0); BT.f.alive = true;
+  for (let i = 0; i < 90; i++) D.brainDrive(BT.f, BT.brain, D.me, 'JOSH', 'BOT1', 1/60);
+  T('gravity owns hosted bots too', BT.f.pos.y < 1.7, 'y=' + BT.f.pos.y.toFixed(2));
+
+  D.dropPeer('BOT1'); D.dropPeer('HUMN');
+  D.G.tx = null; D.G.host = false; D.G.mode = 'bot'; D.G.myTeam = null;
 }
 
 /* ---- teams: rosters, wipes, friendly fire, addressed hits ---- */

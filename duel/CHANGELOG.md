@@ -71,3 +71,9 @@
 - Homing and boomerangs resolve against the nearest living enemy. Spawns are deterministic slots along your side's wall. Down mid-round? You hold position and watch; your team can still take it.
 - Departures handled: a leaver mid-round counts as down, an emptied side loses the round, and a vanished host ends the table cleanly. The gate proves rosters, wipes, addressed hits, friendly-fire immunity, slot spread, per-key draft seeds, and nearest-enemy retargeting.
 - Practice mode is untouched 1v1 against the bot.
+
+## 0.10.0
+- Bots in team rooms. The host sees + Coral Bot / + Teal Bot / − Bot and a Bot Level stepper (1–10); up to six bots fill out either side, and any mix of humans and bots can face any other.
+- A team bot is a full client living inside the host's page. It announces its own shots, addresses its hits to victim keys, applies hits addressed to it, broadcasts its own state and death, and drafts its own powerups with the level-scaled judgement — over the same wire events a human client uses. Every other phone just sees another peer; guests carry zero bot code.
+- The parity law holds by construction: hosted bots drive the same brainDrive that practice bots use, which moves through moveFighter and pulls fireFighter's trigger. Gravity, ammo, reloads, cooldowns, statuses — one physics, everyone.
+- The gate proves the wire contract: bot shots carry the bot's key, strikes on humans go out as addressed hits, strikes on the host player land directly, hits addressed to a bot are applied by the host, bots survive presence reaping, and gravity owns hosted bots too.
