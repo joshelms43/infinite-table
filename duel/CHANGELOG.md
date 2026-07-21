@@ -81,3 +81,8 @@
 ## 0.10.1
 - No player limit. Presence and bot caps lifted — a table takes however many join.
 - Spawn slots rebuilt for any headcount: eight clear spots per rank along your wall, extra ranks stepping toward the middle, deterministic from the index. The old four-slot pattern put the z = ±2 spawns inside the stair boxes — a body born in the furniture from the fifth player on a side; the gate now proves sixteen slots a side are distinct and all stand on open floor.
+
+## 0.11.0
+- The Grounds: a second map at nine times the floor area (90×60) — a central keep with 0.45-rise stairs on both faces, corner compounds, mid-lane walls, side decks, crate clusters, its own five-lamp rig, higher bulb strings, and thinner fog so the far wall exists.
+- Map selection. The team room gets a Map button (host picks, everyone's room follows live, and the match starts on it); the practice sheet gets the same. The choice persists.
+- Maps are a registry: switching mutates the one live ARENA list in place so every collision reference stays honest, and spawn slots, walls, bullet lifetime bounds, fog, lamps, and menu cameras all follow the spec. The gate proves the switch: arena swaps and restores, grounds slots are distinct and on open floor, the keep stairs climb to the deck, and shots live long enough to cross the map.

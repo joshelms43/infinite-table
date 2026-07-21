@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.10.1
+<!-- Duel — Infinite Table. Version: 0.11.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -259,6 +259,7 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
         <span class="tname">Teal</span><span class="tcount" id="tealcount">0</span>
       </button>
     </div>
+    <div class="botrow"><button class="quietbtn" id="maproom">Map — The Table</button></div>
     <div class="botrow" id="botrow" style="display:none">
       <button class="quietbtn" id="botcoral">+ Coral Bot</button>
       <button class="quietbtn" id="botteal">+ Teal Bot</button>
@@ -281,6 +282,7 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   <div class="panel">
     <div class="overline">Practice</div>
     <div class="lvlgrid" id="lvlgrid"></div>
+    <div class="botrow" style="margin-top:12px"><button class="quietbtn" id="mappractice">Map — The Table</button></div>
     <div class="btncol"><button class="quietbtn" id="lvlback">Back</button></div>
   </div>
 </div>
@@ -305,9 +307,9 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.10.1"></script>
-<script src="../shared/tablekit.js?v=0.10.1"></script>
-<script src="../shared/duel-powerups.js?v=0.10.1"></script>
+<script src="../shared/config.js?v=0.11.0"></script>
+<script src="../shared/tablekit.js?v=0.11.0"></script>
+<script src="../shared/duel-powerups.js?v=0.11.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -316,7 +318,7 @@ var ROUNDS_TO_WIN = 10;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.10.1' });
+TableKit.watchErrors({ game: 'duel', version: '0.11.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
@@ -342,7 +344,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setClearColor(COL.fog);
 var scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(COL.fog, 0.028);
-var camera = new THREE.PerspectiveCamera(72, 1, 0.08, 120);
+var camera = new THREE.PerspectiveCamera(72, 1, 0.08, 220);
 function size(){
   if (ROT && window.innerWidth > window.innerHeight) {
     ROT = false; document.body.classList.remove('rot90');   /* they rotated the phone — stand down */
@@ -356,59 +358,135 @@ window.addEventListener('resize', size); size();
 
 scene.add(new THREE.HemisphereLight(0x3A4C42, 0x0A0F0C, 0.95));
 var moon = new THREE.DirectionalLight(0xBFD2C6, 0.5); moon.position.set(-8,14,6); scene.add(moon);
-var lamp1 = new THREE.PointLight(0xE8C57A, 1.0, 30, 1.6); lamp1.position.set(0,6,0); scene.add(lamp1);
-var lamp2 = new THREE.PointLight(0xE8C57A, 0.6, 26, 1.7); lamp2.position.set(-8,5,-5); scene.add(lamp2);
-var lamp3 = new THREE.PointLight(0xE8C57A, 0.6, 26, 1.7); lamp3.position.set(8,5,5); scene.add(lamp3);
 
-/* ---- arena: one list of AABBs drives render, movement, and bullets ---- */
+
+/* ---- arenas: one live list of AABBs drives render, movement, and bullets.
+   Switching maps mutates ARENA in place so every reference stays honest. ---- */
 /* [cx, cy, cz, hx, hy, hz, colorKey] — cy is the box centre */
-var ARENA = [
-  [0,-0.5,0, 15,0.5,10, 'felt'],          /* floor */
-  [-15.4,2,0, 0.4,2.5,10.6, 'timber'],    /* walls */
-  [ 15.4,2,0, 0.4,2.5,10.6, 'timber'],
-  [0,2,-10.4, 15.9,2.5,0.4, 'timber'],
-  [0,2, 10.4, 15.9,2.5,0.4, 'timber'],
-  [0,0.55,0, 1.9,0.55,0.8, 'timber'],     /* centre cover */
-  [-5,0.8,-4.5, 0.8,0.8,0.8, 'crate'],    /* crates */
-  [ 5,0.8, 4.5, 0.8,0.8,0.8, 'crate'],
-  [-5,0.8, 4.5, 0.8,0.8,0.8, 'crate'],
-  [ 5,0.8,-4.5, 0.8,0.8,0.8, 'crate'],
-  [-10.5,0.225,0, 1.4,0.225,1.6, 'timber'], /* west stair + deck (0.45 rises — step-up is 0.55) */
-  [-12.3,0.45,0, 0.9,0.45,1.6, 'timber'],
-  [-14.2,0.675,0, 1.0,0.675,2.2, 'timber'],
-  [ 10.5,0.225,0, 1.4,0.225,1.6, 'timber'], /* east stair + deck */
-  [ 12.3,0.45,0, 0.9,0.45,1.6, 'timber'],
-  [ 14.2,0.675,0, 1.0,0.675,2.2, 'timber'],
-];
+var MAPS = {
+  table: {
+    name: 'The Table', spawnX: 12, slotZ: 8, slotStep: 1.5, bound: 40, fog: 0.028,
+    menuCam: { pos: [0, 4.4, 8.6], pitch: -0.34 },
+    lamps: [[0,6,0,1.0],[-8,5,-5,0.6],[8,5,5,0.6]],
+    strings: [[-9,-9,9,9],[-9,9,9,-9]], stringY: 6.2,
+    boxes: [
+      [0,-0.5,0, 15,0.5,10, 'felt'],
+      [-15.4,2,0, 0.4,2.5,10.6, 'timber'],
+      [ 15.4,2,0, 0.4,2.5,10.6, 'timber'],
+      [0,2,-10.4, 15.9,2.5,0.4, 'timber'],
+      [0,2, 10.4, 15.9,2.5,0.4, 'timber'],
+      [0,0.55,0, 1.9,0.55,0.8, 'timber'],
+      [-5,0.8,-4.5, 0.8,0.8,0.8, 'crate'],
+      [ 5,0.8, 4.5, 0.8,0.8,0.8, 'crate'],
+      [-5,0.8, 4.5, 0.8,0.8,0.8, 'crate'],
+      [ 5,0.8,-4.5, 0.8,0.8,0.8, 'crate'],
+      [-10.5,0.225,0, 1.4,0.225,1.6, 'timber'], /* 0.45 rises — step-up is 0.55 */
+      [-12.3,0.45,0, 0.9,0.45,1.6, 'timber'],
+      [-14.2,0.675,0, 1.0,0.675,2.2, 'timber'],
+      [ 10.5,0.225,0, 1.4,0.225,1.6, 'timber'],
+      [ 12.3,0.45,0, 0.9,0.45,1.6, 'timber'],
+      [ 14.2,0.675,0, 1.0,0.675,2.2, 'timber']
+    ]
+  },
+  grounds: {
+    name: 'The Grounds', spawnX: 40, slotZ: 26, slotStep: 3.2, bound: 110, fog: 0.011,
+    menuCam: { pos: [0, 11, 26], pitch: -0.36 },
+    lamps: [[0,9,0,1.2],[-22,7,-12,0.7],[22,7,12,0.7],[-22,7,12,0.7],[22,7,-12,0.7]],
+    strings: [[-30,-20,30,20],[-30,20,30,-20]], stringY: 8.4,
+    boxes: [
+      [0,-0.5,0, 45,0.5,30, 'felt'],
+      [-45.4,2.5,0, 0.4,3,30.6, 'timber'],
+      [ 45.4,2.5,0, 0.4,3,30.6, 'timber'],
+      [0,2.5,-30.4, 45.9,3,0.4, 'timber'],
+      [0,2.5, 30.4, 45.9,3,0.4, 'timber'],
+      /* the keep: a 1.8m platform with 0.45-rise stairs north and south */
+      [0,0.9,0, 4,0.9,4, 'timber'],
+      [0,0.225, 5.9, 2,0.225,1.0, 'timber'],
+      [0,0.45,  5.0, 2,0.45, 1.0, 'timber'],
+      [0,0.675, 4.3, 2,0.675,0.6, 'timber'],
+      [0,0.225,-5.9, 2,0.225,1.0, 'timber'],
+      [0,0.45, -5.0, 2,0.45, 1.0, 'timber'],
+      [0,0.675,-4.3, 2,0.675,0.6, 'timber'],
+      /* corner compounds — L walls */
+      [ 30,1.2, 18, 4,1.2,0.5, 'timber'], [ 26.5,1.2, 14.5, 0.5,1.2,3.0, 'timber'],
+      [-30,1.2, 18, 4,1.2,0.5, 'timber'], [-26.5,1.2, 14.5, 0.5,1.2,3.0, 'timber'],
+      [ 30,1.2,-18, 4,1.2,0.5, 'timber'], [ 26.5,1.2,-14.5, 0.5,1.2,3.0, 'timber'],
+      [-30,1.2,-18, 4,1.2,0.5, 'timber'], [-26.5,1.2,-14.5, 0.5,1.2,3.0, 'timber'],
+      /* mid-lane walls */
+      [-16,1,0, 0.5,1,8, 'timber'],
+      [ 16,1,0, 0.5,1,8, 'timber'],
+      /* side decks with a step */
+      [0,0.675, 22, 5,0.675,2, 'timber'], [0,0.225, 24.7, 3,0.225,0.7, 'timber'],
+      [0,0.675,-22, 5,0.675,2, 'timber'], [0,0.225,-24.7, 3,0.225,0.7, 'timber'],
+      /* crate clusters */
+      [-10,0.8, 12, 0.8,0.8,0.8, 'crate'], [-8.4,0.8, 13.4, 0.7,0.7,0.7, 'crate'],
+      [ 10,0.8,-12, 0.8,0.8,0.8, 'crate'], [ 8.4,0.8,-13.4, 0.7,0.7,0.7, 'crate'],
+      [-24,0.8,-6, 0.9,0.9,0.9, 'crate'], [ 24,0.8, 6, 0.9,0.9,0.9, 'crate'],
+      [-34,0.8, 4, 0.8,0.8,0.8, 'crate'], [ 34,0.8,-4, 0.8,0.8,0.8, 'crate'],
+      [-6,0.7,-20, 0.7,0.7,0.7, 'crate'], [ 6,0.7, 20, 0.7,0.7,0.7, 'crate'],
+      [ 38,0.8, 20, 0.8,0.8,0.8, 'crate'], [-38,0.8,-20, 0.8,0.8,0.8, 'crate']
+    ]
+  }
+};
+var G_MAP = 'table';
+try { if (MAPS[localStorage.getItem('duel_map')]) G_MAP = localStorage.getItem('duel_map'); } catch (e) {}
+var ARENA = [];
+function MAP() { return MAPS[G_MAP]; }
 var MATS = {
   felt: new THREE.MeshStandardMaterial({ color: COL.felt, roughness: 1 }),
   timber: new THREE.MeshStandardMaterial({ color: 0x3A2B1E, roughness: 1 }),
   crate: new THREE.MeshStandardMaterial({ color: 0x54402A, roughness: 0.9 }),
 };
-ARENA.forEach(function (b) {
-  var m = new THREE.Mesh(new THREE.BoxGeometry(b[3]*2, b[4]*2, b[5]*2), MATS[b[6]]);
-  m.position.set(b[0], b[1], b[2]);
-  scene.add(m);
-});
-/* bulb strings, because every table on this platform sits under them */
-(function bulbs(){
+var mapGroup = null;
+var mapLamps = [];
+for (var li = 0; li < 5; li++) {
+  var L = new THREE.PointLight(0xE8C57A, 0, 60, 1.6);
+  scene.add(L); mapLamps.push(L);
+}
+function loadMap(id) {
+  if (!MAPS[id]) id = 'table';
+  G_MAP = id;
+  try { localStorage.setItem('duel_map', id); } catch (e) {}
+  var spec = MAPS[id];
+  ARENA.length = 0;
+  spec.boxes.forEach(function (b) { ARENA.push(b); });
+  if (mapGroup) scene.remove(mapGroup);
+  mapGroup = new THREE.Group();
+  ARENA.forEach(function (b) {
+    var m = new THREE.Mesh(new THREE.BoxGeometry(b[3]*2, b[4]*2, b[5]*2), MATS[b[6]]);
+    m.position.set(b[0], b[1], b[2]);
+    mapGroup.add(m);
+  });
+  /* bulb strings, because every table on this platform sits under them */
   var geo = new THREE.SphereGeometry(0.08, 8, 8);
   var mat = new THREE.MeshBasicMaterial({ color: 0xF3D48A });
-  [[-9,-9,9,9],[ -9,9,9,-9]].forEach(function (run) {
+  spec.strings.forEach(function (run) {
     var pts = [];
     for (var i = 0; i <= 30; i++) {
       var t = i/30;
       var x = run[0]+(run[2]-run[0])*t, z = run[1]+(run[3]-run[1])*t;
-      var y = 6.2 - Math.cos((t-0.5)*Math.PI)*0.9;
+      var y = spec.stringY - Math.cos((t-0.5)*Math.PI)*0.9;
       pts.push(new THREE.Vector3(x,y,z));
       if (i>0 && i<30 && i%2===0) {
-        var b = new THREE.Mesh(geo, mat); b.position.set(x,y-0.1,z); scene.add(b);
+        var bm = new THREE.Mesh(geo, mat); bm.position.set(x,y-0.1,z); mapGroup.add(bm);
       }
     }
-    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    mapGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
       new THREE.LineBasicMaterial({ color: 0x0A0F0C })));
   });
-})();
+  scene.add(mapGroup);
+  mapLamps.forEach(function (Lp, i2) {
+    var sp = spec.lamps[i2];
+    if (sp) { Lp.position.set(sp[0], sp[1], sp[2]); Lp.intensity = sp[3]; }
+    else Lp.intensity = 0;
+  });
+  scene.fog.density = spec.fog;
+  if (G.phase === 'menu' || G.phase === 'waiting') {
+    camera.position.set(spec.menuCam.pos[0], spec.menuCam.pos[1], spec.menuCam.pos[2]);
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = 0; camera.rotation.x = spec.menuCam.pitch;
+  }
+}
 
 /* ---- collision helpers ---- */
 function collideBox(px, py, pz, hx, hy, hz, b) {
@@ -525,8 +603,8 @@ function hashKey(k) {
 function spawnSlot(team, idx) {
   var west = team === 'coral';
   var rank = Math.floor(idx / 8), j = idx % 8;
-  var z = (j % 2 ? 1 : -1) * (8 - Math.floor(j / 2) * 1.5);
-  var x = west ? (-12 + rank * 3.5) : (12 - rank * 3.5);
+  var z = (j % 2 ? 1 : -1) * (MAP().slotZ - Math.floor(j / 2) * MAP().slotStep);
+  var x = west ? (-MAP().spawnX + rank * 3.5) : (MAP().spawnX - rank * 3.5);
   return { x: x, z: z, yaw: west ? -Math.PI/4 : Math.PI*3/4 };
 }
 
@@ -656,7 +734,7 @@ $('clickcatch').addEventListener('click', function(){ audio(); grabPointer(); })
 /* ---- movement: one body of rules for both fighters ---- */
 function spawnFighter(f, west, slot) {
   if (slot) { f.pos.set(slot.x, 0.01, slot.z); f.yaw = slot.yaw; }
-  else { f.pos.set(west ? -12 : 12, 0.01, west ? -6 : 6); f.yaw = west ? -Math.PI/4 : Math.PI*3/4; }
+  else { var sx = MAP().spawnX; f.pos.set(west ? -sx : sx, 0.01, west ? -6 : 6); f.yaw = west ? -Math.PI/4 : Math.PI*3/4; }
   f.pitch = 0; f.vel.set(0,0,0);
   f.hp = f.stats.hp; f.shield = f.stats.shieldStart;
   f.mag = f.stats.magSize; f.reload = 0; f.fireCd = 0; f.shotsInMag = 0;
@@ -1117,7 +1195,7 @@ function stepBullet(b, dt) {
         }
       }
     }
-    if (Math.abs(b.pos.x)>40 || Math.abs(b.pos.z)>40 || b.pos.y<-8 || b.pos.y>40) return false;
+    if (Math.abs(b.pos.x)>MAP().bound || Math.abs(b.pos.z)>MAP().bound || b.pos.y<-8 || b.pos.y>60) return false;
   }
   b.life -= dt;
   if (b.life <= 0) { if (b.boom > 0) explode(b, b.pos); return false; }
@@ -1486,7 +1564,7 @@ function maybeAdvance() {
 /* ---- the wire ---- */
 var STATE_HZ = 1/12, stateAcc = 0;
 function netEvents() {
-  return ['state','shoot','hit','death','pick','begin','rematch','team','roundend','round'];
+  return ['state','shoot','hit','death','pick','begin','rematch','team','roundend','round','map'];
 }
 function onWire(ev, p) {
   var P;
@@ -1520,7 +1598,11 @@ function onWire(ev, p) {
     if (isBotKey(p.k)) P.bot = true;
     tintPeer(P);
     updateTeamRoom();
+  } else if (ev === 'map') {
+    loadMap(p.id);
+    mapLabelRefresh();
   } else if (ev === 'begin') {
+    if (p.map) loadMap(p.map);
     G.seed = p.seed; G.hostKey = p.k;
     G.roster = p.roster;
     Object.keys(p.roster).forEach(function (k) {
@@ -1641,7 +1723,7 @@ function hostBegin() {
     P.brain = { p: botParams(P.level || 5), hist: [], wanderT: 0,
       mv: { f: 0, r: 0 }, pauseT: 0.8 + Math.random(), tkey: null };
   });
-  G.tx.send('begin', { seed: seed, roster: roster, k: G.myKey });
+  G.tx.send('begin', { seed: seed, roster: roster, k: G.myKey, map: G_MAP });
   startCountdown();
 }
 
@@ -1669,6 +1751,23 @@ function pickTeam(team) {
   if (G.tx) G.tx.send('team', { k: G.myKey, team: team });
   updateTeamRoom();
 }
+function mapLabelRefresh() {
+  var t = 'Map — ' + MAP().name;
+  $('maproom').textContent = t;
+  $('mappractice').textContent = t;
+}
+function cycleMap(fromRoom) {
+  audio();
+  if (fromRoom && !G.host) return;           /* the host picks the table */
+  var ids = Object.keys(MAPS);
+  var next = ids[(ids.indexOf(G_MAP) + 1) % ids.length];
+  loadMap(next);
+  mapLabelRefresh();
+  if (fromRoom && G.tx) G.tx.send('map', { k: G.myKey, id: next });
+}
+$('maproom').onclick = function () { cycleMap(true); };
+$('mappractice').onclick = function () { cycleMap(false); };
+
 var roomBotLvl = 5;
 try { roomBotLvl = Math.max(1, Math.min(10, parseInt(localStorage.getItem('duel_lvl') || '5', 10) || 5)); } catch (e) {}
 function botKeys() { return Object.keys(peers).filter(isBotKey).sort(); }
@@ -1720,6 +1819,9 @@ async function joinRoom(code, asHost) {
     $('codeshow').textContent = code;
     $('startmatch').style.display = asHost ? '' : 'none';
     G.phase = 'waiting';
+    loadMap(G_MAP);                          /* the room shows the picked table behind it */
+    mapLabelRefresh();
+    if (asHost) G.tx.send('map', { k: G.myKey, id: G_MAP });
     updateTeamRoom();
   } catch (e) {
     $('neterr').textContent = String(e.message || e);
@@ -2173,10 +2275,9 @@ function tick() {
 }
 tick();
 
-/* menu camera — inside the arena, looking down the length of it */
-camera.position.set(0, 4.4, 8.6);
-camera.rotation.order = 'YXZ';
-camera.rotation.x = -0.34;
+/* the saved table, and its menu view */
+loadMap(G_MAP);
+mapLabelRefresh();
 
 /* ---- headless eye ---- */
 window.DuelDebug = {
@@ -2196,6 +2297,7 @@ window.DuelDebug = {
   nearestEnemyTo: nearestEnemyTo, onWire: onWire, hostCheckWipe: hostCheckWipe,
   brainDrive: brainDrive, stepHostBots: stepHostBots, nearestEnemyOf: nearestEnemyOf,
   isBotKey: isBotKey, routeHit: routeHit,
+  MAPS: MAPS, loadMap: loadMap, mapId: function(){ return G_MAP; },
   PU: PU,
   touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
   setRot: setRot, tp: tp, vw: vw, vh: vh, isRot: function(){ return ROT; },

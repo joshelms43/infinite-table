@@ -627,6 +627,49 @@ T('catalog grew to 94', D.PU.POWERUPS.length === 94, String(D.PU.POWERUPS.length
 T('dice and rage ride the sheet',
   D.PU.statsFor(['dice']).dice === true && D.PU.statsFor(['soreloser']).rage === true);
 
+/* ---- The Grounds: nine times the floor, same laws ---- */
+{
+  T('the table map is the boot default', D.mapId() === 'table');
+  const tableLen = D.ARENA.length;
+  D.loadMap('grounds');
+  T('switching maps mutates the live arena', D.mapId() === 'grounds' && D.ARENA.length !== tableLen,
+    tableLen + ' -> ' + D.ARENA.length);
+  T('the grounds floor is the big one', D.ARENA[0][3] === 45 && D.ARENA[0][5] === 30);
+  /* slots follow the map: wider, further out, and still on open floor */
+  const g0 = D.spawnSlot('coral', 0);
+  T('spawns move out to the grounds wall', Math.abs(g0.x) === 40 && Math.abs(g0.z) > 20,
+    g0.x + ',' + g0.z);
+  {
+    let unique = new Set(), clear = true;
+    for (let i = 0; i < 16; i++) for (const tm of ['coral','teal']) {
+      const sl = D.spawnSlot(tm, i);
+      unique.add(tm + sl.x + ',' + sl.z);
+      if (D.anyCollide(sl.x, 0.91, sl.z, 0.38, 0.9, 0.38)) clear = false;
+    }
+    T('grounds slots are distinct and on open floor', unique.size === 32 && clear);
+  }
+  /* the keep is climbable: 0.45 rises against the 0.55 step-up */
+  D.me.stats = D.PU.statsFor([]); D.me.alive = true;
+  D.me.pos.set(0, 0.01, 8); D.me.vel.set(0,0,0); D.me.yaw = Math.PI;   /* face -z? forward is -cos(yaw)... yaw PI => +z; need -z */
+  D.me.yaw = 0;                                                        /* forward -z, toward the keep */
+  for (let i = 0; i < 40; i++) D.moveFighter(D.me, {}, 1/60);
+  let peakY = 0;
+  for (let i = 0; i < 400; i++) { D.moveFighter(D.me, { f: 1 }, 1/60); peakY = Math.max(peakY, D.me.pos.y); }
+  T('the keep stairs climb to the top deck', peakY > 1.7, 'peak=' + peakY.toFixed(2));
+  /* bullets live long enough to cross it */
+  const far = D.spawnBullet('me', V(-40, 1.5, -28), V(1, 0, 0), D.PU.statsFor([]), {});
+  D.foe.alive = false;
+  let fAlive = true;
+  for (let i = 0; i < 30 && fAlive; i++) fAlive = D.stepBullet(far, 1/60);
+  T('the map bound lets a shot cross the grounds', fAlive === true, 'x=' + far.pos.x.toFixed(0));
+  /* a look at it */
+  D.camera.position.set(0, 11, 26); D.camera.rotation.order='YXZ';
+  D.camera.rotation.y = 0; D.camera.rotation.x = -0.36;
+  snap('duel-grounds.png');
+  D.loadMap('table');
+  T('and the table comes back intact', D.ARENA.length === tableLen && D.mapId() === 'table');
+}
+
 /* ---- fight frame ---- */
 D.G.phase = 'fight';
 D.foe.pos.set(3, 0, -2);
