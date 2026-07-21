@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  var CATALOG_VERSION = '2026-07-21-duel-r3';
+  var CATALOG_VERSION = '2026-07-21-duel-r4';
 
   function baseStats() {
     return {
@@ -27,6 +27,9 @@
       bulletStyle: 'default',
       wobble: 0, burstOnWall: false, echo: false, selfPush: false,
       dice: false, rage: false,
+      grow: 0, sneezeChance: 0, launchUp: 0, orbit: false, hiccups: false,
+      hornBlast: false, crabMode: false, partyPopper: false, spinOnHit: 0,
+      dmgResist: 0, honk: false, pickpocket: false, muleKick: 0,
       bounceBonus: false, homingAfterBounce: false, lastShotBoom: false,
       kbImmune: false, execute: false, fastStart: false, momentum: false,
       refundOnHit: false, stillGuard: false, airShot: false, payback: false,
@@ -215,7 +218,38 @@
     { id: 'panichands', name: 'Panic Hands', text: 'Reloads are twice as fast when the mag runs dry',
       apply: function (s) { s.emptyReload = true; } },
     { id: 'zoomies', name: 'Zoomies', text: 'Every few seconds you just go faster',
-      apply: function (s) { s.zoomies = true; } }
+      apply: function (s) { s.zoomies = true; } },
+
+    /* ---- the silly batch ---- */
+    { id: 'balloon', name: 'Balloon Rounds', text: 'Bullets inflate as they fly',
+      apply: function (s) { s.grow += 0.25; s.bulletSpeed *= 0.85; } },
+    { id: 'hayfever', name: 'Hay Fever', text: 'Sometimes you sneeze and fire the whole mag at once',
+      apply: function (s) { s.sneezeChance += 0.12; } },
+    { id: 'trebuchet', name: 'Trebuchet', text: 'Hits launch them skyward',
+      apply: function (s) { s.launchUp += 7; s.knockback *= 0.6; } },
+    { id: 'disco', name: 'Disco Inferno', text: 'Bullets orbit you once before launching, +15% damage',
+      apply: function (s) { s.orbit = true; s.damage *= 1.15; } },
+    { id: 'hiccups', name: 'Hiccups', text: '+15% damage, but you have the hiccups',
+      apply: function (s) { s.hiccups = true; s.damage *= 1.15; } },
+    { id: 'beachball', name: 'Beach Ball', text: 'Huge floaty bullets that bounce forever and barely hurt',
+      apply: function (s) { s.bulletSize *= 3; s.bulletSpeed *= 0.55; s.damage *= 0.35;
+        s.bounces += 40; s.keepSpeedOnBounce = true; s.bulletGravity += 3; s.bulletStyle = 'beach'; } },
+    { id: 'battlecry', name: 'Battle Cry', text: 'Reloading blasts a horn that shoves anyone close',
+      apply: function (s) { s.hornBlast = true; } },
+    { id: 'crab', name: 'Crab Mode', text: 'Sideways is 30% faster. Forwards is not',
+      apply: function (s) { s.crabMode = true; } },
+    { id: 'partypopper', name: 'Party Popper', text: 'Your first shot of every round is a confetti blast',
+      apply: function (s) { s.partyPopper = true; } },
+    { id: 'dizzy', name: 'Dizzy Rounds', text: 'Hits spin their view around',
+      apply: function (s) { s.spinOnHit += 5; } },
+    { id: 'tortoise', name: 'Tortoise Mode', text: 'Take 25% less damage, −20% move speed',
+      apply: function (s) { s.dmgResist = Math.min(0.5, s.dmgResist + 0.25); s.moveSpeed *= 0.8; } },
+    { id: 'clownshoes', name: 'Clown Shoes', text: '+30% jump and every jump honks',
+      apply: function (s) { s.jumpPower *= 1.3; s.honk = true; } },
+    { id: 'pickpocket', name: 'Pickpocket', text: 'Every hit steals one round from their mag',
+      apply: function (s) { s.pickpocket = true; } },
+    { id: 'mulekick', name: 'Mule Kick', text: '+15% damage, recoil shoves you backwards',
+      apply: function (s) { s.muleKick += 5; s.damage *= 1.15; } }
   ];
 
   var BY_ID = {};
@@ -242,6 +276,13 @@
     s.explosionRadius = Math.min(4, s.explosionRadius);
     s.bulletGravity = Math.max(-24, Math.min(30, s.bulletGravity));
     s.wobble = Math.min(6, s.wobble);
+    s.grow = Math.min(0.6, s.grow);
+    s.launchUp = Math.min(10, s.launchUp);
+    s.spinOnHit = Math.min(8, s.spinOnHit);
+    s.dmgResist = Math.min(0.5, s.dmgResist);
+    s.muleKick = Math.min(8, s.muleKick);
+    s.sneezeChance = Math.min(0.5, s.sneezeChance);
+    s.bounces = Math.min(60, s.bounces);
     return s;
   }
 

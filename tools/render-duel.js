@@ -345,6 +345,72 @@ T('held fire respects the fire-rate cooldown',
   T('executioner only bites the wounded', low.dmg > high.dmg, low.dmg + ' vs ' + high.dmg);
 }
 
+/* ---- the silly batch behaves ---- */
+{
+  D.G.mode = 'bot'; D.G.phase = 'fight'; D.foe.alive = false; D.me.alive = true;
+  /* balloon inflates */
+  const bl = D.spawnBullet('me', V(0, 1.5, 8), V(1, 0, 0), D.PU.statsFor(['balloon']), {});
+  const s0 = bl.sizeNow;
+  for (let i = 0; i < 30; i++) D.stepBullet(bl, 1/60);
+  T('a balloon round inflates in flight', bl.sizeNow > s0 * 1.5, s0.toFixed(2) + ' -> ' + bl.sizeNow.toFixed(2));
+  /* hay fever dumps the mag */
+  D.me.stats = D.PU.statsFor(['hayfever']); D.me.stats.sneezeChance = 1;
+  D.me.mag = 8; D.me.reload = 0; D.me.fireCd = 0; D.me.pos.set(0, 0.01, 5);
+  const nb = D.bullets.length;
+  D.fireFighter(D.me, 'me', V(1, 0, 0));
+  T('a sneeze empties the whole mag in one blast',
+    D.me.mag === 0 && D.bullets.length - nb >= 8, 'mag=' + D.me.mag + ' shots=' + (D.bullets.length - nb));
+  /* party popper only pops once */
+  D.me.stats = D.PU.statsFor(['partypopper']); D.me.popped = false;
+  D.me.mag = 8; D.me.reload = 0; D.me.fireCd = 0;
+  const n1 = D.bullets.length; D.fireFighter(D.me, 'me', V(1, 0, 0));
+  const first = D.bullets.length - n1;
+  D.me.fireCd = 0;
+  const n2 = D.bullets.length; D.fireFighter(D.me, 'me', V(1, 0, 0));
+  const second = D.bullets.length - n2;
+  T('the party popper pops once per round', first === 8 && second === 1, first + ' then ' + second);
+  /* mule kick shoves the shooter backwards */
+  D.me.stats = D.PU.statsFor(['mulekick']); D.me.vel.set(0,0,0);
+  D.me.mag = 8; D.me.fireCd = 0; D.me.reload = 0;
+  D.fireFighter(D.me, 'me', V(1, 0, 0));
+  T('mule kick recoil is real', D.me.vel.x < -3, D.me.vel.x.toFixed(1));
+  /* trebuchet launches, dizzy spins, pickpocket steals, tortoise shrugs */
+  D.me.stats = D.PU.statsFor([]); D.me.vel.set(0,0,0); D.me.hp = 100; D.me.shield = 0;
+  D.me.stats.deflect = 0;
+  D.applyHit(D.me, { dmg: 5, kb: 0, up: 7, from: [5,1,5] }, true);
+  T('a trebuchet hit launches the victim', D.me.vel.y > 5, D.me.vel.y.toFixed(1));
+  const yawA = D.me.yaw;
+  D.applyHit(D.me, { dmg: 1, kb: 0, spin: 5 }, true);
+  D.stepFighterStatus(D.me, 0.25);
+  T('a dizzy hit spins the view', Math.abs(D.me.yaw - yawA) > 0.5, Math.abs(D.me.yaw - yawA).toFixed(2));
+  D.me.mag = 6;
+  D.applyHit(D.me, { dmg: 1, kb: 0, steal: 1 }, true);
+  T('a pickpocket hit lifts a round', D.me.mag === 5, String(D.me.mag));
+  D.me.stats = D.PU.statsFor(['tortoise']); D.me.hp = 100; D.me.stats.deflect = 0; D.me.shield = 0;
+  D.applyHit(D.me, { dmg: 40, kb: 0 }, true);
+  T('the tortoise shrugs off a quarter', D.me.hp === 70, String(D.me.hp));
+  /* crab mode: sideways beats forwards */
+  D.me.stats = D.PU.statsFor(['crab']); D.me.alive = true;
+  D.me.pos.set(2.6, 0.01, 8); D.me.vel.set(0,0,0); D.me.yaw = 0;
+  for (let i = 0; i < 30; i++) D.moveFighter(D.me, {}, 1/60);
+  D.me.pos.set(2.6, 0.01, 8); D.me.vel.set(0,0,0);
+  for (let i = 0; i < 45; i++) D.moveFighter(D.me, { f: 1 }, 1/60);
+  const fwd = 8 - D.me.pos.z;
+  D.me.pos.set(2.6, 0.01, 8); D.me.vel.set(0,0,0);
+  for (let i = 0; i < 45; i++) D.moveFighter(D.me, { r: -1 }, 1/60);
+  const side = 2.6 - D.me.pos.x;
+  T('crab mode scuttles sideways faster than forwards', side > fwd * 1.2,
+    'side=' + side.toFixed(2) + ' fwd=' + fwd.toFixed(2));
+  /* battle cry shoves a close opponent on reload */
+  D.me.stats = D.PU.statsFor(['battlecry']); D.G.phase = 'fight';
+  D.foe.alive = true; D.foe.stats = D.PU.statsFor([]); D.foe.stats.deflect = 0;
+  D.foe.pos.set(4, 0.01, 5); D.me.pos.set(2.5, 0.01, 5); D.foe.vel.set(0,0,0);
+  D.me.mag = 0;
+  D.startReloadFor(D.me);
+  T('the horn shoves whoever stands too close', D.foe.vel.length() > 5, D.foe.vel.length().toFixed(1));
+  D.me.stats = D.PU.statsFor([]); D.foe.stats = D.PU.statsFor([]);
+}
+
 /* ---- headshots and the bot's teeth ---- */
 {
   D.G.mode = 'bot'; D.G.phase = 'fight';
@@ -372,7 +438,7 @@ T('held fire respects the fire-rate cooldown',
 }
 
 /* ---- the dumb batch behaves ---- */
-T('catalog grew to 80', D.PU.POWERUPS.length === 80, String(D.PU.POWERUPS.length));
+T('catalog grew to 94', D.PU.POWERUPS.length === 94, String(D.PU.POWERUPS.length));
 
 /* helium floats a bullet upward */
 {

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.7.0
+<!-- Duel — Infinite Table. Version: 0.8.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -265,9 +265,9 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.7.0"></script>
-<script src="../shared/tablekit.js?v=0.7.0"></script>
-<script src="../shared/duel-powerups.js?v=0.7.0"></script>
+<script src="../shared/config.js?v=0.8.0"></script>
+<script src="../shared/tablekit.js?v=0.8.0"></script>
+<script src="../shared/duel-powerups.js?v=0.8.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -276,21 +276,22 @@ var ROUNDS_TO_WIN = 10;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.7.0' });
+TableKit.watchErrors({ game: 'duel', version: '0.8.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
 ['heavy','rapid','buckshot','twin','slug','needle','longbarrel','akimbo','lucky','overcharge','lastcall','marksman',
- 'freight','jackhammer','handcannon','dice','soreloser','trickshot','executioner','momentum','showtime','payback']
+ 'freight','jackhammer','handcannon','dice','soreloser','trickshot','executioner','momentum','showtime','payback',
+ 'hayfever','mulekick']
   .forEach(function(id){ CAT[id]='#E26A4B'; });
 ['bounce','superball','phantom','homing','bloodhound','mortar','grenadier','shortfuse','cluster','split','boomerang','gravitywell','chicken',
- 'helium','drunk','popcorn','echo','confetti','sneaky','bees','pinball','finale']
+ 'helium','drunk','popcorn','echo','confetti','sneaky','bees','pinball','finale','balloon','disco','beachball','partypopper']
   .forEach(function(id){ CAT[id]='#6394B6'; });
-['frost','venom','incendiary','flash','riot','leech'].forEach(function(id){ CAT[id]='#7F6595'; });
-['tank','glass','regen','aegis','battery','thorns','pocket','unit','deflector','secondwind','anchor','stand','hoarder']
+['frost','venom','incendiary','flash','riot','leech','trebuchet','dizzy','battlecry','pickpocket'].forEach(function(id){ CAT[id]='#7F6595'; });
+['tank','glass','regen','aegis','battery','thorns','pocket','unit','deflector','secondwind','anchor','stand','hoarder','tortoise']
   .forEach(function(id){ CAT[id]='#3B8B82'; });
 ['sprinter','moonboots','doublejump','airshow','dash','blink','castle','adrenaline','rocketboots',
- 'faststart','zoomies']
+ 'faststart','zoomies','hiccups','crab','clownshoes']
   .forEach(function(id){ CAT[id]='#E0AB52'; });
 ['mag','quickhands','beltfeed','sugarrush','scavenger','panichands'].forEach(function(id){ CAT[id]='#BE8F41'; });
 
@@ -525,6 +526,7 @@ function spawnFighter(f, west) {
   f.alive = true; f.slow = 0; f.slowT = 0; f.dots = []; f.sinceHit = 99;
   f.swUsed = false; f.payback = false;
   f.onGround = false; f.airJumps = 0; f.dashCd = 0;
+  f.hicT = 2 + Math.random()*2; f.popped = false; f.spinT = 0; f.spinV = 0;
 }
 function spawnMe() { spawnFighter(me, G.host || G.mode==='bot'); }
 function spawnFoe() {
@@ -541,6 +543,11 @@ function moveFighter(fi, inp, dt) {
   if (s.fastStart && G.fightT < 3) speed *= 1.5;
   if (s.zoomies && (G.fightT % 4) < 1) speed *= 1.8;
   var f = inp.f || 0, r = inp.r || 0;
+  if (s.crabMode) {                      /* speed follows how sideways you're going */
+    var tot = Math.abs(f) + Math.abs(r);
+    var mix = tot > 0 ? Math.abs(r) / tot : 0;
+    speed *= 0.85 + mix * 0.45;
+  }
   var sin = Math.sin(fi.yaw), cos = Math.cos(fi.yaw);
   var wx = (-sin*f + cos*r), wz = (-cos*f - sin*r);
   var len = Math.max(1, Math.hypot(wx, wz));
@@ -550,11 +557,19 @@ function moveFighter(fi, inp, dt) {
   fi.vel.z += (az - fi.vel.z) * Math.min(1, dt*ground);
 
   /* jumping */
-  if (inp.jump && !fi._jumpHeld) {
-    if (fi.onGround) { fi.vel.y = s.jumpPower; fi.onGround = false; }
-    else if (fi.airJumps < s.extraJumps) { fi.vel.y = s.jumpPower*0.92; fi.airJumps++; }
+  var wantJump = inp.jump;
+  if (s.hiccups) {
+    fi.hicT -= dt;
+    if (fi.hicT <= 0) { fi.hicT = 2.5 + Math.random()*2.5;
+      if (fi.onGround) { wantJump = true; fi._jumpHeld = false; if (fi === me) sTone(980, 0.07, 0.16, 'square'); } }
   }
-  fi._jumpHeld = !!inp.jump;
+  if (wantJump && !fi._jumpHeld) {
+    var jumped = false;
+    if (fi.onGround) { fi.vel.y = s.jumpPower; fi.onGround = false; jumped = true; }
+    else if (fi.airJumps < s.extraJumps) { fi.vel.y = s.jumpPower*0.92; fi.airJumps++; jumped = true; }
+    if (jumped && s.honk) { sTone(310, 0.12, 0.22, 'square'); sTone(240, 0.16, 0.18, 'square'); }
+  }
+  fi._jumpHeld = !!wantJump;
 
   /* dash / blink — only if the sheet grants it, same cooldown for everyone */
   fi.dashCd = Math.max(0, fi.dashCd - dt);
@@ -644,6 +659,10 @@ function bulletMesh(stats, mine) {
     return new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.05, stats.bulletSize), 8, 6),
       new THREE.MeshBasicMaterial({ color: 0xF2EEE2, transparent: true, opacity: 0.07 }));
   }
+  if (stats.bulletStyle === 'beach') {
+    return new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.05, stats.bulletSize), 12, 10),
+      new THREE.MeshBasicMaterial({ color: [0xE26A4B, 0x6394B6, 0xE0AB52][Math.floor(Math.random()*3)] }));
+  }
   if (stats.bulletStyle === 'bee') {
     var bee = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.04, stats.bulletSize), 8, 6),
       new THREE.MeshBasicMaterial({ color: 0xE0AB52 }));
@@ -665,7 +684,10 @@ function spawnBullet(owner, origin, dir, stats, opts) {
     split: stats.splitCount > 0 && !opts.noSplit ? 0.32 : 0,
     boom: opts.boom !== undefined ? opts.boom : (opts.fromCluster ? 0 : stats.explosionRadius),
     returning: false, dmgScale: opts.dmgScale || 1,
-    fromCluster: !!opts.fromCluster, bouncedN: 0, homingBoost: 0
+    fromCluster: !!opts.fromCluster, bouncedN: 0, homingBoost: 0,
+    sizeNow: stats.bulletSize,
+    orbitT: stats.orbit && !opts.fromCluster && !opts.noSplit ? 0.55 : 0,
+    orbitA: Math.random() * Math.PI * 2, relDir: dir.clone()
   });
   return bullets[bullets.length-1];
 }
@@ -673,6 +695,15 @@ function spawnBullet(owner, origin, dir, stats, opts) {
 function startReloadFor(f) {
   f.reload = f.stats.reloadTime;
   if (f.stats.emptyReload && f.mag === 0) f.reload *= 0.5;   /* panic hands */
+  if (f.stats.hornBlast && G.phase === 'fight') {            /* battle cry */
+    sTone(180, 0.35, 0.3, 'sawtooth');
+    var other = f === me ? foe : me;
+    if (other.alive && other.pos.distanceTo(f.pos) < 3.4) {
+      var horn = { dmg: 0, crit: false, kb: 13, from: [f.pos.x, f.pos.y + 1.4, f.pos.z] };
+      if (f === me && G.mode === 'net' && G.tx) G.tx.send('hit', horn);
+      else applyHit(other, horn, true);
+    }
+  }
   if (f === me) { $('reloadtag').classList.add('show'); sTone(500, 0.06, 0.12, 'square'); }
 }
 function startReload() { startReloadFor(me); }
@@ -698,16 +729,29 @@ function fireFighter(f, owner, baseDir) {
   var boom;                                                  /* grand finale */
   if (s.lastShotBoom && f.mag === 0 && !s.noReload) boom = Math.max(s.explosionRadius, 1.3);
 
+  var count = s.bulletCount, spread = s.spread;
+  if (s.partyPopper && !f.popped) {                          /* opening confetti */
+    f.popped = true; count += 7; spread += 0.09;
+  }
+  if (s.sneezeChance > 0 && !s.noReload && f.mag > 0 && Math.random() < s.sneezeChance) {
+    count += Math.min(11, f.mag);                            /* bless you */
+    spread += 0.12;
+    f.mag = 0;
+    if (f === me) sNoise(0.3, 900, 0.4);
+  }
   var origin = f.pos.clone(); origin.y += eyeHeight(f);
   var shots = [];
-  for (var i = 0; i < s.bulletCount; i++) {
+  for (var i = 0; i < count; i++) {
     var dir = baseDir.clone();
-    dir.x += (Math.random()-0.5)*2*s.spread;
-    dir.y += (Math.random()-0.5)*2*s.spread;
-    dir.z += (Math.random()-0.5)*2*s.spread;
+    dir.x += (Math.random()-0.5)*2*spread;
+    dir.y += (Math.random()-0.5)*2*spread;
+    dir.z += (Math.random()-0.5)*2*spread;
     dir.normalize();
     spawnBullet(owner, origin, dir, s, { dmgScale: dmgScale, boom: boom });
     shots.push([dir.x, dir.y, dir.z]);
+  }
+  if (s.muleKick > 0) {
+    fi_kick(f, baseDir, s.muleKick);
   }
   if (s.bulletStyle==='chicken') sCluck();
   else if (f === me) sShot(); else sNoise(0.07, 1000, 0.12);
@@ -726,6 +770,10 @@ function fireFighter(f, owner, baseDir) {
   return true;
 }
 
+function fi_kick(f, dir, mag) {
+  f.vel.x -= dir.x * mag; f.vel.z -= dir.z * mag;
+  f.onGround = false; f.vel.y = Math.max(f.vel.y, 1.5);
+}
 function fire() {
   var dir = new THREE.Vector3(0,0,-1).applyEuler(camera.rotation);
   if (fireFighter(me, 'me', dir)) me.pitch += 0.006; /* tiny kick */
@@ -803,6 +851,25 @@ function stepBullet(b, dt) {
     }
   }
 
+  if (s.grow > 0) {
+    b.sizeNow = Math.min(0.9, b.sizeNow + s.grow * dt);
+    b.mesh.scale.setScalar(b.sizeNow / Math.max(0.01, s.bulletSize));
+  }
+  /* disco: a lap around the shooter, then away it goes */
+  if (b.orbitT > 0) {
+    b.orbitT -= dt;
+    b.orbitA += dt * (Math.PI * 2 / 0.55);
+    var host = b.owner === 'me' ? me : foe;
+    var hc = host.pos.clone(); hc.y += eyeHeight(host) * 0.8;
+    b.pos.set(hc.x + Math.cos(b.orbitA) * 1.0, hc.y + Math.sin(b.orbitA * 2) * 0.2, hc.z + Math.sin(b.orbitA) * 1.0);
+    b.mesh.position.copy(b.pos);
+    if (b.orbitT <= 0) b.vel.copy(b.relDir).multiplyScalar(s.bulletSpeed);
+    else {
+      var tgtO = targetOf(b.owner);
+      if (tgtO.alive && hitsFighter(b.pos, b.pos, tgtO, b.sizeNow)) { landHit(b, b.pos.clone()); return false; }
+      return true;
+    }
+  }
   if (s.wobble > 0) {
     var wob = s.wobble * dt * b.vel.length();
     b.vel.x += (Math.random()-0.5) * wob;
@@ -820,13 +887,13 @@ function stepBullet(b, dt) {
 
     /* fighters — shooter judges hits on the target it can see */
     var tgt2 = targetOf(b.owner);
-    if (tgt2.alive && hitsFighter(prev, b.pos, tgt2, s.bulletSize)) {
-      landHit(b, b.pos.clone(), 1, hitsHead(prev, b.pos, tgt2, s.bulletSize));
+    if (tgt2.alive && hitsFighter(prev, b.pos, tgt2, b.sizeNow)) {
+      landHit(b, b.pos.clone(), 1, hitsHead(prev, b.pos, tgt2, b.sizeNow));
       return false;
     }
     /* arena */
     if (!s.phase) {
-      var box = anyCollide(b.pos.x, b.pos.y, b.pos.z, s.bulletSize, s.bulletSize, s.bulletSize);
+      var box = anyCollide(b.pos.x, b.pos.y, b.pos.z, b.sizeNow, b.sizeNow, b.sizeNow);
       if (box) {
         if (b.bounces > 0) {
           b.bounces--; b.bouncedN++;
@@ -920,6 +987,7 @@ function landHit(b, at, scale, headshot) {
     burn: s.burn ? [s.burn, s.burnDur] : null,
     slow: s.slowOnHit ? [s.slowOnHit, s.slowDur] : null,
     blind: s.blindDur || 0,
+    up: s.launchUp || 0, spin: s.spinOnHit || 0, steal: s.pickpocket ? 1 : 0,
     from: [from.x, from.y, from.z]
   };
   if (shooter === me) {
@@ -927,6 +995,7 @@ function landHit(b, at, scale, headshot) {
     else applyHit(foe, fx, false);
     if (s.lifesteal > 0) healFighter(me, roll.dmg * s.lifesteal);
     if (s.refundOnHit && !s.noReload) { me.mag = Math.min(s.magSize, me.mag + 1); updateAmmoHud(); }
+    if (s.pickpocket && !s.noReload) { me.mag = Math.min(s.magSize, me.mag + 1); updateAmmoHud(); }
     sparkFx(at, true);
     sHit(fx.crit);
     $('xh').classList.remove('mark'); void $('xh').offsetWidth; $('xh').classList.add('mark');
@@ -935,7 +1004,7 @@ function landHit(b, at, scale, headshot) {
     /* practice: the bot's client is this client — same delivery, same rules */
     sparkFx(at, false);
     if (s.lifesteal > 0) healFighter(foe, roll.dmg * s.lifesteal);
-    if (s.refundOnHit && !s.noReload) foe.mag = Math.min(s.magSize, foe.mag + 1);
+    if ((s.refundOnHit || s.pickpocket) && !s.noReload) foe.mag = Math.min(s.magSize, foe.mag + 1);
     applyHit(me, fx, false);
   }
 }
@@ -950,6 +1019,7 @@ function applyHit(f, fx, silentThorns) {
   if (!f.alive || G.phase !== 'fight') return;
   if (Math.random() < f.stats.deflect) { if (f === me) sTone(1500, 0.08, 0.15); return; }
   var dmg = fx.dmg;
+  if (f.stats.dmgResist > 0) dmg = Math.round(dmg * (1 - f.stats.dmgResist));
   if (f.stats.stillGuard && Math.hypot(f.vel.x, f.vel.z) < 0.6) dmg = Math.round(dmg * 0.7);
   if (f.shield > 0) {
     var absorbed = Math.min(f.shield, dmg);
@@ -967,6 +1037,11 @@ function applyHit(f, fx, silentThorns) {
     if (fx.pull) away.multiplyScalar(-1);
     f.vel.addScaledVector(away, fx.kb || 0);
     f.vel.y += (fx.kb||0)*0.15;
+  }
+  if (fx.up && !f.stats.kbImmune) { f.vel.y += fx.up; f.onGround = false; }   /* trebuchet */
+  if (fx.spin) { f.spinT = 0.5; f.spinV = fx.spin * (Math.random() < 0.5 ? -1 : 1); }
+  if (fx.steal && !f.stats.noReload && f.mag > 0) {
+    f.mag--; if (f === me) updateAmmoHud();
   }
   if (f.stats.thorns > 0 && !silentThorns) {
     var back = Math.round(fx.dmg * f.stats.thorns);
@@ -1441,6 +1516,7 @@ function checkDown(f) {
 
 function stepFighterStatus(f, dt) {
   f.sinceHit += dt;
+  if (f.spinT > 0) { f.spinT -= dt; f.yaw += f.spinV * dt; }
   if (f.slowT > 0) { f.slowT -= dt; if (f.slowT <= 0) f.slow = 0; }
   var dotDmg = 0;
   for (var i = f.dots.length-1; i >= 0; i--) {
@@ -1625,6 +1701,7 @@ window.DuelDebug = {
   moveFighter: moveFighter, fireFighter: fireFighter, applyHit: applyHit,
   computeHitDamage: computeHitDamage, stepFighterStatus: stepFighterStatus,
   stepBot: stepBot, botParams: botParams, botDraftPick: botDraftPick,
+  startReloadFor: startReloadFor,
   PU: PU,
   touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
   setRot: setRot, tp: tp, vw: vw, vh: vh, isRot: function(){ return ROT; },

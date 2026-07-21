@@ -48,3 +48,8 @@
 - The bot drafts like it means it. Levels 4+ weigh general card value, 6+ add synergy with its own build (bounce packages, explosion packages, hand-cannon economies, air fighters), 8+ add counter-picks — a shielded opponent teaches it to draft dots, a damage-stacker teaches it Second Wind and Deflector, a runner teaches it Frost and Bloodhound.
 - Information parity holds: it counters only powerups you have already used in fought rounds. Your current draft pick stays as secret from it as its pick is from you.
 - Levels 1–3 still just grab things. A small jitter keeps even level 10 from being perfectly predictable, but never enough to flip a clear judgement — the gate proves all four tiers of behaviour.
+
+## 0.8.0
+- The silly batch (catalog `2026-07-21-duel-r4`, 94 total): Balloon Rounds (bullets inflate in flight — hitbox and all), Hay Fever (sometimes you sneeze the whole mag out at once), Trebuchet (hits launch them skyward), Disco Inferno (bullets lap the shooter before launching), Hiccups, Beach Ball, Battle Cry (reloading blasts a horn that shoves anyone close, judged like any shot), Crab Mode (speed follows how sideways you're going), Party Popper (one confetti blast per round), Dizzy Rounds (hits spin the view — which spins the bot's aim too, because the view is the aim for everyone), Tortoise Mode, Clown Shoes (every jump honks), Pickpocket (hits move a round from their mag to yours), Mule Kick (real recoil).
+- All fourteen ride the shared fighter paths, so each works identically for both fighters and every effect is gate-proven: inflation, sneeze dumps, one-pop-per-round, recoil, launches, spins, thefts, damage shrugs, crab ratios, and the horn shove.
+- No powerup is called Yeet.
