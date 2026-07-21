@@ -172,6 +172,40 @@ D.foe.stats = D.PU.statsFor([]);
 const grazeSmall = D.hitsFighter(V(-2, 1.0, 0.62), V(2, 1.0, 0.62), D.foe, 0.12);
 T('the base fighter does not', grazeSmall === false);
 
+/* ---- touch controls drive the same movement ---- */
+D.me.pos.set(2.6, 0.01, 8); D.me.vel.set(0,0,0); D.me.yaw = 0; D.me.pitch = 0;  /* a clear lane */
+for (let i = 0; i < 30; i++) D.moveSelf(1/60);   /* settle */
+D.setStickVec(0, -1);                             /* full stick forward */
+for (let i = 0; i < 60; i++) D.moveSelf(1/60);
+const fullRun = 8 - D.me.pos.z;
+T('a full stick walks the player forward', fullRun > 3, fullRun.toFixed(2));
+D.clearStick();
+D.me.pos.set(2.6, 0.01, 8); D.me.vel.set(0,0,0);
+D.setStickVec(0, -0.4);                           /* partial stick */
+for (let i = 0; i < 60; i++) D.moveSelf(1/60);
+const halfRun = 8 - D.me.pos.z;
+T('a partial stick is a walk, not a sprint', halfRun > 0.5 && halfRun < fullRun * 0.7,
+  halfRun.toFixed(2) + ' vs ' + fullRun.toFixed(2));
+D.clearStick();
+const yaw0 = D.me.yaw;
+D.applyLook(120, 0);
+T('a look drag turns the head', D.me.yaw < yaw0, (D.me.yaw - yaw0).toFixed(3));
+D.applyLook(0, -100000);
+T('the pitch clamp holds against any drag', D.me.pitch <= 1.45, String(D.me.pitch));
+D.G.phase = 'fight'; D.G.mode = 'bot'; D.me.alive = true;
+D.me.stats = D.PU.statsFor([]);
+D.me.mag = 8; D.me.reload = 0; D.me.fireCd = 0; D.me.shotsInMag = 0;
+D.foe.alive = false;                              /* nobody downrange to eat the shots */
+D.touch.firing = true;
+const nBullets = D.bullets.length, magBefore = D.me.mag;
+for (let i = 0; i < 30; i++) D.stepSelfStatus(1/60);   /* half a second of held Fire */
+D.touch.firing = false;
+T('holding Fire empties rounds through the real gate',
+  D.bullets.length > nBullets && D.me.mag < magBefore,
+  'bullets +' + (D.bullets.length - nBullets) + ', mag ' + magBefore + '->' + D.me.mag);
+T('held fire respects the fire-rate cooldown',
+  magBefore - D.me.mag <= 3, 'shots=' + (magBefore - D.me.mag));
+
 /* ---- fight frame ---- */
 D.G.phase = 'fight';
 D.foe.pos.set(3, 0, -2);

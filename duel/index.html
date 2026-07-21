@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.1.0
+<!-- Duel — Infinite Table. Version: 0.2.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -8,7 +8,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Duel — Infinite Table</title>
 <meta name="theme-color" content="#121A16">
 <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
@@ -23,7 +23,7 @@
   --line-soft:rgba(242,238,226,.13);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;background:var(--table-night);
+html,body{height:100%;overflow:hidden;touch-action:none;overscroll-behavior:none;background:var(--table-night);
   font-family:'Nunito Sans',system-ui,sans-serif;color:var(--text-ivory);user-select:none}
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block}
 button{font-family:inherit;border:none;cursor:pointer;background:none;color:inherit}
@@ -67,6 +67,28 @@ body.fighting #hud{display:block}
 #foehp{position:fixed;pointer-events:none;z-index:5;width:64px;height:5px;border-radius:3px;
   background:rgba(8,12,10,.55);overflow:hidden;display:none}
 #foehpfill{height:100%;background:var(--primary-coral)}
+
+/* ---- touch controls ---- */
+#touchui{display:none}
+body.touch.fighting #touchui{display:block}
+#stick{position:fixed;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;
+  border:2px solid rgba(242,238,226,.22);background:rgba(242,238,226,.05);
+  pointer-events:none;z-index:6;display:none}
+#sticknub{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;
+  border-radius:50%;background:rgba(242,238,226,.35)}
+.tbtn{position:fixed;z-index:6;pointer-events:auto;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Lilita One',cursive;color:var(--text-ivory);
+  background:rgba(242,238,226,.1);border:1.5px solid rgba(242,238,226,.25);
+  text-shadow:0 1px 4px rgba(8,12,10,.6)}
+.tbtn:active{background:rgba(242,238,226,.22)}
+#fireBtn{right:26px;bottom:calc(78px + env(safe-area-inset-bottom));width:84px;height:84px;font-size:17px;
+  background:linear-gradient(180deg,rgba(226,106,75,.85),rgba(188,79,55,.85));
+  border-color:rgba(255,255,255,.3);box-shadow:0 4px 14px rgba(188,79,55,.4)}
+#jumpBtn{right:122px;bottom:calc(52px + env(safe-area-inset-bottom));width:60px;height:60px;font-size:13px}
+#dashBtn{right:150px;bottom:calc(126px + env(safe-area-inset-bottom));width:54px;height:54px;font-size:12px;display:none}
+#reloadBtn{right:36px;bottom:calc(178px + env(safe-area-inset-bottom));width:54px;height:54px;font-size:12px}
+body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
 
 /* ---- banners ---- */
 #banner{position:fixed;left:50%;top:34%;transform:translateX(-50%);z-index:8;text-align:center;
@@ -162,6 +184,13 @@ body.fighting #hud{display:block}
   <div id="rounds"></div>
   <div id="mypicks"></div>
   <div id="foehp"><div id="foehpfill" style="width:100%"></div></div>
+  <div id="touchui">
+    <div id="stick"><div id="sticknub"></div></div>
+    <button class="tbtn" id="fireBtn">Fire</button>
+    <button class="tbtn" id="jumpBtn">Jump</button>
+    <button class="tbtn" id="dashBtn">Dash</button>
+    <button class="tbtn" id="reloadBtn">Reload</button>
+  </div>
 </div>
 <div id="banner"></div>
 <div id="clickcatch">Click To Aim</div>
@@ -212,9 +241,9 @@ body.fighting #hud{display:block}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.1.0"></script>
-<script src="../shared/tablekit.js?v=0.1.0"></script>
-<script src="../shared/duel-powerups.js?v=0.1.0"></script>
+<script src="../shared/config.js?v=0.2.0"></script>
+<script src="../shared/tablekit.js?v=0.2.0"></script>
+<script src="../shared/duel-powerups.js?v=0.2.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -223,7 +252,7 @@ var ROUNDS_TO_WIN = 4;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.1.0' });
+TableKit.watchErrors({ game: 'duel', version: '0.2.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
@@ -395,6 +424,21 @@ function sHurt(){ sTone(220, 0.15, 0.2, 'sawtooth'); }
 function sCluck(){ sTone(740, 0.06, 0.18, 'square'); setTimeout(function(){ sTone(590,0.09,0.15,'square'); }, 60); }
 function sPick(){ sTone(660, 0.12, 0.2); setTimeout(function(){ sTone(990,0.16,0.2); }, 90); }
 
+/* ---- touch ---- */
+var TOUCH = false;
+try { TOUCH = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+  ('ontouchstart' in window); } catch (e) {}
+if (TOUCH) document.body.classList.add('touch');
+var touch = { moveId: null, lookId: null, ax: 0, ay: 0, mx: 0, my: 0, lx: 0, ly: 0,
+  active: false, firing: false };
+function setStickVec(x, y) { touch.mx = x; touch.my = y; touch.active = true; }
+function clearStick() { touch.mx = 0; touch.my = 0; touch.active = false; }
+function applyLook(dx, dy) {
+  me.yaw   -= dx * 0.006;
+  me.pitch -= dy * 0.006;
+  me.pitch = Math.max(-1.45, Math.min(1.45, me.pitch));
+}
+
 /* ---- input ---- */
 var keys = {};
 window.addEventListener('keydown', function(e){ keys[e.code]=true;
@@ -406,7 +450,7 @@ window.addEventListener('keyup', function(e){ keys[e.code]=false; });
 var locked = false;
 document.addEventListener('pointerlockchange', function(){
   locked = document.pointerLockElement === canvas;
-  $('clickcatch').classList.toggle('show', !locked && (G.phase==='fight'||G.phase==='countdown'));
+  $('clickcatch').classList.toggle('show', !TOUCH && !locked && (G.phase==='fight'||G.phase==='countdown'));
 });
 document.addEventListener('mousemove', function(e){
   if (!locked) return;
@@ -414,8 +458,9 @@ document.addEventListener('mousemove', function(e){
   me.pitch -= e.movementY * 0.0026;
   me.pitch = Math.max(-1.45, Math.min(1.45, me.pitch));
 });
-function grabPointer(){ if (!locked) { try { canvas.requestPointerLock(); } catch(e){} } }
-canvas.addEventListener('pointerdown', function(){ audio();
+function grabPointer(){ if (TOUCH) return; if (!locked) { try { canvas.requestPointerLock(); } catch(e){} } }
+canvas.addEventListener('pointerdown', function(e){ audio();
+  if (TOUCH || (e && e.pointerType === 'touch')) return;   /* thumbs are handled below */
   if (G.phase==='fight'||G.phase==='countdown'){ if (!locked){ grabPointer(); return; } fire(); }
 });
 $('clickcatch').addEventListener('click', function(){ audio(); grabPointer(); });
@@ -445,9 +490,10 @@ function moveSelf(dt) {
   var f = 0, r = 0;
   if (keys.KeyW) f += 1; if (keys.KeyS) f -= 1;
   if (keys.KeyD) r += 1; if (keys.KeyA) r -= 1;
+  if (touch.active) { f = -touch.my; r = touch.mx; }   /* analog: a half stick is a walk */
   var sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
   var wx = (-sin*f + cos*r), wz = (-cos*f - sin*r);
-  var len = Math.hypot(wx, wz) || 1;
+  var len = Math.max(1, Math.hypot(wx, wz));
   var ax = wx/len*speed, az = wz/len*speed;
   var ground = me.onGround ? 14 : 4;
   me.vel.x += (ax - me.vel.x) * Math.min(1, dt*ground);
@@ -867,6 +913,8 @@ function startCountdown() {
   spawnMe(); spawnFoe();
   foeMesh.visible = true;
   updateHpHud(); updateAmmoHud(); updateRoundsHud(); updatePicksHud();
+  $('dashBtn').style.display = me.stats.dashCharges > 0 ? 'flex' : 'none';
+  $('reloadBtn').style.display = me.stats.noReload ? 'none' : 'flex';
   $('reloadtag').classList.remove('show');
   G.countdownT = 3;
   grabPointer();
@@ -1136,11 +1184,78 @@ function stepSelfStatus(dt) {
       $('reloadtag').classList.remove('show'); updateAmmoHud(); sTone(700,0.05,0.1,'square'); }
   }
   me.fireCd = Math.max(0, me.fireCd - dt);
-  if ((keys.Mouse0 || mouseDown) && locked) fire();
+  if (((keys.Mouse0 || mouseDown) && locked) || touch.firing) fire();
 }
 var mouseDown = false;
 canvas.addEventListener('mousedown', function(){ mouseDown = true; });
 window.addEventListener('mouseup', function(){ mouseDown = false; });
+
+/* left half of the screen is the stick, the rest of it is the look */
+function onTouchStart(e) {
+  audio();
+  if (G.phase !== 'fight' && G.phase !== 'countdown') return;
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    if (t.target && t.target.closest && t.target.closest('.tbtn, button, a, input')) continue;
+    if (t.clientX < window.innerWidth * 0.45 && touch.moveId === null) {
+      touch.moveId = t.identifier;
+      touch.ax = t.clientX; touch.ay = t.clientY;
+      setStickVec(0, 0);
+      var st = $('stick');
+      st.style.display = 'block';
+      st.style.left = t.clientX + 'px'; st.style.top = t.clientY + 'px';
+      $('sticknub').style.transform = 'translate(0px,0px)';
+    } else if (touch.lookId === null) {
+      touch.lookId = t.identifier;
+      touch.lx = t.clientX; touch.ly = t.clientY;
+    }
+  }
+  e.preventDefault();
+}
+function onTouchMove(e) {
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    if (t.identifier === touch.moveId) {
+      var dx = t.clientX - touch.ax, dy = t.clientY - touch.ay;
+      var d = Math.hypot(dx, dy);
+      if (d > 52) { dx *= 52/d; dy *= 52/d; }
+      setStickVec(dx/52, dy/52);
+      $('sticknub').style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    } else if (t.identifier === touch.lookId) {
+      applyLook(t.clientX - touch.lx, t.clientY - touch.ly);
+      touch.lx = t.clientX; touch.ly = t.clientY;
+    }
+  }
+  e.preventDefault();
+}
+function onTouchEnd(e) {
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    if (t.identifier === touch.moveId) {
+      touch.moveId = null; clearStick();
+      $('stick').style.display = 'none';
+    } else if (t.identifier === touch.lookId) {
+      touch.lookId = null;
+    }
+  }
+}
+window.addEventListener('touchstart', onTouchStart, { passive: false });
+window.addEventListener('touchmove', onTouchMove, { passive: false });
+window.addEventListener('touchend', onTouchEnd);
+window.addEventListener('touchcancel', onTouchEnd);
+
+function bindHold(id, down, up) {
+  var el2 = $(id);
+  el2.addEventListener('touchstart', function (e) { e.preventDefault(); e.stopPropagation(); audio(); down(); }, { passive: false });
+  el2.addEventListener('touchend', function (e) { e.preventDefault(); e.stopPropagation(); if (up) up(); }, { passive: false });
+  el2.addEventListener('touchcancel', function () { if (up) up(); });
+}
+bindHold('fireBtn', function () { touch.firing = true; fire(); }, function () { touch.firing = false; });
+bindHold('jumpBtn', function () { keys.Space = true; }, function () { keys.Space = false; });
+bindHold('dashBtn', function () { keys.ShiftLeft = true; }, function () { keys.ShiftLeft = false; });
+bindHold('reloadBtn', function () {
+  if (G.phase === 'fight' && !me.stats.noReload && me.mag < me.stats.magSize && me.reload <= 0) startReload();
+});
 
 /* ---- foe presentation ---- */
 function stepFoeVisual(dt) {
@@ -1217,7 +1332,9 @@ window.DuelDebug = {
   ARENA: ARENA, anyCollide: anyCollide, segSegDist: segSegDist,
   hitsFighter: hitsFighter, spawnBullet: spawnBullet, stepBullet: stepBullet,
   startBot: startBot, moveSelf: moveSelf, keys: keys,
-  PU: PU
+  PU: PU,
+  touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
+  stepSelfStatus: stepSelfStatus, fire: fire
 };
 </script>
 </body>
