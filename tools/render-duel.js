@@ -296,6 +296,26 @@ T('held fire respects the fire-rate cooldown',
     p10.fireGate < p1.fireGate && p10.pause < p1.pause);
 }
 
+/* ---- the draft brain judges, synergises, and counters ---- */
+{
+  /* run each judgement many times: the 0.15 jitter must not flip a clear call */
+  function always(opts, own, seen, L, want) {
+    for (let i = 0; i < 40; i++) if (D.botDraftPick(opts, own, seen, L) !== want) return false;
+    return true;
+  }
+  T('a strong general beats a meme at level 5',
+    always(['heavy','confetti','helium'], [], [], 5, 'heavy'));
+  T('synergy outranks raw value once owned pieces exist',
+    always(['shortfuse','sprinter','confetti'], ['grenadier'], [], 10, 'shortfuse'));
+  T('a shielded opponent teaches it to draft dots',
+    always(['venom','heavy','confetti'], [], ['aegis','battery'], 10, 'venom'));
+  T('counters stay off below level 8',
+    always(['venom','heavy','confetti'], [], ['aegis','battery'], 6, 'heavy'));
+  let spread = new Set();
+  for (let i = 0; i < 60; i++) spread.add(D.botDraftPick(['heavy','confetti','helium'], [], [], 1));
+  T('level 1 still just grabs things', spread.size >= 2, String(spread.size));
+}
+
 /* ---- the third wave's engine hooks ---- */
 {
   const st = D.PU.statsFor(['trickshot']);

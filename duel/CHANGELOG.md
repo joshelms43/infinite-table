@@ -43,3 +43,8 @@
 - Parity is enforced by the gate: gravity owns the bot, it cannot fire past its sheet's rate, it spends real ammunition and waits out real reloads, it cannot dash without drafting one, drafted blinks obey the same cooldown, poison ticks it down through the same status path, and one frame cannot snap its aim past the level's turn speed.
 - Catalog r3's engine hooks landed inside the shared paths, so all 14 new powerups work identically for both fighters: Trickshot, Pinball Wizard, Grand Finale (the boom now rides the wire so remote last shots explode visually too), Anchor, Executioner, Fast Start, Momentum, Scavenger, Stand Your Ground, Showtime, Payback, Hoarder, Panic Hands, Zoomies. 80 total.
 - Real physics bug found by the parity work: exact-contact float alignment let a body resting dead-centre on a crate read its own perch as a side collision and step-up-launch itself, forever. An epsilon skin in `collideBox` closes it — for both fighters, because there is only one `collideBox`.
+
+## 0.7.0
+- The bot drafts like it means it. Levels 4+ weigh general card value, 6+ add synergy with its own build (bounce packages, explosion packages, hand-cannon economies, air fighters), 8+ add counter-picks — a shielded opponent teaches it to draft dots, a damage-stacker teaches it Second Wind and Deflector, a runner teaches it Frost and Bloodhound.
+- Information parity holds: it counters only powerups you have already used in fought rounds. Your current draft pick stays as secret from it as its pick is from you.
+- Levels 1–3 still just grab things. A small jitter keeps even level 10 from being perfectly predictable, but never enough to flip a clear judgement — the gate proves all four tiers of behaviour.

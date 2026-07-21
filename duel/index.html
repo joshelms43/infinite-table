@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.6.0
+<!-- Duel — Infinite Table. Version: 0.7.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -265,9 +265,9 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.6.0"></script>
-<script src="../shared/tablekit.js?v=0.6.0"></script>
-<script src="../shared/duel-powerups.js?v=0.6.0"></script>
+<script src="../shared/config.js?v=0.7.0"></script>
+<script src="../shared/tablekit.js?v=0.7.0"></script>
+<script src="../shared/duel-powerups.js?v=0.7.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -276,7 +276,7 @@ var ROUNDS_TO_WIN = 10;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.6.0' });
+TableKit.watchErrors({ game: 'duel', version: '0.7.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
@@ -1113,12 +1113,10 @@ function openDraft() {
     setTimeout(function () {
       var foeSeed = (G.seed ^ (G.round*2654435761)) ^ 0x79B9;
       var foeOpts = PU.deal(foe.picks, PU.seededRng(foeSeed >>> 0));
-      var pick = foeOpts[Math.floor(Math.random()*foeOpts.length)];
-      if (G.botLevel >= 6) {                        /* judgement, not luck, at the top */
-        var good = foeOpts.filter(function (id) { return BOT_TIERS.indexOf(id) >= 0; });
-        if (good.length) pick = good[Math.floor(Math.random()*good.length)];
-      }
-      receivePick(pick);
+      /* what it has seen: every pick of mine from rounds already fought.
+         If I've drafted this round already, that newest one is still secret. */
+      var seen = me.picks.slice(0, me.picks.length - (G.myPick ? 1 : 0));
+      receivePick(botDraftPick(foeOpts, foe.picks, seen, G.botLevel));
     }, 900 + Math.random()*1200);
   }
 }
@@ -1277,8 +1275,51 @@ function botParams(L) {
     iq:       t
   };
 }
-var BOT_TIERS = ['heavy','rapid','longbarrel','marksman','tank','sprinter','aegis',
-  'lucky','homing','mag','quickhands','leech','doublejump','executioner','regen','battery'];
+/* draft judgement — general value, synergy with its own build, and counters to
+   what it has SEEN. It never reads your current secret pick; it knows only the
+   powerups you have already used in fought rounds, like any opponent watching. */
+var BOT_VAL = { heavy:2, rapid:1.8, tank:1.8, aegis:1.7, twin:1.6, lucky:1.6,
+  marksman:1.6, leech:1.6, longbarrel:1.5, homing:1.5, executioner:1.5,
+  sprinter:1.4, regen:1.4, battery:1.4, bloodhound:1.4, slug:1.3, mag:1.3,
+  doublejump:1.3, quickhands:1.2, venom:1.2, secondwind:1.2, deflector:1.2,
+  frost:1.2, trickshot:1.1, momentum:1.1, sneaky:1.1, buckshot:1.1,
+  glass:0.8, chicken:0.8, confetti:0.7, helium:0.6, castle:0.5, drunk:0.9, zoomies:0.9 };
+var BOT_SYN = [
+  ['grenadier','shortfuse','cluster','rocketboots','finale','mortar'],
+  ['bounce','superball','trickshot','pinball','chicken'],
+  ['buckshot','scavenger','akimbo','twin'],
+  ['handcannon','quickhands','panichands','overcharge','lastcall','finale'],
+  ['aegis','battery'], ['dash','blink'],
+  ['doublejump','airshow','showtime','moonboots','rocketboots'],
+  ['venom','incendiary'], ['adrenaline','soreloser','secondwind']
+];
+var BOT_COUNTER = [
+  { sees: ['aegis','battery'], likes: { venom: 1.4, incendiary: 1.2 } },          /* dots skip shield */
+  { sees: ['glass','heavy','marksman','handcannon'], likes: { tank: 1.2, aegis: 1.1, deflector: 1.2, secondwind: 1.4 } },
+  { sees: ['sprinter','blink','dash','zoomies','moonboots','airshow','doublejump'],
+    likes: { homing: 1.2, bloodhound: 1.3, frost: 1.4, gravitywell: 0.8 } },
+  { sees: ['homing','bloodhound','bees'], likes: { deflector: 1.5 } },
+  { sees: ['tank','unit','hoarder'], likes: { executioner: 1.6, venom: 0.8 } },
+  { sees: ['thorns'], likes: { leech: 1.0, regen: 0.8 } }
+];
+function botDraftPick(options, ownPicks, seenPicks, level) {
+  if (level <= 3) return options[Math.floor(Math.random()*options.length)];
+  var best = options[0], bestScore = -1;
+  options.forEach(function (id) {
+    var score = BOT_VAL[id] || 1;
+    if (level >= 6) BOT_SYN.forEach(function (grp) {
+      if (grp.indexOf(id) < 0) return;
+      grp.forEach(function (m) { if (m !== id && ownPicks.indexOf(m) >= 0) score += 0.9; });
+    });
+    if (level >= 8) BOT_COUNTER.forEach(function (rule) {
+      var seen = rule.sees.some(function (m) { return seenPicks.indexOf(m) >= 0; });
+      if (seen && rule.likes[id]) score += rule.likes[id];
+    });
+    score += Math.random() * 0.15;   /* never perfectly predictable */
+    if (score > bestScore) { bestScore = score; best = id; }
+  });
+  return best;
+}
 
 function startBot(level) {
   level = Math.max(1, Math.min(10, level || G.botLevel || 1));
@@ -1583,7 +1624,7 @@ window.DuelDebug = {
   startBot: startBot, moveSelf: moveSelf, keys: keys,
   moveFighter: moveFighter, fireFighter: fireFighter, applyHit: applyHit,
   computeHitDamage: computeHitDamage, stepFighterStatus: stepFighterStatus,
-  stepBot: stepBot, botParams: botParams,
+  stepBot: stepBot, botParams: botParams, botDraftPick: botDraftPick,
   PU: PU,
   touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
   setRot: setRot, tp: tp, vw: vw, vh: vh, isRot: function(){ return ROT; },
