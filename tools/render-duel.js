@@ -206,6 +206,32 @@ T('holding Fire empties rounds through the real gate',
 T('held fire respects the fire-rate cooldown',
   magBefore - D.me.mag <= 3, 'shots=' + (magBefore - D.me.mag));
 
+/* ---- headshots and the bot's teeth ---- */
+{
+  D.G.mode = 'bot'; D.G.phase = 'fight';
+  D.me.stats = D.PU.statsFor([]); D.foe.stats = D.PU.statsFor([]);
+  D.foe.pos.set(0, 0, 5); D.foe.alive = true; D.foe.hp = 100;   /* z=5: clear of the centre cover */
+  D.me.alive = true; D.me.hp = 100; D.me.shield = 0; D.me.stats.deflect = 0;
+  /* body shot */
+  let bb = D.spawnBullet('me', V(-4, 0.9, 5), V(1, 0, 0), D.me.stats, {});
+  for (let i = 0; i < 200 && D.stepBullet(bb, 1/60); i++);
+  const bodyDmg = 100 - D.foe.hp;
+  /* head shot */
+  D.foe.hp = 100;
+  let hb2 = D.spawnBullet('me', V(-4, 1.58, 5), V(1, 0, 0), D.me.stats, {});
+  for (let i = 0; i < 200 && D.stepBullet(hb2, 1/60); i++);
+  const headDmg = 100 - D.foe.hp;
+  T('a headshot lands double', bodyDmg > 0 && headDmg === bodyDmg * 2,
+    'body=' + bodyDmg + ' head=' + headDmg);
+  /* the practice bot can actually hurt the player now */
+  D.me.pos.set(0, 0.01, 5); D.foe.pos.set(-6, 0, 5);
+  const myHp = D.me.hp;
+  let fb = D.spawnBullet('foe', V(-4, 0.9, 5), V(1, 0, 0), D.foe.stats, {});
+  for (let i = 0; i < 200 && D.stepBullet(fb, 1/60); i++);
+  T('the practice bot draws blood', D.me.hp < myHp, myHp + ' -> ' + D.me.hp);
+  D.me.pos.set(2.6, 0.01, 8);
+}
+
 /* ---- the dumb batch behaves ---- */
 T('catalog grew to 66', D.PU.POWERUPS.length === 66, String(D.PU.POWERUPS.length));
 

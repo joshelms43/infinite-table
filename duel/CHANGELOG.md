@@ -24,3 +24,7 @@
 - Hand Cannon hard-sets the mag to one; picking Extended Mag afterwards is wasted, picking it before gives seven. Pick order matters — that's the game.
 - Phone-first pass: portrait raises the field of view to 92° so the arena isn't a keyhole, draft cards shrink to fit narrow screens, iOS standalone metas and touch-callout suppression added.
 - Headless proof extended: helium climb, popcorn wall-burst, drunk drift, hand-cannon order semantics, dice/rage flags.
+
+## 0.4.0
+- Headshots land double. The head zone is a sphere at the top of the capsule, scaled with body size — Pocket Size shrinks it, Absolute Unit grows it. Headshots ring and pop like crits.
+- Practice bot bug: its bullets sparked but never damaged the player — the hit-judging path dropped non-player owners entirely. The bot draws blood now, with its full effect set (poison, slow, knockback, the lot).
