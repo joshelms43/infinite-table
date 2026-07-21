@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  var CATALOG_VERSION = '2026-07-21-duel-r1';
+  var CATALOG_VERSION = '2026-07-21-duel-r2';
 
   function baseStats() {
     return {
@@ -25,6 +25,8 @@
       explosionRadius: 0, clusterCount: 0,
       splitCount: 0, boomerang: false, pull: false,
       bulletStyle: 'default',
+      wobble: 0, burstOnWall: false, echo: false, selfPush: false,
+      dice: false, rage: false,
       /* on-hit effects */
       lifesteal: 0, poison: 0, poisonDur: 0, burn: 0, burnDur: 0,
       slowOnHit: 0, slowDur: 0, blindDur: 0
@@ -150,7 +152,36 @@
     { id: 'beltfeed', name: 'Belt Feed', text: 'Never reload again, −20% fire rate',
       apply: function (s) { s.noReload = true; s.fireRate *= 0.8; } },
     { id: 'sugarrush', name: 'Sugar Rush', text: '+12% move, fire and reload speed',
-      apply: function (s) { s.moveSpeed *= 1.12; s.fireRate *= 1.12; s.reloadTime *= 0.88; } }
+      apply: function (s) { s.moveSpeed *= 1.12; s.fireRate *= 1.12; s.reloadTime *= 0.88; } },
+
+    /* ---- the dumb batch ---- */
+    { id: 'helium', name: 'Helium Rounds', text: 'Bullets float upward as they fly',
+      apply: function (s) { s.bulletGravity -= 8; } },
+    { id: 'freight', name: 'Freight Train', text: 'Huge slow bullets, +90% damage',
+      apply: function (s) { s.bulletSpeed *= 0.45; s.damage *= 1.9; s.bulletSize *= 1.6; } },
+    { id: 'jackhammer', name: 'Jackhammer', text: '+120% fire rate, −55% damage',
+      apply: function (s) { s.fireRate *= 2.2; s.damage *= 0.45; } },
+    { id: 'drunk', name: 'Drunk Rounds', text: 'Bullets wander unpredictably, +25% damage',
+      apply: function (s) { s.wobble += 2.2; s.damage *= 1.25; } },
+    { id: 'popcorn', name: 'Popcorn', text: 'Bullets burst into 4 pellets on walls',
+      apply: function (s) { s.burstOnWall = true; } },
+    { id: 'echo', name: 'Echo', text: 'Every shot fires a free second shot a beat later',
+      apply: function (s) { s.echo = true; } },
+    { id: 'confetti', name: 'Confetti Cannon', text: '+1 bullet and everything is confetti',
+      apply: function (s) { s.bulletCount += 1; s.bulletStyle = 'confetti'; } },
+    { id: 'dice', name: 'Dice Rounds', text: 'Every hit rolls between 25% and 250% damage',
+      apply: function (s) { s.dice = true; } },
+    { id: 'rocketboots', name: 'Rocket Boots', text: 'Explosions, and they shove you too — jump with them',
+      apply: function (s) { s.explosionRadius = Math.max(s.explosionRadius, 1.1); s.selfPush = true; } },
+    { id: 'handcannon', name: 'Hand Cannon', text: 'One round in the mag, +230% damage, snappy reload',
+      apply: function (s) { s.magSize = 1; s.damage *= 3.3; s.reloadTime *= 0.45; } },
+    { id: 'sneaky', name: 'Sneaky Rounds', text: 'Your bullets are nearly invisible, −20% damage',
+      apply: function (s) { s.bulletStyle = 'ghost'; s.damage *= 0.8; } },
+    { id: 'bees', name: 'Bees', text: 'Fire a small homing swarm instead of bullets',
+      apply: function (s) { s.bulletCount += 2; s.homing += 1.4; s.bulletSize *= 0.55;
+        s.damage *= 0.5; s.bulletStyle = 'bee'; } },
+    { id: 'soreloser', name: 'Sore Loser', text: '+45% damage while you are below 30 HP',
+      apply: function (s) { s.rage = true; } }
   ];
 
   var BY_ID = {};
@@ -175,6 +206,8 @@
     s.crit = Math.min(0.9, s.crit);
     s.deflect = Math.min(0.6, s.deflect);
     s.explosionRadius = Math.min(4, s.explosionRadius);
+    s.bulletGravity = Math.max(-24, Math.min(30, s.bulletGravity));
+    s.wobble = Math.min(6, s.wobble);
     return s;
   }
 

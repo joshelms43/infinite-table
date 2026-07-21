@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.2.0
+<!-- Duel — Infinite Table. Version: 0.3.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -11,6 +11,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Duel — Infinite Table</title>
 <meta name="theme-color" content="#121A16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito+Sans:wght@700;800&display=swap" rel="stylesheet">
@@ -23,7 +25,7 @@
   --line-soft:rgba(242,238,226,.13);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;touch-action:none;overscroll-behavior:none;background:var(--table-night);
+html,body{height:100%;overflow:hidden;touch-action:none;-webkit-touch-callout:none;overscroll-behavior:none;background:var(--table-night);
   font-family:'Nunito Sans',system-ui,sans-serif;color:var(--text-ivory);user-select:none}
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block}
 button{font-family:inherit;border:none;cursor:pointer;background:none;color:inherit}
@@ -48,12 +50,12 @@ body.fighting #hud{display:block}
 #reloadtag{font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
   color:var(--money-gold);margin-top:6px;opacity:0}
 #reloadtag.show{opacity:1}
-#rounds{position:fixed;top:calc(18px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
-  display:flex;gap:7px;align-items:center}
-.rdot{width:9px;height:9px;border-radius:50%;background:rgba(242,238,226,.16)}
-.rdot.mine{background:var(--money-gold)}
-.rdot.theirs{background:var(--primary-coral)}
-#rounds .vs{font-size:10px;font-weight:800;letter-spacing:1px;opacity:.35;margin:0 4px}
+#rounds{position:fixed;top:calc(16px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+  display:flex;gap:9px;align-items:baseline;font-family:'Lilita One',cursive;font-size:26px;
+  text-shadow:0 2px 6px rgba(8,12,10,.7)}
+#rounds .sc-mine{color:var(--money-gold)}
+#rounds .sc-theirs{color:var(--primary-coral)}
+#rounds .vs{font-size:14px;opacity:.35}
 #mypicks{position:fixed;left:22px;top:calc(18px + env(safe-area-inset-top));max-width:190px;
   font-size:10.5px;font-weight:800;letter-spacing:.4px;opacity:.5;line-height:1.7}
 #hurt{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;
@@ -155,12 +157,17 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
 #draftwait{font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
   color:var(--money-gold);margin-top:18px;min-height:15px;opacity:0;transition:opacity .2s}
 #draftwait.show{opacity:1}
-#foepick{font-size:12px;font-weight:800;margin-top:10px;opacity:.6;min-height:16px}
 
 #clickcatch{position:fixed;inset:0;z-index:9;display:none;align-items:center;justify-content:center;
   background:rgba(10,15,12,.45);font-family:'Lilita One',cursive;font-size:19px;letter-spacing:.5px;
   text-shadow:0 2px 8px rgba(8,12,10,.8);cursor:pointer}
 #clickcatch.show{display:flex}
+@media (max-width:430px){
+  #cards{gap:8px}
+  .pcard{width:104px;min-height:150px}
+  .pcard .pname{font-size:13px;padding:9px 9px 5px}
+  .pcard .ptext{font-size:9.5px;padding:0 9px 10px}
+}
 @media (prefers-reduced-motion: reduce){ .pcard{animation:none} }
 </style>
 </head>
@@ -225,7 +232,6 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
     <div class="overline" id="draftline">Pick A Powerup</div>
     <div id="cards"></div>
     <div id="draftwait">Waiting For Them</div>
-    <div id="foepick"></div>
   </div>
 </div>
 
@@ -241,29 +247,31 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.2.0"></script>
-<script src="../shared/tablekit.js?v=0.2.0"></script>
-<script src="../shared/duel-powerups.js?v=0.2.0"></script>
+<script src="../shared/config.js?v=0.3.0"></script>
+<script src="../shared/tablekit.js?v=0.3.0"></script>
+<script src="../shared/duel-powerups.js?v=0.3.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
 var PU = window.DuelPowerups;
-var ROUNDS_TO_WIN = 4;
+var ROUNDS_TO_WIN = 10;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.2.0' });
+TableKit.watchErrors({ game: 'duel', version: '0.3.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
-['heavy','rapid','buckshot','twin','slug','needle','longbarrel','akimbo','lucky','overcharge','lastcall','marksman']
+['heavy','rapid','buckshot','twin','slug','needle','longbarrel','akimbo','lucky','overcharge','lastcall','marksman',
+ 'freight','jackhammer','handcannon','dice','soreloser']
   .forEach(function(id){ CAT[id]='#E26A4B'; });
-['bounce','superball','phantom','homing','bloodhound','mortar','grenadier','shortfuse','cluster','split','boomerang','gravitywell','chicken']
+['bounce','superball','phantom','homing','bloodhound','mortar','grenadier','shortfuse','cluster','split','boomerang','gravitywell','chicken',
+ 'helium','drunk','popcorn','echo','confetti','sneaky','bees']
   .forEach(function(id){ CAT[id]='#6394B6'; });
 ['frost','venom','incendiary','flash','riot','leech'].forEach(function(id){ CAT[id]='#7F6595'; });
 ['tank','glass','regen','aegis','battery','thorns','pocket','unit','deflector','secondwind']
   .forEach(function(id){ CAT[id]='#3B8B82'; });
-['sprinter','moonboots','doublejump','airshow','dash','blink','castle','adrenaline']
+['sprinter','moonboots','doublejump','airshow','dash','blink','castle','adrenaline','rocketboots']
   .forEach(function(id){ CAT[id]='#E0AB52'; });
 ['mag','quickhands','beltfeed','sugarrush'].forEach(function(id){ CAT[id]='#BE8F41'; });
 
@@ -276,7 +284,9 @@ var scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(COL.fog, 0.028);
 var camera = new THREE.PerspectiveCamera(72, 1, 0.08, 120);
 function size(){ var w=window.innerWidth,h=window.innerHeight;
-  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+  renderer.setSize(w,h,false); camera.aspect=w/h;
+  camera.fov = h > w ? 92 : 72;   /* portrait needs the width back */
+  camera.updateProjectionMatrix(); }
 window.addEventListener('resize', size); size();
 
 scene.add(new THREE.HemisphereLight(0x3A4C42, 0x0A0F0C, 0.95));
@@ -576,6 +586,22 @@ function bulletMesh(stats, mine) {
     beak.position.z = stats.bulletSize; g.add(beak);
     return g;
   }
+  if (stats.bulletStyle === 'confetti') {
+    var hue = ['#E26A4B','#E0AB52','#6394B6','#7F6595','#3B8B82'][Math.floor(Math.random()*5)];
+    var box = new THREE.Mesh(new THREE.BoxGeometry(stats.bulletSize*1.6, stats.bulletSize*0.5, stats.bulletSize*1.6),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(hue) }));
+    box.rotation.set(Math.random()*3, Math.random()*3, Math.random()*3);
+    return box;
+  }
+  if (stats.bulletStyle === 'ghost') {
+    return new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.05, stats.bulletSize), 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xF2EEE2, transparent: true, opacity: 0.07 }));
+  }
+  if (stats.bulletStyle === 'bee') {
+    var bee = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.04, stats.bulletSize), 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xE0AB52 }));
+    return bee;
+  }
   return new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.05, stats.bulletSize), 10, 8),
     mine ? bulletMat : foeBulletMat);
 }
@@ -631,6 +657,15 @@ function fire() {
   if (s.bulletStyle==='chicken') sCluck(); else sShot();
   me.pitch += 0.006; /* tiny kick */
   if (G.tx) G.tx.send('shoot', { o: [origin.x,origin.y,origin.z], d: shots, ds: dmgScale });
+  if (s.echo) {
+    var eo = origin.clone(), eShots = shots.slice(), eScale = dmgScale;
+    setTimeout(function () {
+      if (G.phase !== 'fight' || !me.alive) return;
+      eShots.forEach(function (d) { spawnBullet('me', eo, new THREE.Vector3(d[0],d[1],d[2]), s, { dmgScale: eScale }); });
+      if (G.tx) G.tx.send('shoot', { o: [eo.x,eo.y,eo.z], d: eShots, ds: eScale });
+      sTone(340, 0.07, 0.12);
+    }, 170);
+  }
   if (me.mag === 0 && !s.noReload) startReload();
 
   updateAmmoHud();
@@ -703,6 +738,12 @@ function stepBullet(b, dt) {
     }
   }
 
+  if (s.wobble > 0) {
+    var wob = s.wobble * dt * b.vel.length();
+    b.vel.x += (Math.random()-0.5) * wob;
+    b.vel.y += (Math.random()-0.5) * wob * 0.6;
+    b.vel.z += (Math.random()-0.5) * wob;
+  }
   var remaining = b.vel.length() * dt;
   var stepLen = Math.max(0.12, s.bulletSize);
   var dirN = b.vel.clone().normalize();
@@ -734,6 +775,13 @@ function stepBullet(b, dt) {
           if (s.bulletStyle==='chicken') sCluck();
         } else {
           if (b.boom > 0) explode(b, b.pos);
+          if (s.burstOnWall && !b.fromCluster) {
+            for (var pk = 0; pk < 4; pk++) {
+              var pd = new THREE.Vector3(Math.random()-0.5, Math.random()*0.7+0.15, Math.random()-0.5).normalize();
+              spawnBullet(b.owner, prev, pd, s, { fromCluster: true, noSplit: true, dmgScale: b.dmgScale*0.5 });
+            }
+            sNoise(0.1, 1400, 0.15);
+          }
           return false;
         }
       }
@@ -751,6 +799,15 @@ function explode(b, at) {
   var s = b.stats;
   boomFx(at, b.boom);
   sNoise(0.25, 700, 0.4);
+  if (b.owner === 'me' && s.selfPush) {
+    var dSelf = camera.position.distanceTo(at);
+    if (dSelf < b.boom + 1.4) {
+      var shove = camera.position.clone().sub(at).normalize().multiplyScalar(11);
+      me.vel.x += shove.x; me.vel.z += shove.z;
+      me.vel.y = Math.max(me.vel.y + 4, 7);
+      me.onGround = false;
+    }
+  }
   var tgt = targetOf(b.owner);
   var center = tgt.pos.clone(); center.y += 0.9*tgt.stats.scale;
   if (tgt.alive && center.distanceTo(at) < b.boom + 0.5*tgt.stats.scale) {
@@ -771,6 +828,8 @@ function landHit(b, at, scale) {
   if (b.owner !== 'me') { sparkFx(at, false); return; }  /* bot's judged in botHit */
   var s = me.stats;
   var dmg = s.damage * b.dmgScale * scale;
+  if (s.dice) dmg *= 0.25 + Math.random()*2.25;
+  if (s.rage && me.hp < 30) dmg *= 1.45;
   var crit = Math.random() < s.crit;
   if (crit) dmg *= 2;
   dmg = Math.round(dmg);
@@ -884,11 +943,8 @@ function updateAmmoHud() {
   $('ammo').classList.toggle('dry', !me.stats.noReload && me.mag === 0);
 }
 function updateRoundsHud() {
-  var h = '';
-  for (var i = 0; i < ROUNDS_TO_WIN; i++) h += '<span class="rdot'+(i<G.myScore?' mine':'')+'"></span>';
-  h += '<span class="vs">VS</span>';
-  for (var j = 0; j < ROUNDS_TO_WIN; j++) h += '<span class="rdot'+(j<G.foeScore?' theirs':'')+'"></span>';
-  $('rounds').innerHTML = h;
+  $('rounds').innerHTML = '<span class="sc-mine">' + G.myScore + '</span>' +
+    '<span class="vs">—</span><span class="sc-theirs">' + G.foeScore + '</span>';
 }
 function updatePicksHud() {
   $('mypicks').innerHTML = me.picks.map(function(id){
@@ -948,7 +1004,6 @@ function openDraft() {
   document.exitPointerLock && document.exitPointerLock();
   $('clickcatch').classList.remove('show');
   G.myPick = null; G.foePickId = null;
-  $('foepick').textContent = '';
   if (G.pendingFoePick) { var pend = G.pendingFoePick; G.pendingFoePick = null; receivePick(pend); }
   $('draftwait').classList.remove('show');
   /* both clients deal from the same seed stream: seed ^ round, per-player salt */
@@ -986,10 +1041,8 @@ function choosePick(id, cardEl) {
   maybeAdvance();
 }
 function receivePick(id) {
-  G.foePickId = id;
+  G.foePickId = id;               /* their picks stay their secret — the fight reveals them */
   foe.picks.push(id);
-  var p = PU.byId(id);
-  $('foepick').textContent = p ? 'They took ' + p.name : '';
   maybeAdvance();
 }
 function maybeAdvance() {

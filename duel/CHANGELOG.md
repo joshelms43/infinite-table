@@ -16,3 +16,11 @@
 - Touch and keyboard share every code path — the stick feeds the same movement, the buttons set the same keys. The headless proof drives stick, look drag, pitch clamp, and held-fire through the real functions.
 - Pointer lock is desktop-only now; touch devices never see the Click To Aim catch.
 - Pinch zoom and scroll rubber-banding disabled during play.
+
+## 0.3.0
+- First to ten. The dot tally became a numeric score — twenty dots don't fit a phone.
+- Draft picks are secret now. The fight reveals them.
+- 13 new powerups (catalog `2026-07-21-duel-r2`, 66 total): Helium Rounds, Freight Train, Jackhammer, Drunk Rounds, Popcorn, Echo, Confetti Cannon, Dice Rounds, Rocket Boots, Hand Cannon, Sneaky Rounds, Bees, Sore Loser. Real engine support behind each: wobble steering, wall-burst pellets, delayed free echo shots, self-knockback explosions you can jump with, per-hit damage rolls, and three new bullet skins including nearly-invisible ones.
+- Hand Cannon hard-sets the mag to one; picking Extended Mag afterwards is wasted, picking it before gives seven. Pick order matters — that's the game.
+- Phone-first pass: portrait raises the field of view to 92° so the arena isn't a keyhole, draft cards shrink to fit narrow screens, iOS standalone metas and touch-callout suppression added.
+- Headless proof extended: helium climb, popcorn wall-burst, drunk drift, hand-cannon order semantics, dice/rage flags.

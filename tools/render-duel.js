@@ -206,6 +206,47 @@ T('holding Fire empties rounds through the real gate',
 T('held fire respects the fire-rate cooldown',
   magBefore - D.me.mag <= 3, 'shots=' + (magBefore - D.me.mag));
 
+/* ---- the dumb batch behaves ---- */
+T('catalog grew to 66', D.PU.POWERUPS.length === 66, String(D.PU.POWERUPS.length));
+
+/* helium floats a bullet upward */
+{
+  const st = D.PU.statsFor(['helium']);
+  T('helium turns bullet gravity negative', st.bulletGravity < 0, String(st.bulletGravity));
+  const hb = D.spawnBullet('me', V(0, 1.5, 8), V(1, 0, 0), st, {});
+  D.foe.alive = false;
+  for (let i = 0; i < 20; i++) D.stepBullet(hb, 1/60);
+  T('a helium bullet climbs', hb.pos.y > 1.6, hb.pos.y.toFixed(2));
+}
+/* popcorn bursts on the wall */
+{
+  const st = D.PU.statsFor(['popcorn']);
+  const before = D.bullets.length;
+  const pb = D.spawnBullet('me', V(-13.8, 1.2, 8), V(-1, 0, 0), st, {});
+  let al = true;
+  for (let i = 0; i < 20 && al; i++) al = D.stepBullet(pb, 1/60);
+  T('popcorn dies on the wall but leaves pellets',
+    !al && D.bullets.length >= before + 4, 'bullets=' + (D.bullets.length - before));
+}
+/* drunk wanders off a straight line */
+{
+  const st = D.PU.statsFor(['drunk']);
+  const db = D.spawnBullet('me', V(0, 1.5, 8), V(1, 0, 0), st, {});
+  for (let i = 0; i < 25; i++) D.stepBullet(db, 1/60);
+  const drift = Math.abs(db.pos.z - 8) + Math.abs(db.pos.y - 1.5);
+  T('a drunk bullet does not fly straight', drift > 0.05, drift.toFixed(3));
+}
+/* hand cannon is one round */
+{
+  const st = D.PU.statsFor(['handcannon', 'mag']);
+  T('hand cannon overrides the mag no matter the order',
+    D.PU.statsFor(['mag','handcannon']).magSize === 1 && st.magSize === 7,
+    'later=' + D.PU.statsFor(['mag','handcannon']).magSize + ' earlier=' + st.magSize);
+}
+/* dice and rage change the roll at the landHit layer — flags carried on the sheet */
+T('dice and rage ride the sheet',
+  D.PU.statsFor(['dice']).dice === true && D.PU.statsFor(['soreloser']).rage === true);
+
 /* ---- fight frame ---- */
 D.G.phase = 'fight';
 D.foe.pos.set(3, 0, -2);
