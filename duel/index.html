@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.8.2
+<!-- Duel — Infinite Table. Version: 0.8.3
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -122,6 +122,7 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
 .quietbtn{font-family:'Lilita One',cursive;font-size:14px;color:var(--text-ivory);
   background:rgba(255,255,255,.07);border:1px solid var(--line-soft);border-radius:12px;padding:12px;
   text-decoration:none;display:block}
+.quietbtn.busy{pointer-events:none;opacity:.6}
 .joinrow{display:flex;gap:8px}
 .joinrow input{flex:1;background:rgba(255,255,255,.06);border:1px solid var(--line-soft);border-radius:12px;
   color:var(--text-ivory);font-family:'Lilita One',cursive;font-size:17px;letter-spacing:5px;
@@ -265,9 +266,9 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.8.2"></script>
-<script src="../shared/tablekit.js?v=0.8.2"></script>
-<script src="../shared/duel-powerups.js?v=0.8.2"></script>
+<script src="../shared/config.js?v=0.8.3"></script>
+<script src="../shared/tablekit.js?v=0.8.3"></script>
+<script src="../shared/duel-powerups.js?v=0.8.3"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -276,7 +277,7 @@ var ROUNDS_TO_WIN = 10;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.8.2' });
+TableKit.watchErrors({ game: 'duel', version: '0.8.3' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
@@ -1286,7 +1287,10 @@ function onPresence() {
     document.exitPointerLock && document.exitPointerLock();
     hide('draft');
     G.phase = 'menu'; foeMesh.visible = false;
+    if (G.tx) { try { G.tx.close(); } catch (e) {} G.tx = null; }
+    G.mode = null;
     show('menu');
+    $('hostbtn').classList.remove('busy'); $('joinbtn').classList.remove('busy');
     $('neterr').textContent = 'They left the table.';
   }
 }
@@ -1298,7 +1302,11 @@ function hostBegin() {
   G.tx.send('begin', { seed: seed });
   startCountdown();
 }
+var joining = false;
 async function joinRoom(code, asHost) {
+  if (joining) return;                     /* a second click must not open a second channel */
+  joining = true;
+  if (G.tx) { try { G.tx.close(); } catch (e) {} G.tx = null; }
   $('neterr').textContent = '';
   try {
     G.tx = await TableKit.join({
@@ -1320,6 +1328,7 @@ async function joinRoom(code, asHost) {
     $('neterr').textContent = String(e.message || e);
     $('hostbtn').classList.remove('busy'); $('joinbtn').classList.remove('busy');
   }
+  joining = false;
 }
 $('hostbtn').onclick = function () { audio(); this.classList.add('busy'); joinRoom(TableKit.roomCode(), true); };
 $('joinbtn').onclick = function () {

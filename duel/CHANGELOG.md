@@ -60,3 +60,6 @@
 
 ## 0.8.2
 - Space after Play Again no longer restarts the match forever. Clicked buttons kept keyboard focus, and Space activates the focused button — so the first jump of the rematch clicked Play Again again. Buttons now blur on use, and Space is reserved for jumping during play.
+
+## 0.8.3
+- Double-joining a table is impossible now. The Join button's busy lock had CSS for the wrong button class, so a double-click opened two live channels — every event then processed twice or more: single shots rendered as shotgun volleys, and each hit applied to health repeatedly, one-shotting from round one with no powerups involved. joinRoom now refuses to run concurrently, closes any existing channel before opening one, quiet buttons actually lock while busy, and a dead table releases its channel instead of leaving it subscribed.
