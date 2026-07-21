@@ -53,3 +53,7 @@
 - The silly batch (catalog `2026-07-21-duel-r4`, 94 total): Balloon Rounds (bullets inflate in flight — hitbox and all), Hay Fever (sometimes you sneeze the whole mag out at once), Trebuchet (hits launch them skyward), Disco Inferno (bullets lap the shooter before launching), Hiccups, Beach Ball, Battle Cry (reloading blasts a horn that shoves anyone close, judged like any shot), Crab Mode (speed follows how sideways you're going), Party Popper (one confetti blast per round), Dizzy Rounds (hits spin the view — which spins the bot's aim too, because the view is the aim for everyone), Tortoise Mode, Clown Shoes (every jump honks), Pickpocket (hits move a round from their mag to yours), Mule Kick (real recoil).
 - All fourteen ride the shared fighter paths, so each works identically for both fighters and every effect is gate-proven: inflation, sneeze dumps, one-pop-per-round, recoil, launches, spins, thefts, damage shrugs, crab ratios, and the horn shove.
 - No powerup is called Yeet.
+
+## 0.8.1
+- Touchscreen laptops are not phones. Boot mode now follows the primary pointer only (`pointer: coarse`), not the mere presence of touch hardware — the check that put thumb buttons on a desktop with a touchscreen. From there the truth is live: an actual touch brings the thumb UI up, an actual mouse click puts it away and restores pointer-lock aiming. Hybrids get both, whichever is in hand.
+- The Landscape button follows the live mode instead of a boot-time verdict.

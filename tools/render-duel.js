@@ -172,6 +172,16 @@ D.foe.stats = D.PU.statsFor([]);
 const grazeSmall = D.hitsFighter(V(-2, 1.0, 0.62), V(2, 1.0, 0.62), D.foe, 0.12);
 T('the base fighter does not', grazeSmall === false);
 
+/* ---- input mode follows the hardware actually in use ---- */
+{
+  T('a fine primary pointer boots into desktop mode', D.isTouch() === false);
+  D.setTouchMode(true);                        /* a thumb arrived */
+  T('a real touch brings up the thumb UI', D.isTouch() === true);
+  D.setTouchMode(false);                       /* a mouse click on a hybrid */
+  T('a real mouse puts it away again', D.isTouch() === false &&
+    D.touch.firing === false);
+}
+
 /* ---- the rotated world maps thumbs correctly ---- */
 {
   sandbox.innerWidth = 390; sandbox.innerHeight = 844;   /* a portrait phone */
