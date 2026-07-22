@@ -1,5 +1,20 @@
 # Last Card — Changelog
 
+## 0.2.0
+The flagship's hands. M Deal's hand and drag grammar, ported whole:
+- Fanned, overlapping hand — wrappers keyed by card id, FLIP slides on every
+  change, arc bow via `--fan`/`--fanY`, draw-ins pop, overlap tightens as the
+  hand grows.
+- Direct manipulation: press squishes instantly; tap raises (neighbours part,
+  the pile invites); tap the pile or drag to commit; any upward pull picks the
+  card up; sideways is a scroll; hold 430ms inspects the card full-size.
+- Drag clone with velocity tilt, dropok glow over the pile, magnetic 48px
+  near-miss, springback with a denial shake for dead cards, flight animation
+  onto the pile. Wilds drop first, then pick their colour.
+- New gate `tests/lastcardtouch.js`: a real jsdom document driven by real
+  pointer events — squish, raise, part, drag, chase, drop, deny, wild picker,
+  hold-inspect all pinned. It also re-proved the call penalty from the glass.
+
 ## 0.1.0
 First deal. The Aussie shedding game on the Infinite Table deck — Coral, Teal,
 Gold, Blue.

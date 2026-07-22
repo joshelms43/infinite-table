@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Last Card — Infinite Table. Version: 0.1.0
+<!-- Last Card — Infinite Table. Version: 0.2.0
      Match the colour or the number, actions bite, wilds turn the table, and
      you call "Last Card" before you go to one — or the table charges you two.
      Host-authoritative over TableKit broadcast, same shape as M Deal: clients
@@ -125,12 +125,44 @@ input[type=text]::placeholder{color:var(--text-faint);font-weight:700}
 #mystatus{display:flex;align-items:center;justify-content:center;gap:10px;min-height:26px;
   font-size:13px;font-weight:800;color:var(--text-faint);padding:0 16px}
 #mystatus.go{color:var(--money-gold)}
-#hand{display:flex;gap:9px;overflow-x:auto;padding:16px 18px 8px;scrollbar-width:none}
+#hand{display:flex;overflow-x:auto;padding:34px 18px 8px;margin-top:-18px;scrollbar-width:none;overscroll-behavior:contain}
 #hand::-webkit-scrollbar{display:none}
-#hand .card{transition:transform .15s, box-shadow .15s;opacity:.55}
-#hand .card.legal{opacity:1;transform:translateY(-8px);cursor:pointer;
-  box-shadow:0 8px 18px rgba(8,12,10,.5)}
-#hand .card.legal:active{transform:translateY(-14px)}
+#hand.few{justify-content:center}
+.cardw{flex:0 0 88px;width:88px;position:relative;touch-action:pan-x;
+  transition:transform .26s cubic-bezier(.34,1.56,.64,1)}
+.cardw .card{rotate:var(--fan,0deg);translate:0 var(--fanY,0px);
+  transition:transform .18s cubic-bezier(.2,1.1,.3,1), box-shadow .18s, opacity .18s}
+.cardw.dead .card{opacity:.55}
+.cardw.pressed{z-index:40!important}
+.cardw.pressed .card{transform:scale(.955) translateY(2px);
+  box-shadow:0 1px 4px rgba(8,12,10,.45);transition:transform .07s ease, box-shadow .07s ease}
+.cardw.raised{z-index:60!important;transform:translateY(-26px)}
+.cardw.raised .card{rotate:0deg;translate:0 0;transform:scale(1.03);
+  box-shadow:0 10px 22px rgba(8,12,10,.55)}
+.cardw.part-l{transform:translateX(-8px)}
+.cardw.part-r{transform:translateX(8px)}
+.cardw.hidden-src{visibility:hidden}
+.cardw.denied .card{animation:deny .32s ease}
+@keyframes deny{25%{transform:translateX(-5px)}50%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+.cardw.dealt .card{animation:dealin .3s cubic-bezier(.2,1.3,.4,1)}
+@keyframes dealin{from{transform:translateY(20px) scale(.92);opacity:0}}
+
+.dragclone{position:fixed;z-index:81;pointer-events:none;will-change:transform;
+  width:88px;height:126px;filter:drop-shadow(0 14px 22px rgba(8,12,10,.55))}
+.dragclone .card{transform:scale(1);transition:transform .13s cubic-bezier(.3,1.4,.5,1)}
+.dragclone.lifted .card{transform:scale(1.08)}
+.dragclone.springback{transition:transform .19s cubic-bezier(.3,1.5,.5,1)}
+.droppable{outline:2px dashed rgba(242,238,226,.35);outline-offset:4px;border-radius:16px}
+.dropok{outline:2px solid var(--money-gold);outline-offset:4px;border-radius:16px;
+  box-shadow:0 0 14px rgba(190,143,65,.55);transform:scale(1.03);
+  transition:transform .12s, box-shadow .12s}
+.snapped{animation:snapin .28s cubic-bezier(.2,1.4,.4,1)}
+@keyframes snapin{35%{transform:scale(1.06)}}
+.flyer{position:fixed;z-index:80;pointer-events:none}
+#inspect{position:fixed;inset:0;background:var(--scrim);display:none;
+  align-items:center;justify-content:center;z-index:70}
+#inspect.show{display:flex}
+#inspect .card{transform:scale(2.1);box-shadow:0 18px 40px rgba(8,12,10,.6)}
 #actions{display:flex;justify-content:center;gap:10px;padding:6px 18px 0}
 .actbtn{padding:12px 26px;border-radius:13px;font-weight:800;font-size:15px;
   background:var(--felt-green);border:1px solid var(--line-soft-t)}
@@ -219,6 +251,7 @@ input[type=text]::placeholder{color:var(--text-faint);font-weight:700}
 </div>
 
 <div id="banner"></div>
+<div id="inspect"></div>
 
 <div id="overlay">
   <div id="pickwrap" class="hidden" style="display:contents">
@@ -233,12 +266,12 @@ input[type=text]::placeholder{color:var(--text-faint);font-weight:700}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.1.0"></script>
-<script src="../shared/tablekit.js?v=0.1.0"></script>
-<script src="../shared/lastcard-rules.js?v=0.1.0"></script>
+<script src="../shared/config.js?v=0.2.0"></script>
+<script src="../shared/tablekit.js?v=0.2.0"></script>
+<script src="../shared/lastcard-rules.js?v=0.2.0"></script>
 <script>
 'use strict';
-var VERSION = '0.1.0';
+var VERSION = '0.2.0';
 TableKit.watchErrors({ game: 'lastcard', version: VERSION, onError: function (m) { banner(m); } });
 
 function $(id) { return document.getElementById(id); }
@@ -283,6 +316,7 @@ function cardEl(c) {
 
 function renderAll() {
   if (!V) return;
+  if (SELECTED != null && !MYHAND.some(function (c) { return c.id === SELECTED; })) SELECTED = null;
   /* opponents, seated clockwise from my left */
   var foes = $('foes');
   foes.innerHTML = '';
@@ -317,18 +351,7 @@ function renderAll() {
   else if (mine) st.textContent = V.phase === 'drawn' ? 'Play it or keep it' : 'Your Turn';
   else st.textContent = V.players[V.turn].name + '\u2019s turn';
 
-  var hand = $('hand');
-  hand.innerHTML = '';
-  MYHAND.forEach(function (c) {
-    var el = cardEl(c);
-    var legal = mine && LastCard.canPlay(c, V.top, V.activeColour) &&
-      (V.phase !== 'drawn' || c.id === V.drawnId);
-    if (legal) {
-      el.classList.add('legal');
-      el.onclick = function () { tapCard(c); };
-    }
-    hand.appendChild(el);
-  });
+  renderHand(mine);
 
   $('drawbtn').disabled = !mine || V.phase === 'drawn';
   $('drawpile').classList.toggle('pulse', mine && V.phase === 'play' &&
@@ -359,19 +382,393 @@ function sayEvents(evts, names) {
   });
 }
 
-/* ================= input ================= */
+/* ================= the hand: M Deal's fan, keyed and FLIPped =================
+   Wrappers keyed by card id survive re-renders, so cards slide to their new
+   places instead of teleporting; new arrivals pop in; the fan bows outward
+   like a hand actually held. Same grammar as the flagship: press squishes,
+   tap raises, any upward pull picks the card up, hold inspects it. */
+var SELECTED = null;
+var PREVIDS = new Set();
+
+function isLegal(c) {
+  return V && V.turn === MYSEAT && !V.over &&
+    LastCard.canPlay(c, V.top, V.activeColour) &&
+    (V.phase !== 'drawn' || c.id === V.drawnId);
+}
+
+function sortHand(cards) {
+  var colOrd = { coral: 0, teal: 1, gold: 2, blue: 3 };
+  var kindOrd = { num: 0, skip: 1, rev: 2, d2: 3, wild: 4, w4: 5 };
+  return cards.slice().sort(function (a, b) {
+    var ac = a.colour == null ? 9 : colOrd[a.colour];
+    var bc = b.colour == null ? 9 : colOrd[b.colour];
+    if (ac !== bc) return ac - bc;
+    if (kindOrd[a.kind] !== kindOrd[b.kind]) return kindOrd[a.kind] - kindOrd[b.kind];
+    return (a.n || 0) - (b.n || 0);
+  });
+}
+
+function renderHand(mine) {
+  var hand = $('hand');
+  var cards = sortHand(MYHAND);
+  var n = cards.length;
+  var browser = hand && typeof hand.children === 'object';
+  if (!browser) {                                       // headless harness fallback
+    hand.innerHTML = cards.map(function (c) { return '<div class="cardw" data-cid="' + c.id + '"></div>'; }).join('');
+    PREVIDS = new Set(cards.map(function (c) { return c.id; }));
+    return;
+  }
+  var ov = n <= 5 ? 30 : Math.min(54, 30 + (n - 5) * 3.5);
+
+  var first = {};
+  [].slice.call(hand.children).forEach(function (w) { first[w.dataset.cid] = w.getBoundingClientRect().left; });
+  var byId = {};
+  [].slice.call(hand.children).forEach(function (w) { byId[w.dataset.cid] = w; });
+
+  var seen = new Set();
+  cards.forEach(function (c, i) {
+    var w = byId[c.id];
+    if (!w) {
+      w = document.createElement('div');
+      w.className = 'cardw';
+      w.dataset.cid = c.id;
+      w.appendChild(cardEl(c));
+      if (PREVIDS.size && !PREVIDS.has(c.id)) {
+        w.classList.add('dealt');
+        setTimeout(function () { w.classList.remove('dealt'); }, 340);
+      }
+    }
+    w.style.zIndex = i + 1;
+    w.style.marginLeft = i > 0 ? (-ov + 'px') : '0px';
+    w.classList.toggle('dead', !isLegal(c) && mine);
+    if (!mine) w.classList.remove('dead');
+    w.classList.toggle('raised', SELECTED === c.id);
+    var fm = (n - 1) / 2, foff = i - fm;
+    var fdeg = Math.max(-4, Math.min(4, foff * (8 / Math.max(n - 1, 1))));
+    w.style.setProperty('--fan', fdeg.toFixed(2) + 'deg');
+    w.style.setProperty('--fanY', (Math.abs(foff) * 1.3).toFixed(1) + 'px');
+    if (w !== hand.children[i]) hand.insertBefore(w, hand.children[i] || null);
+    seen.add(String(c.id));
+  });
+  [].slice.call(hand.children).forEach(function (w) { if (!seen.has(w.dataset.cid)) w.remove(); });
+  hand.classList.toggle('few', n <= 3);
+  partNeighbours();
+  PREVIDS = new Set(cards.map(function (c) { return c.id; }));
+
+  /* FLIP: survivors slide from where they were to where they are */
+  [].slice.call(hand.children).forEach(function (w) {
+    var old = first[w.dataset.cid];
+    if (old === undefined) return;
+    var dx = old - w.getBoundingClientRect().left;
+    if (Math.abs(dx) > 3) {
+      w.style.transition = 'none';
+      w.style.transform = 'translateX(' + dx + 'px)';
+      requestAnimationFrame(function () { w.style.transition = ''; w.style.transform = ''; });
+    }
+  });
+}
+
+function partNeighbours() {
+  var hand = $('hand');
+  if (!hand || typeof hand.children !== 'object') return;
+  [].slice.call(hand.children).forEach(function (w) { w.classList.remove('part-l', 'part-r'); });
+  if (SELECTED == null) return;
+  var kids = [].slice.call(hand.children);
+  var at = kids.findIndex(function (w) { return +w.dataset.cid === SELECTED; });
+  if (at < 0) return;
+  if (kids[at - 1]) kids[at - 1].classList.add('part-l');
+  if (kids[at + 1]) kids[at + 1].classList.add('part-r');
+}
+
+function findMine(id) {
+  return MYHAND.find(function (c) { return c.id === id; }) || null;
+}
+
+function toggleSelect(id) {
+  SELECTED = SELECTED === id ? null : id;
+  haptic(6);
+  renderAll();
+  if (SELECTED != null) {
+    var c = findMine(SELECTED);
+    if (c && isLegal(c)) markPileDroppable(true);
+  } else markPileDroppable(false);
+}
+function clearSelection() {
+  SELECTED = null;
+  markPileDroppable(false);
+  partNeighbours();
+}
+function markPileDroppable(on) {
+  var pw = $('pilewrap');
+  if (!pw.classList) return;
+  pw.classList.toggle('droppable', !!on);
+  if (!on) pw.classList.remove('dropok');
+}
+
+/* ---- commit a card to the pile (drop or raised tap) ---- */
 var pendingWild = null;
-function tapCard(c) {
+function commitCard(c, srcRect, tilt) {
+  if (!isLegal(c)) return false;
   if (c.kind === 'wild' || c.kind === 'w4') {
     pendingWild = c.id;
     openPick();
+    return true;
+  }
+  if (srcRect) playFlight(c, srcRect, tilt);
+  sendMove({ t: 'play', id: c.id });
+  return true;
+}
+
+function playFlight(c, srcRect, tilt) {
+  var to = $('pilewrap');
+  if (!srcRect || !to.getBoundingClientRect || !document.body.appendChild) return;
+  var tr = to.getBoundingClientRect();
+  var f = document.createElement('div');
+  f.className = 'flyer';
+  f.appendChild(cardEl(c));
+  f.style.left = srcRect.left + 'px';
+  f.style.top = srcRect.top + 'px';
+  document.body.appendChild(f);
+  var dx = (tr.left + tr.width / 2) - (srcRect.left + srcRect.width / 2);
+  var dy = (tr.top + tr.height / 2) - (srcRect.top + srcRect.height / 2);
+  requestAnimationFrame(function () { requestAnimationFrame(function () {
+    f.style.transition = 'transform 240ms cubic-bezier(.25,.8,.25,1), opacity 240ms ease-in';
+    f.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(.96) rotate(' + (tilt || 4) + 'deg)';
+    f.style.opacity = '0.1';
+  }); });
+  setTimeout(function () { if (f.remove) f.remove(); }, 300);
+  var pw = $('pilewrap');
+  if (pw.classList) {
+    pw.classList.add('snapped');
+    setTimeout(function () { if (pw.classList) pw.classList.remove('snapped'); }, 300);
+  }
+}
+
+/* ================= DRAG ENGINE (M Deal's, one zone: the pile) ================= */
+var DRAG = { pend: null, active: false, card: null, clone: null, srcW: null,
+  px0: 0, py0: 0, cx0: 0, cy0: 0, dx: 0, dy: 0, lx: 0, tilt: 0, over: false };
+var SUPPRESSTAP = false;
+var HOLDT = null;
+
+$('hand').addEventListener('pointerdown', function (e) {
+  if (!V) return;
+  if (V.turn !== MYSEAT && !V.over) return;
+  if (document.querySelector('#overlay.show')) return;
+  var w = e.target.closest ? e.target.closest('.cardw') : null;
+  if (!w) return;
+  var c = findMine(+w.dataset.cid);
+  if (!c) return;
+  DRAG.pend = { w: w, c: c, x: e.clientX, y: e.clientY,
+    raised: SELECTED === c.id };
+  if (w.classList) w.classList.add('pressed');
+  haptic(4);
+  clearTimeout(HOLDT);
+  HOLDT = setTimeout(function () {
+    if (DRAG.pend && !DRAG.active) {
+      var cc = DRAG.pend.c;
+      DRAG.pend = null;
+      unpress();
+      openInspect(cc);
+    }
+  }, 430);
+});
+
+function openInspect(c) {
+  haptic(10);
+  var el = $('inspect');
+  el.innerHTML = '';
+  el.appendChild(cardEl(c));
+  if (el.classList) el.classList.add('show');
+  SUPPRESSTAP = true;
+}
+$('inspect').addEventListener('pointerdown', function () {
+  this.classList.remove('show');
+  setTimeout(function () { SUPPRESSTAP = false; }, 60);
+});
+function unpress() {
+  document.querySelectorAll('#hand .cardw.pressed').forEach(function (w) { w.classList.remove('pressed'); });
+}
+
+document.addEventListener('pointermove', function (e) {
+  if (DRAG.pend && !DRAG.active) {
+    var dx = e.clientX - DRAG.pend.x, dy = e.clientY - DRAG.pend.y;
+    var dist = Math.hypot(dx, dy);
+    if (dist > 8) clearTimeout(HOLDT);
+    if (V && V.over) { if (dist > 8) { unpress(); DRAG.pend = null; } return; }
+    if (DRAG.pend.raised && dist > 6) { startDrag(e); return; }
+    if (dy < -8 || (dist > 12 && Math.abs(dy) > Math.abs(dx))) { startDrag(e); return; }
+    if (dx > 16 || dx < -16 || dy > 20) { unpress(); DRAG.pend = null; }   // scrolling the fan
     return;
   }
-  sendMove({ t: 'play', id: c.id });
+  if (!DRAG.active) return;
+  if (!DRAG.clone || !DRAG.clone.style) { cancelDrag(); return; }
+  e.preventDefault();
+  var mdx = e.clientX - DRAG.px0, mdy = e.clientY - DRAG.py0;
+  var step = e.clientX - (DRAG.lx != null ? DRAG.lx : e.clientX);
+  DRAG.lx = e.clientX;
+  DRAG.dx = mdx; DRAG.dy = mdy;
+  DRAG.tilt = Math.max(-10, Math.min(10, (DRAG.tilt || 0) * 0.82 + step * 0.7));
+  DRAG.clone.style.transform = 'translate3d(' + mdx + 'px,' + mdy + 'px,0) rotate(' + DRAG.tilt.toFixed(1) + 'deg)';
+  hitPile(e.clientX, e.clientY, DRAG.cx0 + mdx, DRAG.cy0 + mdy);
+}, { passive: false });
+
+function pileRect() {
+  var el = $('pilewrap');
+  if (!el.getBoundingClientRect) return null;
+  var r = el.getBoundingClientRect();
+  return { left: r.left - 26, right: r.right + 26, top: r.top - 26, bottom: r.bottom + 26 };
 }
-$('drawbtn').onclick = function () { sendMove({ t: 'draw' }); };
-$('drawpile').onclick = function () { if (!$('drawbtn').disabled) sendMove({ t: 'draw' }); };
-$('passbtn').onclick = function () { sendMove({ t: 'pass' }); };
+function hitPile(x, y, cx, cy) {
+  if (!DRAG.legal) return;
+  var r = pileRect();
+  if (!r) return;
+  var over = (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) ||
+    (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom);
+  if (over !== DRAG.over) {
+    DRAG.over = over;
+    var pw = $('pilewrap');
+    if (pw.classList) pw.classList.toggle('dropok', over);
+    if (over) haptic(6);
+  }
+}
+
+document.addEventListener('pointerup', function (e) {
+  clearTimeout(HOLDT);
+  unpress();
+  if (DRAG.pend && !DRAG.active) {
+    var pend = DRAG.pend;
+    DRAG.pend = null;
+    var dist = Math.hypot(e.clientX - pend.x, e.clientY - pend.y);
+    if (dist < 8 && V && !V.over) {
+      toggleSelect(pend.c.id);
+      SUPPRESSTAP = true;
+      setTimeout(function () { SUPPRESSTAP = false; }, 400);
+    }
+    return;
+  }
+  if (!DRAG.active) return;
+  SUPPRESSTAP = true;
+  setTimeout(function () { SUPPRESSTAP = false; }, 350);
+  var drop = DRAG.over;
+  if (!drop && DRAG.legal) {
+    /* magnetic: a near-miss within 48px of the card centre still lands */
+    var r = pileRect(), cx = DRAG.cx0 + DRAG.dx, cy = DRAG.cy0 + DRAG.dy;
+    if (r) {
+      var px = Math.max(r.left, Math.min(cx, r.right)), py = Math.max(r.top, Math.min(cy, r.bottom));
+      drop = Math.hypot(cx - px, cy - py) < 48;
+    }
+  }
+  if (drop && DRAG.legal) doDrop();
+  else springBack(!DRAG.legal);
+});
+document.addEventListener('touchmove', function (e) { if (DRAG.active) e.preventDefault(); }, { passive: false });
+document.addEventListener('pointercancel', function () {
+  clearTimeout(HOLDT);
+  unpress();
+  if (DRAG.active) {
+    if (DRAG.over && DRAG.legal) doDrop();
+    else springBack(false);
+  } else DRAG.pend = null;
+});
+
+function startDrag(e) {
+  var w = DRAG.pend.w, c = DRAG.pend.c;
+  unpress();
+  clearSelection();
+  var inner = w.querySelector ? w.querySelector('.card') : null;
+  var r = (inner && inner.getBoundingClientRect) ? inner.getBoundingClientRect() : w.getBoundingClientRect();
+  var clone = document.createElement('div');
+  clone.className = 'dragclone';
+  if (inner && inner.cloneNode) clone.appendChild(inner.cloneNode(true));
+  clone.style.left = (r.left + r.width / 2 - 44) + 'px';
+  clone.style.top = (r.top + r.height / 2 - 63) + 'px';
+  clone.style.transform = 'translate3d(0,0,0)';
+  document.body.appendChild(clone);
+  w.classList.add('hidden-src');
+  try { if (e.target && e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); } catch (err) {}
+  DRAG.active = true; DRAG.card = c; DRAG.clone = clone; DRAG.srcW = w;
+  DRAG.px0 = e.clientX; DRAG.py0 = e.clientY;
+  DRAG.lx = e.clientX; DRAG.tilt = 0; DRAG.dx = 0; DRAG.dy = 0; DRAG.over = false;
+  DRAG.cx0 = r.left + r.width / 2; DRAG.cy0 = r.top + r.height / 2;
+  DRAG.legal = isLegal(c);
+  DRAG.pend = null;
+  haptic(8);
+  requestAnimationFrame(function () { if (clone.classList) clone.classList.add('lifted'); });
+  if (DRAG.legal) markPileDroppable(true);
+}
+
+function doDrop() {
+  var c = DRAG.card;
+  var srcRect = DRAG.clone.getBoundingClientRect ? DRAG.clone.getBoundingClientRect() : null;
+  var tilt = DRAG.tilt || 4;
+  haptic(14);
+  finishDrag(true);
+  if (c.kind === 'wild' || c.kind === 'w4') {
+    pendingWild = c.id;
+    openPick();
+  } else {
+    if (srcRect) playFlight(c, srcRect, tilt);
+    sendMove({ t: 'play', id: c.id });
+  }
+}
+
+function springBack(deny) {
+  var clone = DRAG.clone, srcW = DRAG.srcW;
+  if (clone && clone.classList) {
+    clone.classList.add('springback');
+    clone.style.transform = 'translate3d(0,0,0)';
+  }
+  setTimeout(function () {
+    if (clone && clone.remove) clone.remove();
+    if (srcW && srcW.classList) {
+      srcW.classList.remove('hidden-src');
+      if (deny) {
+        srcW.classList.add('denied');
+        setTimeout(function () { if (srcW.classList) srcW.classList.remove('denied'); }, 340);
+      }
+    }
+  }, 200);
+  finishDrag(false);
+  if (deny) haptic(20);
+}
+
+function finishDrag(played) {
+  markPileDroppable(false);
+  if (played && DRAG.clone && DRAG.clone.remove) DRAG.clone.remove();
+  if (played && DRAG.srcW && DRAG.srcW.classList) DRAG.srcW.classList.remove('hidden-src');
+  DRAG.active = false; DRAG.card = null; DRAG.clone = null; DRAG.srcW = null;
+  DRAG.over = false; DRAG.pend = null; DRAG.legal = false;
+}
+
+function cancelDrag() {
+  if (DRAG.active) {
+    if (DRAG.clone && DRAG.clone.remove) DRAG.clone.remove();
+    if (DRAG.srcW && DRAG.srcW.classList) DRAG.srcW.classList.remove('hidden-src');
+    finishDrag(false);
+  }
+  DRAG.pend = null;
+}
+
+/* the raised-card grammar: tap the pile to commit it */
+$('pilewrap').onclick = function () {
+  if (SUPPRESSTAP) return;
+  if (SELECTED == null) return;
+  var c = findMine(SELECTED);
+  var w = document.querySelector('#hand .cardw.raised');
+  var srcRect = (w && w.getBoundingClientRect) ? w.getBoundingClientRect() : null;
+  if (c && isLegal(c)) {
+    clearSelection();
+    commitCard(c, srcRect, 4);
+  } else if (c && w && w.classList) {
+    w.classList.add('denied');
+    setTimeout(function () { if (w.classList) w.classList.remove('denied'); }, 340);
+    haptic(20);
+  }
+};
+
+$('drawbtn').onclick = function () { clearSelection(); sendMove({ t: 'draw' }); };
+$('drawpile').onclick = function () { if (SUPPRESSTAP) return; clearSelection(); if (!$('drawbtn').disabled) sendMove({ t: 'draw' }); };
+$('passbtn').onclick = function () { clearSelection(); sendMove({ t: 'pass' }); };
 $('callbtn').onclick = function () { haptic(30); sendMove({ t: 'call' }); };
 
 function openPick() {
@@ -397,6 +794,7 @@ $('overlay').onclick = function (e) {
   if (e.target === this && !$('pickwrap').classList.contains('hidden')) {
     pendingWild = null;
     closeOverlay();
+    renderAll();
   }
 };
 
