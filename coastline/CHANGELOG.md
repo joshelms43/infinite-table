@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## Test infrastructure — 2026-07-23
+The promise from v0.10.9, kept: tests/assertions.js no longer mints into a live world.
+
+Nine fixture sites built second decks and pushed the clones into a running game — under the canonical catalog those clones are id-twins of live cards, the exact disease that gave netsim its 27% flake. Every one now PULLS the card it wants from wherever it already lives (deck, hands, banks, discard, tables), and the hand/bank wipes that used to vaporise originals return them to the deck instead. Three catalog reads remain by design and say so in comments: the two censuses (composition and economy, which read a fresh build and touch nothing) and the migration test's wholesale world, where every container is replaced from one build so no twin populations can coexist.
+
+Five conservation checkpoints now stand at the converted blocks and the wild-move pin is mutation-proven: restore a single mint and 'conservation: wild-move block' fails on the spot. 115 assertions green; the full gate ran twice clean, including the drag-choreography stage that flakes under load when anything is off.
+
 ## v0.11.1 — 2026-07-23
 Two things: main's gate healed, and a joke walked on.
 

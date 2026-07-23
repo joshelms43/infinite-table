@@ -6,7 +6,27 @@ const HTML_SRC = _F.readFileSync(HTML_PATH,'utf8');
 const REQUIRED_CSS = ['#winscreen{','.wincard{','.showcase{','#winpill{','#logdrawer{','.dragclone{','#promptbar{','.droppable{','.dropok{','.setghost{','.colorpick{','.opp.selectable{','.pickable{','#pov{','#inspect{','.errtoast{','.banner{','.flyer{','.cardback{','.actionzone{','.tcard.pickable','#myprops,.tablespread','.note{','.tset','.pbleft{','#pbfill{'];
 const missingCss = REQUIRED_CSS.filter(sel=>!HTML_SRC.includes(sel));
 T('CSS integrity: all load-bearing selectors present'+(missingCss.length?' (missing: '+missingCss.join(', ')+')':''), missingCss.length===0);
-// 1. deck composition
+/* FIXTURE RULE (v0.10.9's promise, kept): never mint into a live world. Under the
+   canonical catalog a second buildDeck() creates id-colliding twins of live cards —
+   the 27% netsim flake. Fixtures PULL from wherever cards already live, and wipes
+   return originals to the deck. The catalog is only read directly for censuses and
+   the one wholesale-world fixture. */
+function pull(pred){
+  const scan=[G.deck, G.discard, ...G.players.map(p=>p.hand), ...G.players.map(p=>p.bank)];
+  for(const a of scan){ const i=a.findIndex(pred); if(i>-1) return a.splice(i,1)[0]; }
+  for(const p of G.players){ for(const col of Object.keys(p.props||{})){ const a=p.props[col]; const i=a.findIndex(pred); if(i>-1) return a.splice(i,1)[0]; } }
+  throw new Error('fixture pull: nothing in the world satisfies the predicate');
+}
+function clearHoldings(p){
+  p.hand.splice(0).forEach(c=>G.deck.push(c));
+  p.bank.splice(0).forEach(c=>G.deck.push(c));
+  Object.values(p.props||{}).forEach(a=>a.splice(0).forEach(c=>G.deck.push(c)));
+  p.props={};
+  Object.values(p.bldg||{}).forEach(sl=>Object.values(sl||{}).forEach(c=>{ if(c) G.deck.push(c); }));
+  p.bldg={};
+}
+
+// 1. deck composition — the census reads the catalog directly: the intended use
 const d=buildDeck();
 T('deck has 106 playing cards (+4 rule cards = official 110)', d.length===106);
 T('28 properties', d.filter(c=>c.t==='prop').length===28);
@@ -196,19 +216,20 @@ const hbox=[]; NET.tx={ send:(t,p)=>hbox.push({t,p}) };
 NET.roster=[{key:'h',name:'Host'},{key:'r',name:'Remote'},{key:'x',name:'Other'}];
 G.players[1].isAI=false; G.players[2].isAI=true;
 G.turn=1; G.playsLeft=3; G.over=false;
-const dk=buildDeck();
-const rentC=dk.find(c=>c.t==='rent'&&c.colors);
-const hikeC=dk.find(c=>c.t==='action'&&c.kind==='hike');
+const rentC=pull(c=>c.t==='rent'&&c.colors);
+const hikeC=pull(c=>c.t==='action'&&c.kind==='hike');
 const rcol=rentC.colors[0];
-const propC=dk.find(c=>c.t==='prop'&&c.color===rcol);
+const propC=pull(c=>c.t==='prop'&&c.color===rcol);
+const m5w=pull(c=>c.t==='money'&&c.v===5);
+clearHoldings(G.players[1]); clearHoldings(G.players[2]);   // deterministic, conservation-safe: no No Deal for the target
 G.players[1].hand=[rentC,hikeC];
-G.players[2].hand=[];   // deterministic: no No Deal in the target's hand, rent cannot be blocked
 addProp(G.players[1],propC,rcol);
-G.players[2].bank=[dk.find(c=>c.t==='money'&&c.v===5)];
+G.players[2].bank=[m5w];
 doRent(rentC,rcol,2,1);
 T('remote rent with hike in hand becomes an ask', hbox.some(m=>m.t==='ask' && m.p.ask && m.p.ask.type==='hike') && !!NET.pendingAsks[1]);
 NET.applyIntent({seat:1,k:'reply',a:{rt:'hike',use:false, aid:NET.pendingAskInfo[1].aid}});   // real clients echo the ask's key
 T('hike reply resolves the chain and rent is paid', !NET.pendingAsks[1] && bankTotal(G.players[1])>0);
+T('conservation: rent-hike wire block', allCards()===106);
 NET.mode='off'; NET.tx=null; NET.roster=null; NET.pendingAsks={};
 
 
@@ -257,11 +278,10 @@ NET.mode='off'; MYSEAT=savedSeat2;
 
 // ===== wild movement rules =====
 newGame();
-const dkw = buildDeck();
-const dual = dkw.find(c=>c.t==='wild' && c.colors.includes('teal'));
-const rain = dkw.find(c=>c.t==='wildall');
-const tprop = dkw.find(c=>c.t==='prop' && c.color==='teal');
-const oprop = dkw.find(c=>c.t==='prop' && c.color===dual.colors.find(x=>x!=='teal'));
+const dual = pull(c=>c.t==='wild' && c.colors.includes('teal'));
+const rain = pull(c=>c.t==='wildall');
+const tprop = pull(c=>c.t==='prop' && c.color==='teal');
+const oprop = pull(c=>c.t==='prop' && c.color===dual.colors.find(x=>x!=='teal'));
 G.turn=0; G.playsLeft=3; G.over=false; MYSEAT=0;
 addProp(me(), tprop, 'teal'); addProp(me(), dual, 'teal'); addProp(me(), oprop, dual.colors.find(x=>x!=='teal'));
 const other = dual.colors.find(x=>x!=='teal');
@@ -275,7 +295,7 @@ T('unlocked wild moves and lands at the bottom', dest.length===2 && dest[1].id==
 const handN2 = (me().hand=[rain], me().hand.length);
 playProp(rain, 'sage');
 T("rainbows can't start a set", me().hand.length===handN2 && !(me().props['sage']||[]).length);
-addProp(me(), dkw.find(c=>c.t==='prop'&&c.color==='sage'), 'sage');
+addProp(me(), pull(c=>c.t==='prop'&&c.color==='sage'), 'sage');
 playProp(rain, 'sage');
 T('rainbows join occupied sets', (me().props['sage']||[]).some(c=>c.id===rain.id));
 newGame();
@@ -283,32 +303,32 @@ newGame();
 
 // ===== wilds in completed sets + rainbow ride-along =====
 newGame();
-const dkw2 = buildDeck();
-const dual2 = dkw2.find(c=>c.t==='wild' && c.colors.includes('teal'));
-const rain2 = dkw2.find(c=>c.t==='wildall');
+const dual2 = pull(c=>c.t==='wild' && c.colors.includes('teal'));
+const rain2 = pull(c=>c.t==='wildall');
 const other2 = dual2.colors.find(x=>x!=='teal');
 G.turn=0; G.playsLeft=3; G.over=false; MYSEAT=0;
-const tprops = dkw2.filter(c=>c.t==='prop'&&c.color==='teal').slice(0, COLORS.teal.size-1);
+const tprops = []; for(let _i=0;_i<COLORS.teal.size-1;_i++) tprops.push(pull(c=>c.t==='prop'&&c.color==='teal'));
 tprops.forEach(c=>addProp(me(), c, 'teal'));
 addProp(me(), dual2, 'teal');
 T('setup: teal complete via wild', isComplete(me(),'teal'));
 moveWildTo(dual2.id, other2);
 T('wilds move out of completed sets (no building)', (me().props[other2]||[]).some(c=>c.id===dual2.id) && !isComplete(me(),'teal'));
 moveWildTo(dual2.id, 'teal');
-addProp(me(), dkw2.find(c=>c.t==='prop'&&c.color===other2), other2);
-me().props['teal'] = [dual2];
+addProp(me(), pull(c=>c.t==='prop'&&c.color===other2), other2);
+me().props['teal'] = (me().props['teal']||[]).filter(c=>{ if(c.id===dual2.id) return true; G.deck.push(c); return false; });   // strip to the wild alone, originals back to the deck
 addProp(me(), rain2, 'teal');
 moveWildTo(dual2.id, other2);
 const dst2 = me().props[other2]||[];
 T('rainbow rides along when its anchor moves', !((me().props['teal']||[]).length) && dst2.some(c=>c.id===rain2.id) && dst2.some(c=>c.id===dual2.id));
+T('conservation: wild movement block', allCards()===106);
 newGame();
 
 
 // ===== short payers get the screen; AI still auto-strips =====
 newGame();
-const dks = buildDeck();
 G.turn=1; G.playsLeft=3; G.over=false; MYSEAT=0;
-me().hand=[]; me().bank=[dks.find(c=>c.t==='money'&&c.v===1)]; me().props={};
+const m1s = pull(c=>c.t==='money'&&c.v===1);
+clearHoldings(me()); me().bank=[m1s];
 let shortDone=false;
 requestPayment(0, 8, 1, ()=>{ shortDone=true; });
 T('a short human payer still gets the pay screen', MODE.type==='pay' && shortDone===false);
@@ -316,7 +336,8 @@ T('the pay target caps at what they own', paySelTotal()===0 && Math.min(MODE.amo
 payAutoM(); payConfirm();
 T('paying everything completes the short payment', shortDone===true && me().bank.length===0);
 G.players[1].isAI = true;
-G.players[1].hand=[]; G.players[1].bank=[dks.find(c=>c.t==='money'&&c.v===2)]; G.players[1].props={};
+const m2s = pull(c=>c.t==='money'&&c.v===2);
+clearHoldings(G.players[1]); G.players[1].bank=[m2s];
 let aiDone=false;
 requestPayment(1, 9, 0, ()=>{ aiDone=true; });
 T('a short AI payer auto-strips with no screen', aiDone===true && G.players[1].bank.length===0);
@@ -359,14 +380,16 @@ NET.mode='off'; NET.roster=null; NET.gone={}; NET.tx=null;
 
 // ===== table rules: no attacks on the first go-round =====
 newGame();
-const dkr = buildDeck();
 RULES.firstTurnAttack = false;
 G.turn = 0; G.playsLeft = 3; G.turnCount = 1; G.over = false; MYSEAT = 0;
-const rentR = dkr.find(c=>c.t==='rent' && c.colors);
+const rentR = pull(c=>c.t==='rent' && c.colors);
 const rcolR = rentR.colors[0];
-addProp(me(), dkr.find(c=>c.t==='prop'&&c.color===rcolR), rcolR);
+const propR = pull(c=>c.t==='prop'&&c.color===rcolR);
+clearHoldings(me());
+addProp(me(), propR, rcolR);
 me().hand = [rentR];
-G.players[1].bank = [dkr.find(c=>c.t==='money'&&c.v===5)];
+const m5r = pull(c=>c.t==='money'&&c.v===5);
+clearHoldings(G.players[1]); G.players[1].bank = [m5r];
 doRent(rentR, rcolR, 1, 0);
 T('first-round rent is refused when the rule is off', me().hand.length===1 && G.players[1].bank.length===1);
 G.turnCount = G.players.length + 1;
@@ -409,11 +432,13 @@ const outHand = G.players[1].hand.length;
 eliminatePlayer(1, 'testing');
 T('an eliminated player is out, hand discarded, turn advanced', G.players[1].out===true && G.players[1].hand.length===0 && G.turn!==1);
 T('out seats leave the target pool', !othersOf(0).includes(1));
-const rentO = buildDeck().find(c=>c.t==='rent'&&c.colors);
-addProp(me(), buildDeck().find(c=>c.t==='prop'&&c.color===rentO.colors[0]), rentO.colors[0]);
+const rentO = pull(c=>c.t==='rent'&&c.colors);
+const propO = pull(c=>c.t==='prop'&&c.color===rentO.colors[0]);
+clearHoldings(me()); addProp(me(), propO, rentO.colors[0]);
 me().hand=[rentO]; G.turn=0; G.playsLeft=3;
 doRent(rentO, rentO.colors[0], 1, 0);
 T('out seats cannot be attacked', me().hand.length===1);
+T('conservation: out-seats block', allCards()===106);
 G.players.forEach((p,i)=>{ if(i!==2) p.out = (i!==2); });
 G.players.forEach((p,i)=>{ p.out = i!==2; });
 G.over=false;
@@ -423,6 +448,8 @@ newGame();
 
 // ===== deck reconstruction: everything unknown returns to the deck =====
 newGame();
+/* wholesale fixture: every container below is replaced from ONE catalog build — a single
+   consistent population with no live originals left to collide against. The one legitimate mint. */
 G.players.forEach(p=>{ p.hand=[]; p.bank=[]; p.props={}; p.bldg={}; });
 const dkm = buildDeck();
 G.players[0].hand = dkm.slice(0,5);
@@ -439,11 +466,10 @@ newGame();
 
 // ===== reaction windows: uniform, leak-free, drag-grammar =====
 newGame();
-const dkw3 = buildDeck();
 G.turn=1; G.playsLeft=3; G.turnCount=5; G.over=false; MYSEAT=0; NET.mode='off';
-const nd3 = dkw3.find(c=>c.t==='action'&&c.kind==='nodeal');
-me().hand = [nd3];
-G.players[1].hand = [];   // the attacker holds no counter: the chain resolves synchronously
+const nd3 = pull(c=>c.t==='action'&&c.kind==='nodeal');
+clearHoldings(me()); me().hand = [nd3];
+clearHoldings(G.players[1]);   // the attacker holds no counter: the chain resolves synchronously
 let stole=false, blocked3=false;
 resolveBlock(0, 1, 'Sneaky Swipe', b=>{ if(b) blocked3=true; else stole=true; });
 T('a steal against a human opens the window, never resolves instantly', MODE.type==='react' && !stole && !blocked3);
@@ -474,7 +500,7 @@ NET.pendingAsks = {}; NET.pendingAskInfo = {};
 clockTick(1000);
 T('control returning to the turn owner refreshes the cap again', CLK.turnLeft===29000);
 const turnBefore9 = G.turn;
-G.players[turnBefore9].hand = buildDeck().slice(0,10);
+while(G.players[turnBefore9].hand.length<10) G.players[turnBefore9].hand.push(G.deck.pop());   // overflow drawn from the live deck
 forceEndTurnFor(turnBefore9);
 T('forcing any seat to end discards overflow and advances the turn', G.players[turnBefore9].hand.length===7 && G.turn!==turnBefore9);
 RULES.clock = JSON.parse(JSON.stringify(RULES_DEFAULTS.clock));
@@ -504,7 +530,7 @@ newGame();
 
 
 // ===== ECONOMY CENSUS: pinned to official Monopoly Deal (aligned with infinite-ai v0.5.0 audit) =====
-const dkE = buildDeck();
+const dkE = buildDeck();   // census: reads the catalog directly, touches nothing live
 const propV = col => (dkE.find(c=>c.t==='prop' && c.color===col)||{}).v;
 T('property values are official', propV('brown')===1 && propV('sky')===1 && propV('purple')===2 && propV('orange')===2
   && propV('green')===2 && propV('black')===2 && propV('coral')===3 && propV('sage')===3
@@ -533,13 +559,13 @@ T('houses are banned on Stations and Utilities only',
 // the wild move is free and unlimited (Hasbro FAQ) — no play is spent
 newGame();
 G.turn=0; G.playsLeft=3; G.turnCount=5; G.over=false; MYSEAT=0; NET.mode='off';
-const dkW = buildDeck();
-const wCard = dkW.find(c=>c.t==='wild' && c.colors.includes('coral') && c.colors.includes('sage'));
+const wCard = pull(c=>c.t==='wild' && c.colors.includes('coral') && c.colors.includes('sage'));
 addProp(me(), wCard, 'coral');
 const playsBefore = G.playsLeft;
 moveWildTo(wCard.id, 'sage', 0);
 T('moving a played wild costs no play and is unlimited',
   G.playsLeft===playsBefore && (me().props['sage']||[]).some(c=>c.id===wCard.id));
+T('conservation: wild-move block', allCards()===106);
 moveWildTo(wCard.id, 'coral', 0);
 T('and it can move straight back, same turn', G.playsLeft===playsBefore && (me().props['coral']||[]).some(c=>c.id===wCard.id));
 newGame();
