@@ -356,6 +356,65 @@ T('held fire respects the fire-rate cooldown',
   T('executioner only bites the wounded', low.dmg > high.dmg, low.dmg + ' vs ' + high.dmg);
 }
 
+/* ---- rumble: everyone's an enemy, kills pay, death strips ---- */
+{
+  D.G.mode = 'net'; D.G.gameMode = 'rumble'; D.G.host = false;
+  D.G.myKey = 'JOSH'; D.G.myTeam = 'ffa'; D.G.phase = 'fight'; D.G.kills = {};
+  const sent = [];
+  D.G.tx = { send: function (ev, pl) { sent.push([ev, pl]); }, close(){}, presence(){ return []; } };
+  const E1 = D.ensurePeer('ENE1'); E1.team = 'ffa'; E1.f.alive = true; E1.f.stats = D.PU.statsFor([]);
+  T('in rumble everyone is an enemy', D.isEnemyTeam('ffa', 'ffa') === true && D.enemiesOfMine().length === 1);
+
+  /* a kill pays one random powerup, announced on the wire */
+  D.me.alive = true; D.me.hp = 100; D.me.picks = []; D.me.stats = D.PU.statsFor([]);
+  D.onWire('death', { k: 'ENE1', by: 'JOSH' });
+  const pickMsg = sent.filter(function (e) { return e[0] === 'pick'; });
+  T('a kill grants one random powerup', D.me.picks.length === 1 && D.PU.byId(D.me.picks[0]) !== null,
+    D.me.picks.join(','));
+  T('the grant is announced under my key', pickMsg.length === 1 && pickMsg[0][1].k === 'JOSH' &&
+    pickMsg[0][1].id === D.me.picks[0]);
+  T('the kill is tallied', D.G.kills['JOSH'] === 1);
+  T('their stats reset with their death', E1.f.picks.length === 0);
+
+  /* stats apply live, health carried by fraction */
+  D.me.picks = []; D.me.stats = D.PU.statsFor([]); D.me.hp = 50;   /* half health */
+  D.me.picks = ['tank']; /* pretend an earlier grant */
+  D.me.stats = D.PU.statsFor([]);
+  D.grantKillPowerup(D.me, 'JOSH');
+  T('a mid-life grant keeps your health fraction sane',
+    D.me.hp >= 1 && D.me.hp <= D.me.stats.hp, D.me.hp + '/' + D.me.stats.hp);
+
+  /* death strips and the respawn is clean and protected */
+  D.me.picks = ['heavy', 'tank', 'chicken'];
+  D.me.alive = false;
+  D.me.picks = [];                      /* what checkDown does in rumble */
+  D.respawnMe();
+  T('a respawn is a clean sheet on the ring', D.me.alive === true &&
+    D.me.stats.damage === D.PU.baseStats().damage && D.me.picks.length === 0 &&
+    D.me.prot > 1, 'prot=' + D.me.prot);
+  const spawnMsg = sent.filter(function (e) { return e[0] === 'spawn'; });
+  T('the respawn is announced', spawnMsg.length === 1 && spawnMsg[0][1].k === 'JOSH');
+  D.me.hp = 100; D.me.stats.deflect = 0; D.me.shield = 0;
+  D.applyHit(D.me, { dmg: 40, kb: 0, k: 'ENE1' }, true);
+  T('spawn protection holds', D.me.hp === 100, String(D.me.hp));
+  D.me.prot = 0;
+  D.applyHit(D.me, { dmg: 40, kb: 0, k: 'ENE1' }, true);
+  T('and expires', D.me.hp === 60, String(D.me.hp));
+  T('the last hand that hurt me gets the credit', D.me.lastHitBy === 'ENE1');
+
+  /* ring slots are the proven wall slots */
+  let ringOk = true;
+  for (let i = 0; i < 16; i++) {
+    const r = D.rumbleSlot(i);
+    if (D.anyCollide(r.x, 0.91, r.z, 0.38, 0.9, 0.38)) ringOk = false;
+  }
+  T('the respawn ring stands on open floor', ringOk);
+
+  D.dropPeer('ENE1');
+  D.G.tx = null; D.G.gameMode = 'teams'; D.G.mode = 'bot'; D.G.myTeam = null;
+  D.me.alive = true; D.me.picks = []; D.me.stats = D.PU.statsFor([]); D.me.prot = 0;
+}
+
 /* ---- hosted bots: real clients living inside the host ---- */
 {
   D.G.mode = 'net'; D.G.host = true; D.G.myKey = 'JOSH'; D.G.myTeam = 'coral';

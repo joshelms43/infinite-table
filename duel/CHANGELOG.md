@@ -86,3 +86,10 @@
 - The Grounds: a second map at nine times the floor area (90×60) — a central keep with 0.45-rise stairs on both faces, corner compounds, mid-lane walls, side decks, crate clusters, its own five-lamp rig, higher bulb strings, and thinner fog so the far wall exists.
 - Map selection. The team room gets a Map button (host picks, everyone's room follows live, and the match starts on it); the practice sheet gets the same. The choice persists.
 - Maps are a registry: switching mutates the one live ARENA list in place so every collision reference stays honest, and spawn slots, walls, bullet lifetime bounds, fog, lamps, and menu cameras all follow the spec. The gate proves the switch: arena swaps and restores, grounds slots are distinct and on open floor, the keep stairs climb to the deck, and shots live long enough to cross the map.
+
+## 0.12.0
+- Rumble: a free-for-all mode with no finish line. Everyone against everyone, respawns on a ring of the proven wall slots with 1.5s of spawn protection, and every kill pays one random powerup you don't own, applied on the spot — health carried over by fraction, mag clamped, banner tells you what you drew.
+- Death costs everything: your whole build strips to a clean sheet and you're back in three seconds. The score line shows your kills against the current best, purely for bragging — the arena runs until people walk away.
+- The team room grew a Mode toggle next to Map (host cycles Teams/Rumble, rooms follow live). In Rumble the side columns vanish, the room shows a headcount, bots join sideless, and starting takes two bodies of any kind.
+- Kill credit is victim-truth: the last hand that hurt you is named in your own death event; everyone tallies from that, killers grant themselves from it, and the host does the same for its bots — which strip, respawn, and snowball by exactly the same rules.
+- Gate covers it: FFA enemy predicate, kill grant and its wire announcement, tally, mid-life stat application, the strip on death, clean protected ring respawns, protection expiry, and last-hitter credit.

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.11.0
+<!-- Duel — Infinite Table. Version: 0.12.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -259,7 +259,8 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
         <span class="tname">Teal</span><span class="tcount" id="tealcount">0</span>
       </button>
     </div>
-    <div class="botrow"><button class="quietbtn" id="maproom">Map — The Table</button></div>
+    <div class="botrow"><button class="quietbtn" id="maproom">Map — The Table</button>
+      <button class="quietbtn" id="moderoom">Mode — Teams</button></div>
     <div class="botrow" id="botrow" style="display:none">
       <button class="quietbtn" id="botcoral">+ Coral Bot</button>
       <button class="quietbtn" id="botteal">+ Teal Bot</button>
@@ -307,18 +308,19 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.11.0"></script>
-<script src="../shared/tablekit.js?v=0.11.0"></script>
-<script src="../shared/duel-powerups.js?v=0.11.0"></script>
+<script src="../shared/config.js?v=0.12.0"></script>
+<script src="../shared/tablekit.js?v=0.12.0"></script>
+<script src="../shared/duel-powerups.js?v=0.12.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
 var PU = window.DuelPowerups;
 var ROUNDS_TO_WIN = 10;
+var RUMBLE_GOAL = 15;
 var COL = { night:0x121A16, felt:0x1D2B25, ivory:0xF2EEE2, coral:0xE26A4B,
   gold:0xBE8F41, timber:0x4E3A2A, fog:0x0C1310, teal:0x3B8B82 };
 
-TableKit.watchErrors({ game: 'duel', version: '0.11.0' });
+TableKit.watchErrors({ game: 'duel', version: '0.12.0' });
 
 /* ---- category bands for the draft cards ---- */
 var CAT = {};
@@ -571,10 +573,16 @@ function tintPeer(P) {
   if (P.bar) P.bar.firstChild.style.background = P.team === 'teal' ? '#3B8B82' : '#E26A4B';
 }
 function eachPeer(fn) { Object.keys(peers).forEach(function (k) { fn(peers[k], k); }); }
+function isEnemyTeam(a, b) { return G.gameMode === 'rumble' ? true : a !== b; }
 function enemiesOfMine() {
   var out = [];
-  eachPeer(function (P) { if (P.team !== G.myTeam && P.f.alive) out.push(P); });
+  eachPeer(function (P) { if (isEnemyTeam(P.team, G.myTeam) && P.f.alive) out.push(P); });
   return out;
+}
+/* the respawn ring: the sixteen proven wall slots, both sides */
+function rumbleSlot(i) {
+  var j = ((i % 16) + 16) % 16;
+  return spawnSlot(j < 8 ? 'coral' : 'teal', j % 8);
 }
 function teamAliveCount(team) {
   var n = 0;
@@ -619,7 +627,8 @@ var G = {
   host: false, tx: null, seed: 0,
   myPick: null, foePickId: null, pendingFoePick: null, countdownT: 0, fightT: 0,
   botBrain: null, botLevel: 1,
-  myKey: null, myTeam: null, roster: {}, hostKey: null, code: null, picked: {}
+  myKey: null, myTeam: null, roster: {}, hostKey: null, code: null, picked: {},
+  gameMode: 'teams', kills: {}
 };
 
 var $ = function(id){ return document.getElementById(id); };
@@ -742,6 +751,7 @@ function spawnFighter(f, west, slot) {
   f.swUsed = false; f.payback = false;
   f.onGround = false; f.airJumps = 0; f.dashCd = 0;
   f.hicT = 2 + Math.random()*2; f.popped = false; f.spinT = 0; f.spinV = 0;
+  f.prot = 0; f.lastHitBy = null;
 }
 function spawnMe() { spawnFighter(me, G.host || G.mode==='bot'); }
 function spawnFoe() {
@@ -919,10 +929,10 @@ function startReloadFor(f) {
       if (other.alive && other.pos.distanceTo(f.pos) < 3.4) applyHit(other, horn0, true);
     } else {
       var hteam = f === me ? G.myTeam : (peers[hornKey] && peers[hornKey].team);
-      if (G.myKey !== hornKey && me.alive && G.myTeam !== hteam && me.pos.distanceTo(f.pos) < 3.4)
+      if (G.myKey !== hornKey && me.alive && isEnemyTeam(G.myTeam, hteam) && me.pos.distanceTo(f.pos) < 3.4)
         routeHit(G.myKey, hornKey, Object.assign({}, horn0), true);
       eachPeer(function (P, k) {
-        if (k === hornKey || P.team === hteam || !P.f.alive) return;
+        if (k === hornKey || !isEnemyTeam(P.team, hteam) || !P.f.alive) return;
         if (P.f.pos.distanceTo(f.pos) < 3.4) routeHit(k, hornKey, Object.assign({}, horn0), true);
       });
     }
@@ -1153,14 +1163,14 @@ function stepBullet(b, dt) {
     } else if (G.host && peers[b.owner] && peers[b.owner].bot) {
       /* the host judges its bots' shots against everyone they can hurt */
       var bteam = peers[b.owner].team;
-      if (me.alive && G.myTeam !== bteam && hitsFighter(prev, b.pos, me, b.sizeNow)) {
+      if (me.alive && isEnemyTeam(G.myTeam, bteam) && hitsFighter(prev, b.pos, me, b.sizeNow)) {
         landHit(b, b.pos.clone(), 1, hitsHead(prev, b.pos, me, b.sizeNow), me);
         return false;
       }
       var pk = Object.keys(peers);
       for (var bi = 0; bi < pk.length; bi++) {
         var BP = peers[pk[bi]];
-        if (pk[bi] === b.owner || BP.team === bteam || !BP.f.alive) continue;
+        if (pk[bi] === b.owner || !isEnemyTeam(BP.team, bteam) || !BP.f.alive) continue;
         if (hitsFighter(prev, b.pos, BP.f, b.sizeNow)) {
           landHit(b, b.pos.clone(), 1, hitsHead(prev, b.pos, BP.f, b.sizeNow), BP);
           return false;
@@ -1303,6 +1313,7 @@ function healFighter(f, n) {
 /* the victim's side of any hit, for either fighter */
 function applyHit(f, fx, silentThorns) {
   if (!f.alive || G.phase !== 'fight') return;
+  if (f.prot > 0) { if (f === me) sTone(1200, 0.05, 0.1); return; }
   if (Math.random() < f.stats.deflect) { if (f === me) sTone(1500, 0.08, 0.15); return; }
   var dmg = fx.dmg;
   if (f.stats.dmgResist > 0) dmg = Math.round(dmg * (1 - f.stats.dmgResist));
@@ -1313,6 +1324,7 @@ function applyHit(f, fx, silentThorns) {
   }
   f.hp -= dmg;
   f.sinceHit = 0;
+  if (fx.k && dmg > 0) f.lastHitBy = fx.k;
   if (f.stats.payback) f.payback = true;
   if (fx.poison) f.dots.push({ dps: fx.poison[0], t: fx.poison[1], kind: 'poison' });
   if (fx.burn) f.dots.push({ dps: fx.burn[0], t: fx.burn[1], kind: 'burn' });
@@ -1391,6 +1403,13 @@ function updateAmmoHud() {
   $('ammo').classList.toggle('dry', !me.stats.noReload && me.mag === 0);
 }
 function updateRoundsHud() {
+  if (G.gameMode === 'rumble') {
+    var mine = G.kills[G.myKey] || 0, best = 0;
+    Object.keys(G.kills).forEach(function (k) { if (k !== G.myKey) best = Math.max(best, G.kills[k]); });
+    $('rounds').innerHTML = '<span class="sc-mine">' + mine + '</span>' +
+      '<span class="vs">—</span><span class="sc-theirs">' + best + '</span>';
+    return;
+  }
   $('rounds').innerHTML = '<span class="sc-mine">' + G.myScore + '</span>' +
     '<span class="vs">—</span><span class="sc-theirs">' + G.foeScore + '</span>';
 }
@@ -1419,11 +1438,12 @@ function startCountdown() {
     spawnMe(); spawnFoe();
     foeMesh.visible = true;
   } else {
-    /* deterministic slots: sorted roster keys, indexed within each team */
-    var slotIdx = { coral: 0, teal: 0 };
+    /* deterministic slots: sorted roster keys, indexed within each team;
+       rumble spreads everyone around the whole ring */
+    var slotIdx = { coral: 0, teal: 0, ffa: 0 };
     Object.keys(G.roster).sort().forEach(function (k) {
       var team = G.roster[k];
-      var slot = spawnSlot(team, slotIdx[team]++);
+      var slot = team === 'ffa' ? rumbleSlot(slotIdx.ffa++ * 3) : spawnSlot(team, slotIdx[team]++);
       if (k === G.myKey) { spawnFighter(me, team === 'coral', slot); }
       else if (peers[k]) {
         var Q = peers[k];
@@ -1564,7 +1584,7 @@ function maybeAdvance() {
 /* ---- the wire ---- */
 var STATE_HZ = 1/12, stateAcc = 0;
 function netEvents() {
-  return ['state','shoot','hit','death','pick','begin','rematch','team','roundend','round','map'];
+  return ['state','shoot','hit','death','pick','begin','rematch','team','roundend','round','map','spawn','mode'];
 }
 function onWire(ev, p) {
   var P;
@@ -1586,11 +1606,27 @@ function onWire(ev, p) {
   } else if (ev === 'death') {
     P = peers[p.k]; if (!P) return;
     P.f.alive = false;
-    if (G.host) hostCheckWipe();
+    if (G.gameMode === 'rumble') { P.f.picks = []; tallyKill(p.by); }
+    else if (G.host) hostCheckWipe();
+  } else if (ev === 'spawn') {
+    P = peers[p.k]; if (!P) return;
+    P.f.picks = P.f.picks || [];
+    if (G.gameMode === 'rumble') { P.f.stats = PU.statsFor(P.f.picks); }
+    P.f.alive = true; P.f.hp = P.f.stats.hp;
+    P.mesh.scale.setScalar(P.f.stats.scale);
+  } else if (ev === 'mode') {
+    G.gameMode = p.id;
+    modeLabelRefresh(); updateTeamRoom();
   } else if (ev === 'pick') {
-    P = peers[p.k];
-    if (P && G.picked[p.k] !== G.round) { G.picked[p.k] = G.round; P.f.picks.push(p.id); }
-    if (G.host) hostMaybeRound();
+    P = peers[p.k]; if (!P) return;
+    if (G.gameMode === 'rumble') {           /* a kill reward, applied live */
+      P.f.picks.push(p.id);
+      P.f.stats = PU.statsFor(P.f.picks);
+      P.mesh.scale.setScalar(P.f.stats.scale);
+    } else {
+      if (G.picked[p.k] !== G.round) { G.picked[p.k] = G.round; P.f.picks.push(p.id); }
+      if (G.host) hostMaybeRound();
+    }
   } else if (ev === 'team') {
     if (p.team === null) { dropPeer(p.k); updateTeamRoom(); return; }
     P = ensurePeer(p.k);
@@ -1603,6 +1639,8 @@ function onWire(ev, p) {
     mapLabelRefresh();
   } else if (ev === 'begin') {
     if (p.map) loadMap(p.map);
+    G.gameMode = p.mode || 'teams';
+    G.kills = {};
     G.seed = p.seed; G.hostKey = p.k;
     G.roster = p.roster;
     Object.keys(p.roster).forEach(function (k) {
@@ -1625,6 +1663,50 @@ function onWire(ev, p) {
   }
 }
 
+function tallyKill(by) {
+  if (!by) return;
+  G.kills[by] = (G.kills[by] || 0) + 1;
+  updateRoundsHud();
+  if (by === G.myKey) grantKillPowerup(me, G.myKey);
+  else if (G.host && peers[by] && peers[by].bot) grantKillPowerup(peers[by].f, by);
+}
+/* a kill pays one random powerup you don't own, applied on the spot */
+function grantKillPowerup(f, wireKey) {
+  var owned = {};
+  f.picks.forEach(function (id) { owned[id] = 1; });
+  var pool = PU.POWERUPS.filter(function (pu) { return !owned[pu.id]; });
+  if (!pool.length) return;
+  var pick = pool[Math.floor(Math.random() * pool.length)];
+  f.picks.push(pick.id);
+  var hpFrac = f.hp / f.stats.hp;
+  f.stats = PU.statsFor(f.picks);
+  f.hp = Math.min(f.stats.hp, Math.max(1, Math.round(f.stats.hp * hpFrac)));
+  f.mag = Math.min(f.mag, f.stats.magSize);
+  if (G.tx) G.tx.send('pick', { k: wireKey, id: pick.id });
+  if (f === me) {
+    banner(pick.name, 'For The Kill', 1400);
+    sPick();
+    updatePicksHud(); updateHpHud(); updateAmmoHud();
+  }
+}
+function respawnMe() {
+  if (G.gameMode !== 'rumble' || G.phase !== 'fight' || me.alive) return;
+  me.stats = PU.statsFor(me.picks);          /* picks are empty — a clean sheet */
+  spawnFighter(me, false, rumbleSlot(Math.floor(Math.random() * 16)));
+  me.prot = 1.5;
+  if (G.tx) G.tx.send('spawn', { k: G.myKey });
+  updateHpHud(); updateAmmoHud(); updatePicksHud();
+}
+function respawnHostBot(bk) {
+  var P = peers[bk];
+  if (!P || G.gameMode !== 'rumble' || G.phase !== 'fight' || P.f.alive) return;
+  P.f.stats = PU.statsFor(P.f.picks);
+  spawnFighter(P.f, false, rumbleSlot(Math.floor(Math.random() * 16)));
+  P.f.prot = 1.5;
+  P.net.pos.copy(P.f.pos); P.net.has = true;
+  if (G.tx) G.tx.send('spawn', { k: bk });
+}
+
 /* everyone scores the round the host called */
 function onRoundEnd(winnerTeam) {
   if (G.phase !== 'fight' && G.phase !== 'intermission') return;
@@ -1640,7 +1722,7 @@ function onRoundEnd(winnerTeam) {
   }, 1600);
 }
 function hostCheckWipe() {
-  if (!G.host || G.phase !== 'fight') return;
+  if (!G.host || G.phase !== 'fight' || G.gameMode === 'rumble') return;
   var coral = teamAliveCount('coral'), teal = teamAliveCount('teal');
   var winner = coral === 0 ? 'teal' : (teal === 0 ? 'coral' : null);
   if (winner) {
@@ -1704,13 +1786,19 @@ function leaveToMenu(msg) {
   $('neterr').textContent = msg || '';
 }
 function hostBegin() {
-  /* the roster is whoever's here with a side picked; both sides must exist */
   var roster = {};
-  if (G.myTeam) roster[G.myKey] = G.myTeam;
-  eachPeer(function (P, k) { if (P.team) roster[k] = P.team; });
-  var coral = 0, teal = 0;
-  Object.keys(roster).forEach(function (k) { if (roster[k] === 'coral') coral++; else teal++; });
-  if (!coral || !teal) { $('roomline').textContent = 'Both Sides Need A Player'; return; }
+  if (G.gameMode === 'rumble') {
+    roster[G.myKey] = 'ffa';
+    eachPeer(function (P, k) { roster[k] = 'ffa'; });
+    if (Object.keys(roster).length < 2) { $('roomline').textContent = 'It Takes Two'; return; }
+  } else {
+    /* the roster is whoever's here with a side picked; both sides must exist */
+    if (G.myTeam) roster[G.myKey] = G.myTeam;
+    eachPeer(function (P, k) { if (P.team) roster[k] = P.team; });
+    var coral = 0, teal = 0;
+    Object.keys(roster).forEach(function (k) { if (roster[k] === 'coral') coral++; else teal++; });
+    if (!coral || !teal) { $('roomline').textContent = 'Both Sides Need A Player'; return; }
+  }
   var seed = (Math.random()*4294967296) >>> 0;
   G.seed = seed; G.roster = roster; G.hostKey = G.myKey;
   G.myScore = 0; G.foeScore = 0; G.round = 0; G.picked = {};
@@ -1723,26 +1811,35 @@ function hostBegin() {
     P.brain = { p: botParams(P.level || 5), hist: [], wanderT: 0,
       mv: { f: 0, r: 0 }, pauseT: 0.8 + Math.random(), tkey: null };
   });
-  G.tx.send('begin', { seed: seed, roster: roster, k: G.myKey, map: G_MAP });
+  G.kills = {};
+  G.tx.send('begin', { seed: seed, roster: roster, k: G.myKey, map: G_MAP, mode: G.gameMode });
   startCountdown();
 }
 
 /* ---- the team room ---- */
 function updateTeamRoom() {
-  var coral = G.myTeam === 'coral' ? 1 : 0, teal = G.myTeam === 'teal' ? 1 : 0;
-  eachPeer(function (P) { if (P.team === 'coral') coral++; if (P.team === 'teal') teal++; });
+  var rumble = G.gameMode === 'rumble';
+  var coral = G.myTeam === 'coral' ? 1 : 0, teal = G.myTeam === 'teal' ? 1 : 0, all = 1;
+  eachPeer(function (P) { if (P.team === 'coral') coral++; if (P.team === 'teal') teal++; all++; });
+  $('pickcoral').style.display = rumble ? 'none' : '';
+  $('pickteal').style.display = rumble ? 'none' : '';
   $('coralcount').textContent = coral;
   $('tealcount').textContent = teal;
   $('pickcoral').classList.toggle('mine', G.myTeam === 'coral');
   $('pickteal').classList.toggle('mine', G.myTeam === 'teal');
+  $('botteal').style.display = rumble ? 'none' : '';
+  $('botcoral').textContent = rumble ? '+ Bot' : '+ Coral Bot';
   if (G.host) {
     $('startmatch').style.display = '';
     $('botrow').style.display = 'flex';
     $('botlvlrow').style.display = 'flex';
     showBotLvl();
-    $('roomline').textContent = coral && teal ? 'Ready When You Are' : 'Pick A Side';
+    $('roomline').textContent = rumble
+      ? (all >= 2 ? all + ' In · Ready When You Are' : 'Waiting For Players')
+      : (coral && teal ? 'Ready When You Are' : 'Pick A Side');
   } else {
-    $('roomline').textContent = G.myTeam ? 'Waiting For The Host' : 'Pick A Side';
+    $('roomline').textContent = rumble ? (all + ' In · Waiting For The Host')
+      : (G.myTeam ? 'Waiting For The Host' : 'Pick A Side');
   }
 }
 function pickTeam(team) {
@@ -1750,6 +1847,9 @@ function pickTeam(team) {
   G.myTeam = team;
   if (G.tx) G.tx.send('team', { k: G.myKey, team: team });
   updateTeamRoom();
+}
+function modeLabelRefresh() {
+  $('moderoom').textContent = G.gameMode === 'rumble' ? 'Mode — Rumble' : 'Mode — Teams';
 }
 function mapLabelRefresh() {
   var t = 'Map — ' + MAP().name;
@@ -1766,6 +1866,13 @@ function cycleMap(fromRoom) {
   if (fromRoom && G.tx) G.tx.send('map', { k: G.myKey, id: next });
 }
 $('maproom').onclick = function () { cycleMap(true); };
+$('moderoom').onclick = function () {
+  audio();
+  if (!G.host) return;
+  G.gameMode = G.gameMode === 'rumble' ? 'teams' : 'rumble';
+  modeLabelRefresh(); updateTeamRoom();
+  if (G.tx) G.tx.send('mode', { k: G.myKey, id: G.gameMode });
+};
 $('mappractice').onclick = function () { cycleMap(false); };
 
 var roomBotLvl = 5;
@@ -2003,9 +2110,9 @@ function stepBot(dt) {
 /* the host runs its team bots — same drive, wire keys of their own */
 function nearestEnemyOf(team, pos) {
   var best = null, bk = null, bd = 1e9, d;
-  if (G.myTeam !== team && me.alive) { best = me; bk = G.myKey; bd = me.pos.distanceTo(pos); }
+  if (isEnemyTeam(G.myTeam, team) && me.alive) { best = me; bk = G.myKey; bd = me.pos.distanceTo(pos); }
   eachPeer(function (P, k) {
-    if (P.team === team || !P.f.alive) return;
+    if (!isEnemyTeam(P.team, team) || !P.f.alive) return;
     d = P.f.pos.distanceTo(pos);
     if (d < bd) { bd = d; best = P.f; bk = k; }
   });
@@ -2065,13 +2172,26 @@ function checkDown(f) {
     } else {
       f.hp = 0; f.alive = false;
       if (f === me) {
-        if (G.tx) G.tx.send('death', { k: G.myKey });
+        if (G.tx) G.tx.send('death', { k: G.myKey, by: f.lastHitBy });
         if (G.mode === 'bot') roundOver(false);
-        else if (G.host) hostCheckWipe();
-        if (G.mode === 'net' && G.phase === 'fight') banner('Down', 'Watch The Round', 1500);
+        else if (G.gameMode === 'rumble') {
+          tallyKill(f.lastHitBy);
+          me.picks = [];                       /* everything you built dies with you */
+          banner('Down', 'Back In Three', 1500);
+          setTimeout(respawnMe, 2800);
+        } else {
+          if (G.host) hostCheckWipe();
+          if (G.phase === 'fight') banner('Down', 'Watch The Round', 1500);
+        }
       } else if (f.botKey) {
-        if (G.tx) G.tx.send('death', { k: f.botKey });
-        hostCheckWipe();
+        if (G.tx) G.tx.send('death', { k: f.botKey, by: f.lastHitBy });
+        if (G.gameMode === 'rumble') {
+          tallyKill(f.lastHitBy);
+          f.picks = [];
+          (function (bk) {
+            setTimeout(function () { respawnHostBot(bk); }, 2800);
+          })(f.botKey);
+        } else hostCheckWipe();
       } else roundOver(true);
     }
   }
@@ -2079,6 +2199,7 @@ function checkDown(f) {
 
 function stepFighterStatus(f, dt) {
   f.sinceHit += dt;
+  if (f.prot > 0) f.prot -= dt;
   if (f.spinT > 0) { f.spinT -= dt; f.yaw += f.spinV * dt; }
   if (f.slowT > 0) { f.slowT -= dt; if (f.slowT <= 0) f.slow = 0; }
   var dotDmg = 0;
@@ -2298,6 +2419,8 @@ window.DuelDebug = {
   brainDrive: brainDrive, stepHostBots: stepHostBots, nearestEnemyOf: nearestEnemyOf,
   isBotKey: isBotKey, routeHit: routeHit,
   MAPS: MAPS, loadMap: loadMap, mapId: function(){ return G_MAP; },
+  tallyKill: tallyKill, grantKillPowerup: grantKillPowerup, respawnMe: respawnMe,
+  rumbleSlot: rumbleSlot, isEnemyTeam: isEnemyTeam,
   PU: PU,
   touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
   setRot: setRot, tp: tp, vw: vw, vh: vh, isRot: function(){ return ROT; },
