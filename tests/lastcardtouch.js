@@ -169,6 +169,25 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(80);
   T('tapping the inspector closes it', !doc.getElementById('inspect').classList.contains('show'));
 
+  /* ---- the table speaks: event-driven animation from sayEvents ---- */
+  E.turn = 0; E.phase = 'play';
+  vm.runInContext('syncFromEngine([])', ctx);
+  await sleep(20);
+  vm.runInContext('sayEvents([{ e: "play", seat: 1, card: { id: 1, kind: "num", colour: "teal", n: 4 } }])', ctx);
+  await sleep(10);
+  T('a foe play flies across the table', !!doc.querySelector('.flyer'));
+  vm.runInContext('sayEvents([{ e: "draw", seat: 1, n: 1 }])', ctx);
+  await sleep(10);
+  T('a foe draw flies off the deck', !!doc.querySelector('.flyback'));
+  vm.runInContext('sayEvents([{ e: "reverse" }])', ctx);
+  T('a reverse spins the direction tag', doc.getElementById('dirtag').classList.contains('spin'));
+  vm.runInContext('sayEvents([{ e: "skip", seat: 1 }])', ctx);
+  T('a skip flashes the skipped seat',
+    doc.querySelector('#foes .foe[data-seat="1"]').classList.contains('flash'));
+  vm.runInContext('MYSEAT = 0; sayEvents([{ e: "win", seat: 0 }])', ctx);
+  T('winning rains confetti', doc.querySelectorAll('.confetti').length >= 20);
+  await sleep(700);
+
   finished = true;
   console.log(fails === 0 ? 'LASTCARDTOUCH: ALL PASS' : 'LASTCARDTOUCH FAILURES: ' + fails);
   process.exit(fails ? 1 : 0);

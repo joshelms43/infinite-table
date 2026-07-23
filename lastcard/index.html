@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Last Card — Infinite Table. Version: 0.2.0
+<!-- Last Card — Infinite Table. Version: 0.3.0
      Match the colour or the number, actions bite, wilds turn the table, and
      you call "Last Card" before you go to one — or the table charges you two.
      Host-authoritative over TableKit broadcast, same shape as M Deal: clients
@@ -163,6 +163,18 @@ input[type=text]::placeholder{color:var(--text-faint);font-weight:700}
   align-items:center;justify-content:center;z-index:70}
 #inspect.show{display:flex}
 #inspect .card{transform:scale(2.1);box-shadow:0 18px 40px rgba(8,12,10,.6)}
+#dirtag.spin{animation:dirspin .6s cubic-bezier(.3,1.3,.4,1)}
+@keyframes dirspin{from{transform:translateX(-50%) rotate(0)}to{transform:translateX(-50%) rotate(360deg)}}
+#dirtag.ccw.spin{animation:dirspinccw .6s cubic-bezier(.3,1.3,.4,1)}
+@keyframes dirspinccw{from{transform:translateX(-50%) scaleX(-1) rotate(0)}to{transform:translateX(-50%) scaleX(-1) rotate(-360deg)}}
+.foe.flash{animation:foeflash .5s ease}
+@keyframes foeflash{30%{border-color:var(--warning-amber);box-shadow:0 0 16px rgba(217,160,63,.5)}}
+.flyback{position:fixed;z-index:79;pointer-events:none;width:44px;height:63px;border-radius:7px;
+  background:linear-gradient(150deg,var(--primary-coral) 0%,var(--primary-coral-deep) 100%);
+  border:1.5px solid rgba(8,12,10,.35)}
+.confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:95;pointer-events:none;
+  animation:confall linear forwards}
+@keyframes confall{to{transform:translateY(105vh) rotate(560deg);opacity:.5}}
 #actions{display:flex;justify-content:center;gap:10px;padding:6px 18px 0}
 .actbtn{padding:12px 26px;border-radius:13px;font-weight:800;font-size:15px;
   background:var(--felt-green);border:1px solid var(--line-soft-t)}
@@ -266,12 +278,12 @@ input[type=text]::placeholder{color:var(--text-faint);font-weight:700}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.2.0"></script>
-<script src="../shared/tablekit.js?v=0.2.0"></script>
-<script src="../shared/lastcard-rules.js?v=0.2.0"></script>
+<script src="../shared/config.js?v=0.3.0"></script>
+<script src="../shared/tablekit.js?v=0.3.0"></script>
+<script src="../shared/lastcard-rules.js?v=0.3.0"></script>
 <script>
 'use strict';
-var VERSION = '0.2.0';
+var VERSION = '0.3.0';
 TableKit.watchErrors({ game: 'lastcard', version: VERSION, onError: function (m) { banner(m); } });
 
 function $(id) { return document.getElementById(id); }
@@ -326,6 +338,7 @@ function renderAll() {
     var p = V.players[s];
     var d = document.createElement('div');
     d.className = 'foe' + (V.turn === s && !V.over ? ' turn' : '') + (p.called ? ' called' : '');
+    d.dataset.seat = s;
     var minis = '';
     for (var m = 0; m < Math.min(p.handN, 8); m++) minis += '<span class="mini"></span>';
     d.innerHTML = '<span class="fname">' + esc(p.name) + '</span>' +
@@ -369,16 +382,122 @@ function esc(s) {
   });
 }
 
-function sayEvents(evts, names) {
+/* ================= sound (M Deal's synth) ================= */
+var AC = null;
+function ac() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  return AC;
+}
+function sfx(kind) {
+  var ctx = ac();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  var t = ctx.currentTime;
+  var tone = function (f, start, dur, type, gain) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(gain || .07, t + start);
+    g.gain.exponentialRampToValueAtTime(.0001, t + start + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t + start); o.stop(t + start + dur + .02);
+  };
+  if (kind === 'pick') tone(520, 0, .045, 'triangle', .05);
+  if (kind === 'drop') { tone(190, 0, .09, 'triangle', .09); tone(120, .02, .13, 'sine', .06); }
+  if (kind === 'back') { tone(300, 0, .06, 'sine', .04); tone(200, .05, .09, 'sine', .035); }
+  if (kind === 'draw') { tone(660, 0, .07, 'triangle', .045); }
+  if (kind === 'sting') { tone(440, 0, .12, 'square', .05); tone(300, .11, .16, 'square', .05); }
+  if (kind === 'call') { tone(523, 0, .1); tone(659, .08, .1); tone(784, .16, .18); }
+  if (kind === 'win') { [523, 659, 784, 1047].forEach(function (f, i) { tone(f, i * .12, .22, 'sine', .09); }); }
+}
+function confetti() {
+  if (!document.body || !document.body.appendChild) return;
+  var cols = [LastCard.COLOURS.coral.hex, LastCard.COLOURS.teal.hex,
+    LastCard.COLOURS.gold.hex, LastCard.COLOURS.blue.hex, '#F2EEE2'];
+  for (var i = 0; i < 32; i++) {
+    var sp = document.createElement('span');
+    sp.className = 'confetti';
+    sp.style.left = (Math.random() * 100) + 'vw';
+    sp.style.background = cols[i % cols.length];
+    sp.style.animationDelay = (Math.random() * 0.8) + 's';
+    sp.style.animationDuration = (1.6 + Math.random() * 1.4) + 's';
+    document.body.appendChild(sp);
+    (function (el) { setTimeout(function () { if (el.remove) el.remove(); }, 3600); })(sp);
+  }
+}
+
+/* ================= the events, spoken and shown =================
+   One table owns everything an engine event does at the glass: the banner
+   line, the sound, the haptic, and the flight across the table. */
+function foeEl(seat) { return document.querySelector('#foes .foe[data-seat="' + seat + '"]'); }
+function rectMid(el) {
+  if (!el || !el.getBoundingClientRect) return null;
+  var r = el.getBoundingClientRect();
+  if (!r) return null;
+  return { left: r.left + r.width / 2, top: r.top + r.height / 2, width: 0, height: 0 };
+}
+function flyBack(fromEl, toEl, delay) {
+  if (!fromEl || !toEl || !document.body || !document.body.appendChild) return;
+  if (!fromEl.getBoundingClientRect || !toEl.getBoundingClientRect) return;
+  var a = fromEl.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+  if (!a || !b) return;
+  var f = document.createElement('div');
+  f.className = 'flyback';
+  f.style.left = (a.left + a.width / 2 - 22) + 'px';
+  f.style.top = (a.top + a.height / 2 - 31) + 'px';
+  document.body.appendChild(f);
+  var dx = (b.left + b.width / 2) - (a.left + a.width / 2);
+  var dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+  setTimeout(function () {
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      f.style.transition = 'transform 260ms cubic-bezier(.25,.8,.25,1), opacity 260ms ease-in';
+      f.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(8deg)';
+      f.style.opacity = '0.15';
+    }); });
+    setTimeout(function () { if (f.remove) f.remove(); }, 340);
+  }, delay || 0);
+}
+
+function sayEvents(evts) {
+  if (!V) return;
+  var names = V.players.map(function (p) { return p.name; });
+  var who = function (s) { return s === MYSEAT ? 'You' : names[s]; };
   (evts || []).forEach(function (e) {
-    var who = function (s) { return s === MYSEAT ? 'You' : names[s]; };
-    if (e.e === 'call') banner(who(e.seat) + (e.seat === MYSEAT ? ' called Last Card' : ' called Last Card!'));
+    if (e.e === 'play' && e.seat !== MYSEAT) {
+      /* their card crosses the table into the pile */
+      var src = rectMid(foeEl(e.seat));
+      if (src) playFlight(e.card, { left: src.left - 44, top: src.top - 63, width: 88, height: 126 }, -6);
+      sfx('drop');
+    } else if (e.e === 'play') {
+      sfx('drop');
+    }
+    if (e.e === 'draw' || e.e === 'penalty' || e.e === 'forced') {
+      var dest = e.seat === MYSEAT ? $('hand') : foeEl(e.seat);
+      var n = Math.min(e.n || 1, 4);
+      for (var i = 0; i < n; i++) flyBack($('drawpile'), dest, i * 90);
+      if (e.seat === MYSEAT) haptic(e.e === 'draw' ? 8 : 60);
+      sfx(e.e === 'draw' ? 'draw' : 'sting');
+    }
+    if (e.e === 'call') { banner(who(e.seat) + ' called Last Card' + (e.seat === MYSEAT ? '' : '!')); sfx('call'); }
     else if (e.e === 'penalty') banner(who(e.seat) + (e.seat === MYSEAT ? ' forgot to call — draw two' : ' forgot to call — draws two'));
     else if (e.e === 'forced') banner('+' + e.n + ' to ' + who(e.seat));
-    else if (e.e === 'reverse') banner('Play reverses');
-    else if (e.e === 'skip') banner(who(e.seat) + (e.seat === MYSEAT ? ' are skipped' : ' is skipped'));
+    else if (e.e === 'reverse') {
+      banner('Play reverses');
+      var dt = $('dirtag');
+      if (dt.classList) {
+        dt.classList.remove('spin'); void (dt.offsetWidth || 0); dt.classList.add('spin');
+        setTimeout(function () { if (dt.classList) dt.classList.remove('spin'); }, 650);
+      }
+    }
+    else if (e.e === 'skip') {
+      banner(who(e.seat) + (e.seat === MYSEAT ? ' are skipped' : ' is skipped'));
+      var fe = foeEl(e.seat);
+      if (fe && fe.classList) {
+        fe.classList.add('flash');
+        setTimeout(function () { if (fe.classList) fe.classList.remove('flash'); }, 550);
+      }
+    }
     else if (e.e === 'reshuffle') banner('The pile shuffles back in');
-    if (e.e === 'forced' && e.seat === MYSEAT) haptic(60);
+    else if (e.e === 'win') { sfx('win'); if (e.seat === MYSEAT) confetti(); }
   });
 }
 
@@ -486,7 +605,7 @@ function findMine(id) {
 
 function toggleSelect(id) {
   SELECTED = SELECTED === id ? null : id;
-  haptic(6);
+  haptic(6); sfx('pick');
   renderAll();
   if (SELECTED != null) {
     var c = findMine(SELECTED);
@@ -523,6 +642,7 @@ function playFlight(c, srcRect, tilt) {
   var to = $('pilewrap');
   if (!srcRect || !to.getBoundingClientRect || !document.body.appendChild) return;
   var tr = to.getBoundingClientRect();
+  if (!tr) return;
   var f = document.createElement('div');
   f.className = 'flyer';
   f.appendChild(cardEl(c));
@@ -692,7 +812,7 @@ function startDrag(e) {
   DRAG.cx0 = r.left + r.width / 2; DRAG.cy0 = r.top + r.height / 2;
   DRAG.legal = isLegal(c);
   DRAG.pend = null;
-  haptic(8);
+  haptic(8); sfx('pick');
   requestAnimationFrame(function () { if (clone.classList) clone.classList.add('lifted'); });
   if (DRAG.legal) markPileDroppable(true);
 }
@@ -703,13 +823,7 @@ function doDrop() {
   var tilt = DRAG.tilt || 4;
   haptic(14);
   finishDrag(true);
-  if (c.kind === 'wild' || c.kind === 'w4') {
-    pendingWild = c.id;
-    openPick();
-  } else {
-    if (srcRect) playFlight(c, srcRect, tilt);
-    sendMove({ t: 'play', id: c.id });
-  }
+  commitCard(c, srcRect, tilt);
 }
 
 function springBack(deny) {
@@ -729,6 +843,7 @@ function springBack(deny) {
     }
   }, 200);
   finishDrag(false);
+  sfx('back');
   if (deny) haptic(20);
 }
 
@@ -803,7 +918,7 @@ function showOver() {
   $('overwrap').classList.remove('hidden');
   var won = V.winner === MYSEAT;
   $('overtitle').textContent = won ? 'You Win' : V.players[V.winner].name + ' Wins';
-  $('oversub').textContent = won ? 'Clean exit.' : 'Next one\u2019s yours.';
+  $('oversub').textContent = won ? 'Clean exit.' : (MODE === 'client' ? 'The host deals the next one.' : 'Next one\u2019s yours.');
   $('againbtn').style.display = (MODE === 'client') ? 'none' : '';
   $('overlay').classList.add('show');
 }
@@ -840,7 +955,7 @@ function startBot(bots) {
 function syncFromEngine(evts) {
   V = publicView(ENGINE, ROSTER_NAMES);
   MYHAND = ENGINE.players[MYSEAT].hand.slice();
-  sayEvents(evts, ROSTER_NAMES);
+  sayEvents(evts);
   renderAll();
 }
 
@@ -912,7 +1027,7 @@ function hostPush(evts) {
   ENGINE.players.forEach(function (p, s) {
     if (s !== MYSEAT) TX.send('hand', { seat: s, cards: p.hand });
   });
-  sayEvents(evts, ROSTER_NAMES);
+  sayEvents(evts);
   renderAll();
 }
 
@@ -938,7 +1053,7 @@ function onWire(ev, m) {
   } else if (ev === 'state') {
     if (MODE !== 'client') return;
     V = m.v;
-    sayEvents(m.evts, ROSTER_NAMES);
+    sayEvents(m.evts);
     renderAll();
   } else if (ev === 'hand') {
     if (MODE !== 'client' || m.seat !== MYSEAT) return;
@@ -954,7 +1069,13 @@ function seatOfKey(key) {
   return ROSTER.findIndex(function (r) { return r.key === key; });
 }
 
+var HEALT = null;
 function onPresence() {
+  if (MODE === 'host' && ENGINE) {
+    /* someone joined or came back mid-game — re-push truth so they heal */
+    clearTimeout(HEALT);
+    HEALT = setTimeout(function () { if (MODE === 'host' && ENGINE) hostPush([]); }, 600);
+  }
   if ($('room').classList.contains('hidden')) return;
   renderRoom();
 }

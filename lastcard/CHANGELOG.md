@@ -1,5 +1,22 @@
 # Last Card — Changelog
 
+## 0.3.0
+The table comes alive, and the wire heals.
+- One event table owns everything an engine event does at the glass: banner,
+  sound, haptic, flight. Foe plays fly from their chip into the pile; every
+  draw, sting and penalty flies card-backs off the deck to whoever pays;
+  a Reverse spins the direction tag; a Skip flashes the skipped seat;
+  winning rains the four house colours.
+- M Deal's WebAudio synth ported: pick, drop, springback, draw, sting, the
+  call fanfare, the win run. No assets, all oscillators.
+- Presence heal: any join or rejoin mid-game makes the host re-push truth
+  (debounced), so a phone that drops and comes back is whole again without
+  anyone doing anything. Host migration remains the open gap.
+- Refactor: one commit path for drop and raised-tap (`commitCard`); event
+  names read from the pushed view, not a parallel roster copy; every rect
+  read guarded the same way.
+- Client end-screen now says who deals the next one.
+
 ## 0.2.0
 The flagship's hands. M Deal's hand and drag grammar, ported whole:
 - Fanned, overlapping hand — wrappers keyed by card id, FLIP slides on every
