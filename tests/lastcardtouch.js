@@ -19,6 +19,11 @@ const T = (n, c, d) => {
   if (!c) fails++;
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const until = async (fn, ms = 1800) => {          // load-proof: wait for the STATE, not a guess at the clock
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(12); }
+  return fn();
+};
 
 (async () => {
   const dom = new JSDOM(htmlFor('lastcard'), { pretendToBeVisual: true, runScripts: 'outside-only', url: 'https://it.test/lastcard/' });
@@ -122,16 +127,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     pd(doc, 'pointermove', 0, 0);
     T('and never lights for it', !doc.getElementById('pilewrap').classList.contains('dropok'));
     pd(doc, 'pointerup', 0, 0);
-    await sleep(260);
+    await until(() => !doc.querySelector('.dragclone') && deadNow.classList.contains('denied'));
     T('it springs back with the denial shake', !doc.querySelector('.dragclone') &&
       deadNow.classList.contains('denied') && E.players[0].hand.length === handN);
-    await sleep(340);
+    await until(() => !deadNow.classList.contains('denied') && !deadNow.classList.contains('hidden-src'));
     T('and settles clean', !deadNow.classList.contains('denied') &&
       !deadNow.classList.contains('hidden-src') && E.players[0].hand.length === handN);
   }
 
   /* ---- a wild drop opens the colour picker; picking sends the play ---- */
-  await sleep(420);
+  await until(() => !doc.querySelector('.dragclone'));
+  await sleep(60);
   const wildNow = [...doc.querySelectorAll('#hand .cardw')].find(w => {
     const c = E.players[0].hand.find(x => x.id === +w.dataset.cid);
     return c && c.kind === 'wild';
@@ -143,12 +149,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     pd(doc, 'pointermove', 90, 486);
     pd(doc, 'pointermove', 0, 0);
     pd(doc, 'pointerup', 0, 0);
-    await sleep(30);
+    await until(() => doc.getElementById('overlay').classList.contains('show') &&
+                      doc.querySelectorAll('#swatches .swatch').length === 4);
     T('a wild drop opens the colour picker',
       doc.getElementById('overlay').classList.contains('show') &&
       doc.querySelectorAll('#swatches .swatch').length === 4);
-    doc.querySelectorAll('#swatches .swatch')[1].click();     // teal
-    await sleep(30);
+    const _sw = doc.querySelectorAll('#swatches .swatch');
+    if (_sw[1]) _sw[1].click();     // teal
+    await until(() => E.players[0].hand.length === handN - 1 + 2 &&
+                      LC.top(E).kind === 'wild' && E.activeColour === 'teal', 4500);
     /* the play leaves one card, uncalled — the table charges two, automatically */
     T('picking a colour plays the wild and the uncalled exit costs two',
       E.players[0].hand.length === handN - 1 + 2 &&
