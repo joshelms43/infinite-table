@@ -26,6 +26,16 @@ function clearHoldings(p){
   p.bldg={};
 }
 
+// BUZZY: the gag lands in the caller's hand and says what he chose               // BUZZY
+newGame(); G.over=false; G._buzzyIn=false;                                          // BUZZY
+const _hb=G.players[0].hand.length, _db=G.deck.length;                              // BUZZY
+addBuzzy(0,'GET IN THERE BUZZY');                                                   // BUZZY
+T('Buzzy goes to the hand, not the deck', G.players[0].hand.length===_hb+1          // BUZZY
+  && G.players[0].hand.some(c=>c.id===9001) && G.deck.length===_db);                // BUZZY
+T('Buzzy says what he was told', G.players[0].hand.find(c=>c.id===9001).d==='GET IN THERE BUZZY');   // BUZZY
+T('Buzzy is one-shot', (addBuzzy(0,'again'), G.players[0].hand.filter(c=>c.id===9001).length===1));  // BUZZY
+G.players[0].hand = G.players[0].hand.filter(c=>c.id!==9001); G._buzzyIn=false;     // BUZZY: leave the world at 106 for every check downstream
+
 // 1. deck composition — the census reads the catalog directly: the intended use
 const d=buildDeck();
 T('deck has 106 playing cards (+4 rule cards = official 110)', d.length===106);

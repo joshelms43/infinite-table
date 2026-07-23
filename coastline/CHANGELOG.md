@@ -1,5 +1,10 @@
 # Coastline — Changelog
 
+## v0.11.2 — 2026-07-23
+Buzzy, to spec: straight to the hand, saying what Josh tells him to.
+
+The gag previously slipped the card into the deck at a random depth — suspense by shuffle. Josh's actual spec: the card goes to HIS hand (the timing becomes the joke, and the hand stays private — the public log only says "put Buzzy in"), and he types the words. The button now asks "What does Buzzy say?"; the chosen line rides the meta intent host-authoritatively, is kept printable and capped at sixty characters, becomes the card's own rule text (so the options sheet shows it via the existing fall-back-to-card-fields hardening), and detonates as the gold banner when played. One-shot per game as before; still name-gated; still stripped by deleting every BUZZY-tagged line — the three new test pins carry the tag too.
+
 ## Test infrastructure — 2026-07-23
 The promise from v0.10.9, kept: tests/assertions.js no longer mints into a live world.
 
