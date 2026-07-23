@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.2
+  Version: 0.11.3
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -770,7 +770,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.2"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.3"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -803,7 +803,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.2</span>
+    <span class="ver">v0.11.3</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -2304,13 +2304,17 @@ function playPayday(c,by){
    kind it does not know, and no test counts cards in a game where the button was
    pressed. Remove the whole gag by deleting every line that mentions BUZZY. */
 function isJoshName(){ try{ return /^josh$/i.test((localStorage.getItem('it_name')||'').trim()); }catch(e){ return false; } }
-function makeBuzzyCard(say){ return { t:'action', kind:'buzzy', n:'Put Buzzy In', d:(say||'Straight off the bench.'), v:1, id:9001 }; }   // BUZZY
-function addBuzzy(by, say){                                                                        // BUZZY
-  if(G.over || G._buzzyIn) return;                                                                 // BUZZY
-  say = String(say||'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,60);                         // BUZZY: his words, kept printable and short
-  G.players[by].hand.push(makeBuzzyCard(say));                                                     // BUZZY: straight to the caller's hand
-  G._buzzyIn = true;                                                                               // BUZZY
-  log(nameOf(by)+' put Buzzy in.');                                                                // BUZZY: the hand stays private; the timing is the joke
+function makeBuzzyCard(name, say){                                                                 // BUZZY
+  G._buzzyN = (G._buzzyN||0)+1;                                                                    // BUZZY: unique ids off the catalog, 9001 upward
+  return { t:'action', kind:'buzzy', n:(name||'Buzzy'), d:(say||'BUZZY IS IN!'), v:1, id:9000+G._buzzyN };   // BUZZY
+}   // BUZZY
+function addBuzzy(by, name, say){                                                                  // BUZZY
+  if(G.over) return;                                                                               // BUZZY: no cap — his table, his bench
+  const clean = t => String(t||'').replace(/[\u0000-\u001f]/g,'').trim();                          // BUZZY
+  name = clean(name).slice(0,24); say = clean(say).slice(0,60);                                    // BUZZY
+  const card = makeBuzzyCard(name, say);                                                           // BUZZY
+  G.players[by].hand.push(card);                                                                   // BUZZY: straight to the caller's hand
+  log(nameOf(by)+' put '+card.n+' in.');                                                           // BUZZY: the name is announced; the hand stays private
   sfx('tick'); haptic(8);                                                                          // BUZZY
   if(NET.mode==='host') NET.pushState();                                                           // BUZZY
   renderAll();                                                                                     // BUZZY
@@ -2327,7 +2331,7 @@ function playBuzzy(c, by){                                                      
 }                                                                                                  // BUZZY
 function updateBuzzyBtn(){                                                                         // BUZZY
   const b=$('#buzzybtn'); if(!b||!b.style) return;                                                 // BUZZY
-  b.style.display = (isJoshName() && G && !G.over && !G._buzzyIn) ? '' : 'none';                   // BUZZY
+  b.style.display = (isJoshName() && G && !G.over) ? '' : 'none';                                 // BUZZY: the bench never empties
 }                                                                                                  // BUZZY
 /* ----- turn flow ----- */
 function startTurn(){
@@ -2416,9 +2420,10 @@ function reopenWin(){
   $('#winscreen').classList.add('show');
 }
 $('#endturn').onclick = ()=>{ if(isMyTurn() && !DRAG.active){ haptic(6); sfx('tick'); endTurn(); } };
-$('#buzzybtn').onclick = ()=>{ if(!isJoshName() || !G || G.over || G._buzzyIn) return;   // BUZZY
-  const say=(prompt('What does Buzzy say?','BUZZY IS IN!')||'').trim(); if(!say) return;           // BUZZY: he picks the words
-  if(NET.intercept('buzzy_add',{say:say})) return; addBuzzy(MYSEAT, say); };   // BUZZY
+$('#buzzybtn').onclick = ()=>{ if(!isJoshName() || !G || G.over) return;                          // BUZZY
+  const name=(prompt('Name the card','Buzzy')||'').trim(); if(!name) return;                       // BUZZY: he picks the name
+  const say=(prompt('What does '+name+' say?','BUZZY IS IN!')||'').trim(); if(!say) return;        // BUZZY: and the words
+  if(NET.intercept('buzzy_add',{name:name,say:say})) return; addBuzzy(MYSEAT, name, say); };   // BUZZY
 function endTurn(){
   if(typeof netBusy==='function' && netBusy()){ showPrompt('Waiting for a payment to resolve…', false); return; }
   if(NET.intercept('endturn',{})) return;
@@ -3123,9 +3128,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.2"></script>
-<script src="../shared/tablekit.js?v=0.11.2"></script>
-<script src="../shared/identity.js?v=0.11.2"></script>
+<script src="../shared/config.js?v=0.11.3"></script>
+<script src="../shared/tablekit.js?v=0.11.3"></script>
+<script src="../shared/identity.js?v=0.11.3"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3227,7 +3232,7 @@ const NET = {
       if(cb){ delete this.pendingAsks[seat]; delete this.pendingAskInfo[seat]; delete this.pendingAskAt[seat]; cb(a); }
       return;
     }
-    if(k==='buzzy_add'){ if(!G.over) addBuzzy(seat, a && a.say); return; }   // BUZZY: a meta action — legal off-turn; the words travel
+    if(k==='buzzy_add'){ if(!G.over) addBuzzy(seat, a && a.name, a && a.say); return; }   // BUZZY: a meta action — legal off-turn; name and words travel
     if(G.over || G.turn!==seat){ this.tx.send('nack', { seat }); return; }   // stale / out-of-turn: bounce it back
     if(Object.keys(this.pendingAsks).length){ this.tx.send('nack', { seat }); return; } // interrupt resolving: bounce
     const p = G.players[seat];

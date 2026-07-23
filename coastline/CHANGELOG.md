@@ -1,5 +1,8 @@
 # Coastline — Changelog
 
+## v0.11.3 — 2026-07-23
+The bench never empties. Two prompts now: name the card, then give it its line — both travel host-authoritatively, both sanitized (names to 24 characters, sayings to 60). Every press mints a fresh card straight into Josh's hand with a unique id counting up from 9001 off the catalog, so no two collide and the migration rebuild ignores them all naturally (non-catalog ids simply never re-mint). The one-shot gate is gone. The public log announces the chosen name — "Josh put Big Dazza in." — while the hand stays private, so the reveal is still the play. Pins rewritten for the multi era: two cards land in the hand and never the deck, each carries its own name and words, ids never collide.
+
 ## v0.11.2 — 2026-07-23
 Buzzy, to spec: straight to the hand, saying what Josh tells him to.
 

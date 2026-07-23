@@ -26,15 +26,18 @@ function clearHoldings(p){
   p.bldg={};
 }
 
-// BUZZY: the gag lands in the caller's hand and says what he chose               // BUZZY
-newGame(); G.over=false; G._buzzyIn=false;                                          // BUZZY
-const _hb=G.players[0].hand.length, _db=G.deck.length;                              // BUZZY
-addBuzzy(0,'GET IN THERE BUZZY');                                                   // BUZZY
-T('Buzzy goes to the hand, not the deck', G.players[0].hand.length===_hb+1          // BUZZY
-  && G.players[0].hand.some(c=>c.id===9001) && G.deck.length===_db);                // BUZZY
-T('Buzzy says what he was told', G.players[0].hand.find(c=>c.id===9001).d==='GET IN THERE BUZZY');   // BUZZY
-T('Buzzy is one-shot', (addBuzzy(0,'again'), G.players[0].hand.filter(c=>c.id===9001).length===1));  // BUZZY
-G.players[0].hand = G.players[0].hand.filter(c=>c.id!==9001); G._buzzyIn=false;     // BUZZY: leave the world at 106 for every check downstream
+// BUZZY: named at will, worded at will, no limit                                   // BUZZY
+newGame(); G.over=false;                                                             // BUZZY
+const _hb=G.players[0].hand.length, _db=G.deck.length;                               // BUZZY
+addBuzzy(0,'Big Dazza','HE CANNOT BE STOPPED');                                      // BUZZY
+addBuzzy(0,'Buzzy','BUZZY IS IN!');                                                  // BUZZY
+const _bz=G.players[0].hand.filter(c=>c.id>9000);                                    // BUZZY
+T('multiple cards land in the hand, never the deck', _bz.length===2                  // BUZZY
+  && G.players[0].hand.length===_hb+2 && G.deck.length===_db);                       // BUZZY
+T('each carries its own name and words', _bz[0].n==='Big Dazza' && _bz[0].d==='HE CANNOT BE STOPPED'   // BUZZY
+  && _bz[1].n==='Buzzy' && _bz[1].d==='BUZZY IS IN!');                               // BUZZY
+T('ids never collide', _bz[0].id!==_bz[1].id && _bz.every(c=>c.id>9000));            // BUZZY
+G.players[0].hand = G.players[0].hand.filter(c=>c.id<=9000);                         // BUZZY: leave the world at 106 for every check downstream
 
 // 1. deck composition — the census reads the catalog directly: the intended use
 const d=buildDeck();
