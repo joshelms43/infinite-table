@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.11.0 - 2026-07-23
+Champion AI: the bots now use the net-guided ISMCTS brain from the infinite-ai lab (economies already match 1:1 - both RULEBOOK 2026-07-12-official). On contentious decisions the brain deals out determinized worlds consistent with card counting, plays each forward with the trained value net as the rollout evaluator, and picks the action that wins the most futures; obvious decisions stay greedy and instant.
+
+Ported additively - the counting + greedy layer was already here; this adds the search + value net (mctsChoose, determinize, mcMoves, rollout/rolloutValue, netValue, featuresOf) and loads coastline/value-net.json at boot, falling back to the pre-net leader-proxy champion if the net can't load. MC.jsn=0 (the certified config); no rules change.
+
+Verified: economy/exec suite green; full AI game completes with 106-card conservation; net path returns valid probabilities; ~13ms per contentious decision (det8xK4) so no UI jank. On a branch for review before it goes live.
+
 ## v0.10.10 — 2026-07-15
 Live report from the table: "ran out of cards in my hand and only got given 2, not 5."
 
