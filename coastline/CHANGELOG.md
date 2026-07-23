@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.11.1 — 2026-07-23
+Two things: main's gate healed, and a joke walked on.
+
+**The merge left the gate flaky-red.** The champion-ai PR landed with lastcardtouch choreographing drag animations against fixed sleeps — green alone, red in the full chain (a hot box drifts the timers), different assertions failing each run. Waits are condition-based now, sampling the settled state with a full-settlement predicate on the colour-pick penalty; four loaded runs and three full chains green.
+
+**Put Buzzy In (TEMPORARY).** If your saved name is Josh, a button beside End Turn shuffles one "Put Buzzy In" card ($1M action, id 9001) into the live deck — once per game, off-turn legal, host-authoritative over the wire. Whoever draws it can bank it or play it for a gold BUZZY IS IN! banner. Engineering notes for a gag: the card travels as a whole object (state pushes and the resurrection blob both carry objects, so he survives a host death), the champion brain never proposes kinds it does not know, and the end-to-end smoke caught a real crash before it shipped — cardName and two other renderers dereferenced ACTIONS[kind] blind and would have thrown the moment any unknown kind touched the table. All ACTIONS consumers now fall back to the card's own name and description, which is simply correct hardening regardless of jokes. Strip the whole gag by deleting every line mentioning BUZZY.
+
 ## v0.11.0 - 2026-07-23
 Champion AI: the bots now use the net-guided ISMCTS brain from the infinite-ai lab (economies already match 1:1 - both RULEBOOK 2026-07-12-official). On contentious decisions the brain deals out determinized worlds consistent with card counting, plays each forward with the trained value net as the rollout evaluator, and picks the action that wins the most futures; obvious decisions stay greedy and instant.
 
