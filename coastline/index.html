@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.7
+  Version: 0.11.8
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -288,6 +288,51 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .colorpick:active{transform:scale(.95)}
 
 /* ---------- win ---------- */
+/* ---- the rating stinger: shown over the results, dismissed to reveal them ---- */
+#eloscreen{
+  position:fixed;inset:0;z-index:70;display:flex;
+  background:rgba(10,15,12,.86);backdrop-filter:blur(5px);
+  flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
+  opacity:0;pointer-events:none;transition:opacity .3s ease;
+}
+#eloscreen.show{opacity:1;pointer-events:auto}
+.elocard{display:flex;flex-direction:column;align-items:center;gap:2px;max-width:340px;width:100%}
+.elolabel{
+  font-size:10px;font-weight:800;letter-spacing:3.5px;text-transform:uppercase;
+  color:var(--text-faint);margin-bottom:10px;
+}
+#eloverdict{
+  font-family:'Lilita One',cursive;font-size:26px;line-height:1.1;
+  color:var(--text-ivory);opacity:.9;margin-bottom:2px;
+}
+#elonum{
+  font-family:'Lilita One',cursive;font-size:78px;line-height:1;
+  color:var(--text-ivory);font-variant-numeric:tabular-nums;
+  text-shadow:0 6px 26px rgba(0,0,0,.55);
+}
+#elodelta{
+  font-family:'Lilita One',cursive;font-size:30px;line-height:1;margin-top:8px;
+  font-variant-numeric:tabular-nums;opacity:0;transform:scale(.6);
+}
+#elodelta.in{animation:elodpop .5s cubic-bezier(.2,1.5,.4,1) forwards}
+@keyframes elodpop{to{opacity:1;transform:scale(1)}}
+#elodelta.up{color:var(--success-green)}
+#elodelta.down{color:var(--danger-red)}
+#elodelta.flat{color:var(--text-faint)}
+#elotrack{
+  width:100%;max-width:260px;height:5px;border-radius:3px;margin-top:20px;
+  background:rgba(242,238,226,.12);overflow:hidden;
+}
+#elofill{display:block;height:100%;width:0;border-radius:3px;transition:width .9s cubic-bezier(.2,.9,.3,1)}
+#elofill.up{background:linear-gradient(90deg,var(--money-gold),var(--success-green))}
+#elofill.down{background:linear-gradient(90deg,var(--danger-red),var(--money-gold-deep))}
+#elosub{font-size:12px;font-weight:700;color:var(--text-faint);margin-top:14px;line-height:1.45;max-width:280px}
+#eloclose{
+  font-family:'Lilita One',cursive;font-size:15px;color:var(--text-ivory);margin-top:26px;
+  background:rgba(255,255,255,.08);border:1px solid var(--line-soft-t);border-radius:12px;padding:13px 34px;
+}
+#eloclose:active{transform:scale(.97)}
+
 #winscreen{
   position:fixed;inset:0;z-index:60;display:flex;
   background:rgba(10,15,12,.72);backdrop-filter:blur(3px);
@@ -770,7 +815,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.7"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.8"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -803,7 +848,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.7</span>
+    <span class="ver">v0.11.8</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -900,6 +945,18 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 
 <div id="winpill" onclick="reopenWin()">Results</div>
 
+<div id="eloscreen" onclick="if(event.target===this)closeElo()">
+  <div class="elocard">
+    <div class="elolabel">Rating</div>
+    <div id="eloverdict"></div>
+    <div id="elonum">0</div>
+    <div id="elodelta"></div>
+    <div id="elotrack"><span id="elofill"></span></div>
+    <div id="elosub"></div>
+    <button id="eloclose" onclick="closeElo()">Continue</button>
+  </div>
+</div>
+
 <div id="winscreen" onclick="if(event.target===this)closeWin()">
   <div class="wincard">
     <button id="winclose" onclick="closeWin()">✕</button>
@@ -931,6 +988,7 @@ const G = {
   deck:[], discard:[], players:[], turn:0, playsLeft:0, over:false,
 };
 function newGame(){
+  ELOSHOWN = false;              // the stinger fires once per game, not once per page
   G.deck = shuffle(buildDeck());
   G.discard = [];
   G.players = [
@@ -2378,6 +2436,7 @@ function checkAllWin(){
         sfx(p===me()?'win':'alert');
         haptic(p===me()?[12,60,12,60,24]:20);
         if(p===me()) confetti();
+        showElo(G.players.indexOf(p));
       }, 700);
       return true;
     }
@@ -2414,6 +2473,72 @@ function refreshWinBtn(){
   else if(NET.mode==='host'){ b.textContent = 'Rematch'; b.disabled = false; }
   else { b.textContent = 'Play Again'; b.disabled = false; }
 }
+/* ---- the rating stinger ----
+   Shown over the results a beat after they land, then dismissed to reveal
+   them. Guests never see it: the ending stays guest-first, and there is
+   nothing to report. Signed in, it always appears — including when the game
+   did not count, because "why didn't that change my rating" is the question
+   worth answering.
+
+   Every number here comes back from the database. The client owns none of the
+   arithmetic: the host writes through record_match, and a client polls its own
+   row until it moves, so the figure on screen is the figure that landed. */
+let ELOSHOWN = false;
+function showElo(winnerSeat){
+  if(typeof ID === 'undefined' || !ID.user || ELOSHOWN) return;
+  ELOSHOWN = true;
+  Promise.resolve(ID.settleRating(winnerSeat)).then(paintElo).catch(()=>{});
+}
+function eloReason(why){
+  if(why === 'watching') return 'You were not seated in this one, so nothing changed.';
+  if(why === 'toobig')   return 'Five at the table — too many for the ladder. Nothing changed.';
+  if(why === 'noprofile')return 'Your profile did not load, so this one went unrated.';
+  return 'This game was unrated — a rated table needs at least two accounts.';
+}
+function paintElo(r){
+  const scr = $('#eloscreen'); if(!scr || !scr.classList) return;
+  const num = $('#elonum'), dlt = $('#elodelta'), fill = $('#elofill'),
+        sub = $('#elosub'), verd = $('#eloverdict');
+  if(!r || !r.rated){
+    const at = (r && r.before != null) ? r.before : (ID.profile ? ID.profile.elo : 0);
+    if(verd) verd.textContent = 'Unrated';
+    if(num) num.textContent = at;
+    if(dlt){ dlt.textContent = '±0'; dlt.className = 'flat in'; }
+    if(fill){ fill.className = ''; fill.style.width = Math.max(0, at % 100) + '%'; }
+    if(sub) sub.textContent = eloReason(r && r.why);
+    scr.classList.add('show');
+    return;
+  }
+  const up = r.delta > 0, flat = r.delta === 0;
+  if(verd) verd.textContent = r.won ? 'You win' : (up ? 'Rating up' : 'Rating down');
+  if(sub)  sub.textContent = r.won ? 'Taken off the table.' : 'Better luck at the next one.';
+  if(num)  num.textContent = r.before;
+  if(dlt){ dlt.textContent = (r.delta > 0 ? '+' : '') + r.delta; dlt.className = flat ? 'flat' : (up ? 'up' : 'down'); }
+  if(fill){ fill.className = up ? 'up' : 'down'; fill.style.width = '0%'; }
+  scr.classList.add('show');
+  sfx(up ? 'good' : 'tick'); haptic(up ? [10,50,10] : 16);
+
+  /* count the number across, rather than snapping it */
+  const from = r.before, to = r.after, span = 900, t0 = Date.now();
+  const ease = x => 1 - Math.pow(1 - x, 3);
+  const tick = () => {
+    const k = Math.min(1, (Date.now() - t0) / span);
+    const v = Math.round(from + (to - from) * ease(k));
+    if(num) num.textContent = v;
+    if(fill) fill.style.width = Math.max(0, v % 100) + '%';
+    if(k < 1) requestAnimationFrame(tick);
+    else {
+      if(num) num.textContent = to;
+      if(dlt) dlt.classList.add('in');
+      if(!flat) haptic(8);
+    }
+  };
+  requestAnimationFrame(tick);
+}
+function closeElo(){
+  const scr = $('#eloscreen'); if(scr && scr.classList) scr.classList.remove('show');
+}
+
 function closeWin(){
   $('#winscreen').classList.remove('show');
   $('#winpill').classList.add('show');
@@ -3131,9 +3256,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.7"></script>
-<script src="../shared/tablekit.js?v=0.11.7"></script>
-<script src="../shared/identity.js?v=0.11.7"></script>
+<script src="../shared/config.js?v=0.11.8"></script>
+<script src="../shared/tablekit.js?v=0.11.8"></script>
+<script src="../shared/identity.js?v=0.11.8"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3396,7 +3521,7 @@ const NET = {
         $('#wintitle').textContent = w===me() ? 'You win' : w.name+' wins';
         $('#winsub').textContent = 'Three complete sets: ' + completeColors(w).map(c=>COLORS[c].label).join(', ');
         fillWinRows(); NET.teardown();
-        setTimeout(()=>{ refreshWinBtn(); $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); }, 500);
+        setTimeout(()=>{ refreshWinBtn(); $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); showElo(G.players.indexOf(w)); }, 500);
       }
     }
   },
@@ -3802,6 +3927,7 @@ const NET = {
     GAME_STARTED = true;
     newGame();
     G.players = roster.map(r=>({ name:r.name, isAI:!!r.isAI, hand:[], bank:[], props:{}, bldg:{} }));
+    ELOSHOWN = false;              // a fresh online game gets its own stinger
     clockStart();
     G.deck = shuffle(buildDeck());
     for(let i=0;i<5;i++) G.players.forEach(p=>p.hand.push(draw()));
@@ -3992,6 +4118,7 @@ function eliminatePlayer(seat, reason){
     $('#winsub').textContent = 'Last one standing';
     fillWinRows(); NET.teardown();
     const ws=$('#winscreen'); if(ws&&ws.classList) ws.classList.add('show');
+    showElo(alive[0]);
     if(NET.mode==='host') NET.pushState();
     return;
   }

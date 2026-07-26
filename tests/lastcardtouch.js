@@ -53,6 +53,20 @@ const until = async (fn, ms = 1800) => {          // load-proof: wait for the ST
   vm.runInContext('syncFromEngine([])', ctx);
   await sleep(20);
 
+  /* Tap the event stream. Some of what this file checks is transient — a card
+     sits on top of the pile only until the next one lands — and polling for a
+     snapshot races the opponent's turn. Events are durable: they record that a
+     thing happened, not that it is still true. */
+  vm.runInContext(
+    'globalThis.__EV = [];' +
+    'var _sync = syncFromEngine;' +
+    'syncFromEngine = function(evts){ (evts||[]).forEach(function(e){ globalThis.__EV.push(e); }); return _sync.apply(this, arguments); };',
+    ctx);
+  const events = () => vm.runInContext('globalThis.__EV', ctx);
+  const sawWildPlay = () => events().some(e => e && e.e === 'play' && e.seat === 0 &&
+                                               e.card && e.card.kind === 'wild' && e.colour === 'teal');
+  const sawPenalty = () => events().some(e => e && e.e === 'penalty' && e.seat === 0 && e.n === 2);
+
   const wraps = [...doc.querySelectorAll('#hand .cardw')];
   T('the fan renders one wrapper per card', wraps.length === 3);
   const wrapOf = id => doc.querySelector('#hand .cardw[data-cid="' + id + '"]');
@@ -175,12 +189,19 @@ const until = async (fn, ms = 1800) => {          // load-proof: wait for the ST
       doc.querySelectorAll('#swatches .swatch').length === 4);
     const _sw = doc.querySelectorAll('#swatches .swatch');
     if (_sw[1]) _sw[1].click();     // teal
-    await until(() => E.players[0].hand.length === handN - 1 + 2 &&
-                      LC.top(E).kind === 'wild' && E.activeColour === 'teal', 4500);
-    /* the play leaves one card, uncalled — the table charges two, automatically */
-    T('picking a colour plays the wild and the uncalled exit costs two',
-      E.players[0].hand.length === handN - 1 + 2 &&
-      LC.top(E).kind === 'wild' && E.activeColour === 'teal');
+    await until(() => sawWildPlay() && sawPenalty(), 4500);
+    /* The play leaves one card, uncalled — the table charges two, automatically.
+       Asserted from the event stream, not from the table: the opponent plays
+       immediately afterwards, so by the time a poll observes the pile the wild
+       is no longer on top and the hand has moved on. That timing is the game
+       working, not the test failing, and reading the snapshot made this
+       assertion fail about two runs in five under load. */
+    T('picking a colour plays the wild', sawWildPlay(),
+      'events: ' + JSON.stringify(events().map(e => e && e.e)));
+    T('and the uncalled exit costs two', sawPenalty(),
+      'events: ' + JSON.stringify(events().map(e => e && e.e)));
+    T('and the colour the picker chose is the colour that took effect',
+      events().some(e => e && e.e === 'play' && e.colour === 'teal'));
   }
 
   /* ---- hold to inspect ---- */

@@ -428,22 +428,72 @@ const ID = {
                                   : (i === mine && this.user ? this.user.id : null));
   },
 
+  /* Does this table pay out at all? One place decides, so the end-of-game
+     screen and the write agree about whether the game was rated. */
+  ratedTable(winnerSeat){
+    // deliberately does not require a loaded profile: recording must not be
+    // suppressed just because the row failed to read back. Only the screen needs it.
+    if(!this.sb || !this.user) return { ok:false, why:'guest' };
+    const seats = this.seatUids();
+    const winner = seats[winnerSeat];
+    if(!winner) return { ok:false, why:'unrated' };
+    const ids = seats.filter(Boolean);
+    if(ids.length < 2) return { ok:false, why:'unrated' };
+    if(ids.indexOf(this.user.id) < 0) return { ok:false, why:'watching' };
+    if(ids.length > 4) return { ok:false, why:'toobig' };
+    return { ok:true, ids, winner, won: winner === this.user.id };
+  },
+
+  /* My rating after the game, for the screen that shows it.
+
+     The host (and solo) writes the result, then reads it back. A client writes
+     nothing — the host's record_match updates every profile at the table,
+     including mine — so it polls until its own row moves. Elo is written by
+     the database, never guessed here: the screen shows what actually landed. */
+  async settleRating(winnerSeat){
+    const t = this.ratedTable(winnerSeat);
+    const before = this.profile ? this.profile.elo : null;
+    if(!t.ok) return { rated:false, why:t.why, before };
+    if(before === null) return { rated:false, why:'noprofile', before:null };
+
+    const iAmClient = (typeof NET!=='undefined') && NET.mode === 'client';
+    if(!iAmClient) await this.recordMatch(winnerSeat);
+
+    const after = await this._pollElo(before, iAmClient ? 10 : 3);
+    return { rated:true, won:t.won, before, after, delta: after - before };
+  },
+
+  /* Re-read my row until it moves, or until we run out of patience. The host's
+     write and my read are different round trips; on a client they are on
+     different devices. Settling for the stale value would show +0. */
+  async _pollElo(before, tries){
+    let elo = before;
+    for(let i = 0; i < (tries || 3); i++){
+      try{
+        const r = await this.sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
+        if(r && r.data){
+          const code = this.profile && this.profile.friend_code;
+          this.profile = r.data;
+          if(code) this.profile.friend_code = code;
+          this.renderProfile();
+          elo = r.data.elo;
+          if(elo !== before) return elo;
+        }
+      }catch(e){}
+      await new Promise(res => setTimeout(res, 350));
+    }
+    return elo;
+  },
+
   /* Called once by whoever owns the game state — the host online, and the
      browser itself when playing solo. Solo counts: Josh asked for it, and the
      bots now have somewhere for the points to go. */
   async recordMatch(winnerSeat){
     try{
-      if(!this.sb || !this.user) return;                       // guests stay unrated
       if(typeof NET!=='undefined' && NET.mode === 'client') return;   // the host records, not us
-      const seats = this.seatUids();
-      const winnerUid = seats[winnerSeat];
-      if(!winnerUid) return;
-      const ids = seats.filter(Boolean);
-      if(ids.length < 2) return;
-      if(ids.indexOf(this.user.id) < 0) return;                // record_match requires a participant
-      if(ids.length > 4) return;                               // record_match caps at four; a five-seat
-                                                               // table stays off the ladder rather than throwing
-      await this.sb.rpc('record_match', { p_players: ids, p_winner: winnerUid, p_rounds: G.turnCount });
+      const t = this.ratedTable(winnerSeat);
+      if(!t.ok) return;
+      await this.sb.rpc('record_match', { p_players: t.ids, p_winner: t.winner, p_rounds: G.turnCount });
       const r = await this.sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
       if(r && r.data){
         const code = this.profile && this.profile.friend_code;

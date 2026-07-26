@@ -1,5 +1,27 @@
 # Coastline — Changelog
 
+## v0.11.8 — 2026-07-26
+The rating lands on screen now, and it is the database's number rather than the client's guess.
+
+**The stinger.** Every ending — a set win, a client watching the host's win land, and last-one-standing — now opens a full-screen rating card a beat after the results. The old rating counts across to the new one over 900ms, the delta pops in signed and coloured, and a bar tracks progress through the current hundred. Dismissing it reveals the results underneath.
+
+**It shows what actually happened, not what should have.** The client does no Elo arithmetic at all. The host (and solo) writes through `record_match` and reads its row back; a client writes nothing — the host's write updates every profile at the table, including the client's — so it polls its own row until the number moves, up to ten times, then settles rather than hanging. `settleRating` is the one place that decides, and `recordMatch` now shares that decision instead of repeating it.
+
+**Guests never see it.** The ending stays guest-first. Signed in, it always appears, including when the game did not count — `Five at the table — too many for the ladder`, `You were not seated in this one` — because "why didn't that change my rating" is the question worth answering.
+
+**A coupling caught while refactoring:** folding the rated-table check into one function briefly made `recordMatch` depend on a loaded profile, so a failed profile read would have silently stopped recording. Recording needs an account; only the screen needs the profile. The check no longer asks for one.
+
+**Bots at an online table.** Josh confirmed the bots play fine, and driving a real host+client pair agreed. Two findings from that exercise are recorded in `tests/botsim.js` because both looked like bugs and neither was: sampling `G.turn` never catches a bot mid-turn, since `setTimeout` is synchronous in the harness and a bot seat plays and ends inside one call stack, so the turn appears to jump 0 → 2; and driving turns in a tight loop stalls on seat 0, because `finishEnd` refuses a second advance of the same turn inside 800ms. What botsim pins is the quiet part: a four-seat table with two bots resolves to four accounts, the bots to their seeded ids, the humans to the uids the roster carried, and an unseeded bot like Davo to nothing rather than to someone else's row.
+
+Pins: seven settlement cases (solo win, loss, client polling, a host that never wrote, guest, five-seat, not seated) and a real-DOM pass over the screen itself — the win lands on 1031 showing `+31` in green, the loss on 982 showing `-18` in red, the unrated case explains itself, and a guest is never shown it. The count animation is sampled 120ms in, so a snap fails it; the first version of that pin only checked that the string `requestAnimationFrame(tick)` appeared in the file, which a mutation that kept the text walked straight through.
+
+## Test infrastructure — 2026-07-26 (second pass)
+The lastcardtouch flake, properly this time.
+
+The earlier fix stated the precondition — re-rigging the hand so the wild play leaves exactly one card — and was necessary but not sufficient. It came back. The remaining race is that the assertion sampled a state the game destroys immediately: the opponent plays the moment the penalty resolves, so the wild stops being the top card and the hand moves on. `until` polls every 12ms, and under load the whole sequence completes between two polls. Waiting longer makes that *more* likely, not less, which is why every previous attempt to fix it by waiting failed.
+
+The assertion now reads the event stream, tapped by wrapping `syncFromEngine`. Events are durable: they record that the wild was played as teal and that seat 0 was charged two, rather than that those things are still visible. Six runs under ten competing CPU hogs, all green, plus three consecutive full chains. Deleting the penalty draw still fails it, and the failure now prints the events it did see.
+
 ## v0.11.7 — 2026-07-26
 Shaz is Shazza. She and Bazza hold real accounts now, and solo games count.
 

@@ -385,6 +385,103 @@ MAILERS.forEach(([label, re]) => {
       }
     }
 
+    /* ---------- 7. the rating the end-of-game screen shows ---------- */
+    {
+      const idsrc = fs.readFileSync(path.join(ROOT, 'shared', 'identity.js'), 'utf8');
+      const ME = 'aaaaaaaa-0000-4000-8000-000000000009';
+      const solo3 = () => ({ MYSEAT: 0, G: { turnCount: 11, players: [{ name: 'You' }, { name: 'Bazza', isAI: true }, { name: 'Shazza', isAI: true }] } });
+
+      /* elos: the sequence the profile row reports on each successive read. */
+      function ratingRig(extra, elos, startElo) {
+        const st = { rpc: 0, reads: 0 };
+        const sb = {
+          rpc: () => { st.rpc++; return Promise.resolve({ data: null, error: null }); },
+          from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => {
+            const e = elos[Math.min(st.reads++, elos.length - 1)];
+            return Promise.resolve({ data: { id: ME, name: 'Josh', elo: e, games: 1, wins: 1 } });
+          } }) }) }),
+        };
+        const c = vm.createContext(Object.assign({
+          console: { error() {}, log() {} }, SUPABASE_URL: '', SUPABASE_ANON: '',
+          setTimeout: (fn) => { fn(); return 0; },
+        }, extra));
+        vm.runInContext(idsrc + '\n;globalThis.__ID = ID;', c);
+        const I = c.__ID;
+        I.sb = sb; I.user = { id: ME }; I.profile = { id: ME, elo: startElo, friend_code: 'ABC123' };
+        I.renderProfile = () => {};
+        return { I, st };
+      }
+
+      {   // solo win: we write, then read what landed
+        const r = ratingRig(solo3(), [1031], 1000);
+        const out = await r.I.settleRating(0);
+        T('a rated solo win reports the change', out.rated === true && out.delta === 31, JSON.stringify(out));
+        T('and knows I won', out.won === true);
+        T('and wrote the result exactly once', r.st.rpc === 1, String(r.st.rpc));
+        T('and shows the figure the database returned, not a guess',
+          out.before === 1000 && out.after === 1031);
+      }
+      {   // a loss reads back as a loss
+        const r = ratingRig(solo3(), [982], 1000);
+        const out = await r.I.settleRating(1);
+        T('a loss reports a negative change', out.delta === -18 && out.won === false, JSON.stringify(out));
+      }
+      {   // a client writes nothing and waits for the host's write to land
+        const r = ratingRig({ MYSEAT: 0, NET: { mode: 'client', roster: [{ uid: ME }, { name: 'Bazza', isAI: true }] }, G: { turnCount: 4, players: [] } }, [1000, 1000, 1017], 1000);
+        const out = await r.I.settleRating(0);
+        T('a client records nothing', r.st.rpc === 0);
+        T('but still reports its change, once the host write lands',
+          out.rated === true && out.delta === 17, JSON.stringify(out));
+        T('and it took more than one read to see it', r.st.reads >= 3, String(r.st.reads));
+      }
+      {   // the host never wrote: give up rather than poll forever
+        const r = ratingRig({ MYSEAT: 0, NET: { mode: 'client', roster: [{ uid: ME }, { name: 'Bazza', isAI: true }] }, G: { turnCount: 4, players: [] } }, [1000], 1000);
+        const out = await r.I.settleRating(0);
+        T('an unmoved rating settles at zero rather than hanging', out.delta === 0);
+        T('and the polling is bounded', r.st.reads <= 12, String(r.st.reads));
+      }
+      {   // a guest has nothing to report
+        const r = ratingRig(solo3(), [1000], 1000); r.I.user = null;
+        const out = await r.I.settleRating(0);
+        T('a guest is told it was unrated', out.rated === false && out.why === 'guest', JSON.stringify(out));
+        T('and nothing was written for them', r.st.rpc === 0);
+      }
+      {   // five at the table is over the ladder cap
+        const five = [{ uid: ME }, { name: 'Bazza', isAI: true }, { name: 'Shazza', isAI: true },
+                      { uid: 'bbbbbbbb-0000-4000-8000-000000000001' }, { uid: 'cccccccc-0000-4000-8000-000000000002' }];
+        const r = ratingRig({ MYSEAT: 0, NET: { mode: 'host', roster: five }, G: { turnCount: 9, players: [] } }, [1000], 1000);
+        const out = await r.I.settleRating(0);
+        T('a five-seat table says why it did not count', out.rated === false && out.why === 'toobig', JSON.stringify(out));
+      }
+      {   // watching someone else's game
+        const r = ratingRig({ MYSEAT: 0, NET: { mode: 'host', roster: [{ uid: 'dddddddd-0000-4000-8000-000000000003' }, { name: 'Bazza', isAI: true }] }, G: { turnCount: 9, players: [] } }, [1000], 1000);
+        const out = await r.I.settleRating(0);
+        T('a game I am not seated in says so', out.rated === false && out.why === 'watching', JSON.stringify(out));
+      }
+    }
+
+    /* ---------- 8. the screen that shows it ---------- */
+    {
+      const mdeal = fs.readFileSync(path.join(ROOT, 'coastline', 'index.html'), 'utf8');
+      T('the rating screen exists', /id="eloscreen"/.test(mdeal));
+      T('with a number, a delta and a verdict',
+        /id="elonum"/.test(mdeal) && /id="elodelta"/.test(mdeal) && /id="eloverdict"/.test(mdeal));
+      T('it can be dismissed', /function closeElo\(/.test(mdeal) && /id="eloclose"/.test(mdeal));
+      T('guests never see it', /if\(typeof ID === 'undefined' \|\| !ID\.user \|\| ELOSHOWN\) return;/.test(mdeal));
+      T('it fires once per game, not once per page', /ELOSHOWN = true/.test(mdeal) && (mdeal.match(/ELOSHOWN = false/g) || []).length >= 2);
+
+      /* all three endings, or the screen is missing exactly where it matters */
+      const hooks = (mdeal.match(/showElo\(/g) || []).length;
+      T('every ending reaches it — local win, client win, last standing', hooks >= 4, 'showElo references: ' + hooks);
+      T('the local win passes the winning seat', /showElo\(G\.players\.indexOf\(p\)\)/.test(mdeal));
+      T('the client win passes the winning seat', /showElo\(G\.players\.indexOf\(w\)\)/.test(mdeal));
+      T('the last-standing ending passes the survivor', /showElo\(alive\[0\]\)/.test(mdeal));
+
+      T('the number is counted across rather than snapped', /requestAnimationFrame\(tick\)/.test(mdeal));
+      T('the client does no Elo arithmetic of its own',
+        !/32\s*\*\s*\(1\s*-/.test(mdeal) && !/eloDelta\(/.test(mdeal));
+    }
+
     console.log(fails ? 'IDENTITY: ' + fails + ' FAILED' : 'IDENTITY: ALL PASS');
     process.exitCode = fails ? 1 : 0;
   })();
