@@ -144,7 +144,7 @@ const ID = {
             <button class="homebtn" onclick="ID.register(this)">Create Account</button>
             <button class="homebtn" onclick="ID.signIn(this)">Sign In</button>
           </div>
-          
+          ${this.lastError ? `<div class="sub" style="margin-top:8px;color:var(--danger-red)">${this.lastError}</div>` : ''}
         </div>
         <button class="optbtn" style="margin-top:14px" onclick="ID.sheetOpen=false;closeSheet()">Done</button>`);
       return;
@@ -188,34 +188,67 @@ const ID = {
     if(this._authing) return; this._authing = true; this._busyBtn(btn, true);
     try{ await this._register(); } finally { this._authing = false; this._busyBtn(btn, false); }
   },
+  /* Registration NEVER touches auth.signUp(). That endpoint mails a
+     confirmation link, and the built-in SMTP allows two per hour — which is
+     exactly the wall sign-up kept hitting. The Edge Function below mints the
+     account with the admin API instead: pre-confirmed, no mail, no ceiling.
+     tests/identitysim.js fails the gate if a mailing call ever reappears. */
+  REGISTER_URL(){ return SUPABASE_URL + '/functions/v1/register'; },
+
+  /* Turn a failed registration into something a human can act on. The old
+     code collapsed every cause into "SIGN UP: FAILED", which is why a
+     function that was never deployed looked identical to a wrong password. */
+  _authFault(status, out){
+    const err = (out && out.err) || '';
+    if(err === 'taken')       return ['USERNAME TAKEN', 'that username is already registered'];
+    if(err === 'username')    return ['USERNAME: 3+ LETTERS', 'username too short'];
+    if(err === 'password')    return ['PASSWORD: 6+ CHARACTERS', 'password too short'];
+    if(err === 'serverconfig')return ['SERVER NOT CONFIGURED', 'the register function has no service-role key'];
+    if(status === 404)        return ['SIGN UP OFFLINE', 'the register function is not deployed on Supabase'];
+    if(status === 401 || status === 403) return ['SIGN UP REJECTED', 'Supabase refused the anon key (JWT verification)'];
+    if(status === 429)        return ['TOO MANY TRIES', 'rate limited — wait a minute'];
+    if(status === 0)          return ['NO CONNECTION', 'could not reach Supabase at all'];
+    return ['SIGN UP FAILED', 'server said ' + status + (err ? ' / ' + err : '')];
+  },
+
   async _register(){
     const u = this.sanitizeU(($('#acctuser')||{}).value);
     const pw = (($('#acctpass')||{}).value)||'';
     if(u.length<3){ banner('USERNAME: 3+ LETTERS','var(--danger-red)'); return; }
     if(pw.length<6){ banner('PASSWORD: 6+ CHARACTERS','var(--danger-red)'); return; }
+    const sb = await this.ensureSB();
+    if(!sb){ this.fail('config', 'no supabase keys'); return; }
+
+    let status = 0, out = null;
     try{
-      const sb = await this.ensureSB(); if(!sb) return;
-      // registration goes through an Edge Function: the public signup endpoint
-      // MX-validates email domains, which rejects our synthetic no-email addresses
-      const res = await fetch(SUPABASE_URL + '/functions/v1/register', {
+      const res = await fetch(this.REGISTER_URL(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON },
         body: JSON.stringify({ username: u, password: pw }),
       });
-      let out = null; try{ out = await res.json(); }catch(e){}
-      if(!res.ok || !out || !out.ok){
-        const err = (out && out.err) || 'failed';
-        banner(err==='taken' ? 'USERNAME TAKEN' : ('SIGN UP: '+err).toUpperCase().slice(0,50), 'var(--danger-red)');
-        return;
-      }
-      const s2 = await sb.auth.signInWithPassword({ email: u+'@coastline.game', password: pw });
-      if(s2.error || !s2.data.session){ banner('CREATED — NOW SIGN IN','var(--warning-amber)'); return; }
-      const session = s2.data.session;
-      this.user = session.user; this.profile = null;
-      await this.init();
-      banner('ACCOUNT CREATED','var(--success-green)');
-      this.renderProfileSheet();
-    }catch(e){ banner('COULD NOT CREATE ACCOUNT','var(--danger-red)'); }
+      status = res.status;
+      try{ out = await res.json(); }catch(e){ out = null; }
+      if(!res.ok || !out || !out.ok) throw new Error('rejected');
+    }catch(e){
+      const [msg, why] = this._authFault(status, out);
+      this.lastError = 'sign up — ' + why;
+      try{ console.error('[identity] register', status, out); }catch(_){}
+      banner(msg, 'var(--danger-red)');
+      if(this.sheetOpen) this.renderProfileSheet();
+      return;
+    }
+
+    const s2 = await sb.auth.signInWithPassword({ email: u+'@coastline.game', password: pw });
+    if(s2.error || !s2.data || !s2.data.session){
+      this.lastError = 'account made, sign-in failed';
+      banner('CREATED — NOW SIGN IN','var(--warning-amber)');
+      if(this.sheetOpen) this.renderProfileSheet();
+      return;
+    }
+    this.user = s2.data.session.user; this.profile = null;
+    await this.init();
+    banner('ACCOUNT CREATED','var(--success-green)');
+    this.renderProfileSheet();
   },
   async signIn(btn){
     if(this._authing) return; this._authing = true; this._busyBtn(btn, true);
@@ -225,14 +258,29 @@ const ID = {
     const u = this.sanitizeU(($('#acctuser')||{}).value);
     const pw = (($('#acctpass')||{}).value)||'';
     if(!u || !pw){ banner('USERNAME + PASSWORD','var(--danger-red)'); return; }
+    const sb = await this.ensureSB();
+    if(!sb){ this.fail('config', 'no supabase keys'); return; }
     try{
-      const { data, error } = await this.sb.auth.signInWithPassword({ email: u+'@coastline.game', password: pw });
-      if(error || !data || !data.user){ banner('WRONG USERNAME OR PASSWORD','var(--danger-red)'); return; }
+      const { data, error } = await sb.auth.signInWithPassword({ email: u+'@coastline.game', password: pw });
+      if(error || !data || !data.user){
+        // "Invalid login credentials" is the ordinary case; anything else is
+        // infrastructure, and saying so saves an hour of guessing.
+        const m = (error && error.message) || 'no session';
+        const creds = /invalid login|credentials/i.test(m);
+        this.lastError = 'sign in — ' + (creds ? 'wrong username or password' : m.slice(0,80));
+        banner(creds ? 'WRONG USERNAME OR PASSWORD' : 'SIGN IN: ' + m.toUpperCase().slice(0,40), 'var(--danger-red)');
+        if(this.sheetOpen) this.renderProfileSheet();
+        return;
+      }
       this.user = data.user; this.profile = null; this.friends = [];
       await this.init();
       banner('WELCOME BACK','var(--success-green)');
       this.renderProfileSheet();
-    }catch(e){ banner('SIGN IN FAILED','var(--danger-red)'); }
+    }catch(e){
+      this.lastError = 'sign in — could not reach Supabase';
+      banner('NO CONNECTION','var(--danger-red)');
+      if(this.sheetOpen) this.renderProfileSheet();
+    }
   },
   async signOut(){
     try{ await this.sb.auth.signOut(); }catch(e){}

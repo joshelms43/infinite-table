@@ -1,5 +1,22 @@
 # Coastline — Changelog
 
+## v0.11.4 — 2026-07-26
+Accounts work, they are M Deal's alone for now, and the email wall is gone by construction rather than by care.
+
+**Root cause of "sign-up doesn't work": the Edge Function was never deployed.** Registration has gone through `supabase/functions/register/index.ts` since v0.7.4, but Supabase does not watch this repo — Vercel deploys the site, and Edge Functions deploy only from the dashboard or the CLI. Pushing the TypeScript changed nothing on the server, so `POST /functions/v1/register` answered 404, `res.json()` threw on the HTML error page, and the client printed `SIGN UP: FAILED`. That message was the second bug: a function that had never existed and a mistyped password rendered identically, so the one fact worth knowing was the one the screen would not say.
+
+**Root cause of the two-emails-an-hour wall: v0.6.0, and it was already fixed.** That build registered users with `auth.signUp()`, which mails a confirmation link; the built-in SMTP allows two an hour. v0.7.4 replaced it with the admin API. The lobby's cache-buster moved 060 → 062 across that change, so no phone kept serving the mailing build — the limit has been unreachable for a while, and the remembered failure was the 404 above wearing the older bug's face.
+
+Now pinned rather than merely fixed. `tests/identitysim.js` walks every `.js`, `.ts` and `.html` in the repo, strips comments so it reads calls and not sentences about calls, and fails the gate on `signUp`, `signInWithOtp`, `inviteUserByEmail`, `resetPasswordForEmail`, `auth.resend` or `generateLink`. Reaching the ceiling again now takes a change the gate will not pass. Four mutations prove it bites: restore a `signUp` fallback, drop `email_confirm: true` from the function, load identity in the lobby, or collapse two faults into one message — each fails on the spot. The first pass of that stage passed while a mailing call sat in a comment; both scanners read stripped source now.
+
+**The function answers a GET.** `{"ok":true,"service":"register","email":"never"}` means deployed; a 404 means it is not. That is a five-second check from a phone browser, and it is the difference between knowing and guessing — see DEPLOY.md, which now leads with it.
+
+**It also mints the profile row itself,** with the service role, retrying friend-code collisions. The browser used to insert that row under RLS after signing in, which is a second place registration could half-succeed and a place the client could not explain.
+
+**Every failure now names itself** — `SIGN UP OFFLINE` for a missing function, `SIGN UP REJECTED` for a refused key, `SERVER NOT CONFIGURED` for a missing service role, plus taken / rate-limited / no-connection — and the profile sheet prints the longer reason under the buttons. No two causes share a message, and the gate checks that.
+
+**Accounts are M Deal's for now.** The lobby dropped the identity module and everything that rendered into it: the profile chip, the stats strip, the sheet, the banner and invite-toast styles, and the adapter that read `display_name` and `losses`, two fields the schema has never had. The lobby is guest-first again and 40% smaller (17.5 KB → 10.4 KB). Sign-in lives at the M Deal profile chip.
+
 ## v0.11.3 — 2026-07-23
 The bench never empties. Two prompts now: name the card, then give it its line — both travel host-authoritatively, both sanitized (names to 24 characters, sayings to 60). Every press mints a fresh card straight into Josh's hand with a unique id counting up from 9001 off the catalog, so no two collide and the migration rebuild ignores them all naturally (non-catalog ids simply never re-mint). The one-shot gate is gone. The public log announces the chosen name — "Josh put Big Dazza in." — while the hand stays private, so the reveal is still the play. Pins rewritten for the multi era: two cards land in the hand and never the deck, each carries its own name and words, ids never collide.
 
