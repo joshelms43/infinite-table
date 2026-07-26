@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.9
+  Version: 0.11.10
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -815,7 +815,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.9"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.10"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -848,7 +848,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.9</span>
+    <span class="ver">v0.11.10</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -988,7 +988,7 @@ const G = {
   deck:[], discard:[], players:[], turn:0, playsLeft:0, over:false,
 };
 function newGame(){
-  ELOSHOWN = false;              // the stinger fires once per game, not once per page
+  ELOSHOWN = false; ELOCLOSED = false; WINREVEAL = null;   // once per game, not once per page
   G.deck = shuffle(buildDeck());
   G.discard = [];
   G.players = [
@@ -2424,11 +2424,10 @@ function checkAllWin(){
     if(checkWin(p)){
       G.over = true; renderAll();
       if(NET.mode!=='off'){ try{ localStorage.removeItem('it_room'); localStorage.removeItem('it_host'); }catch(e){} }
-      if(typeof ID!=='undefined') ID.recordMatch(G.players.indexOf(p));   // solo counts too; ID gates on mode
       $('#wintitle').textContent = p===me() ? 'You win' : p.name+' wins';
       $('#winsub').textContent = 'Three complete sets: ' + completeColors(p).map(c=>COLORS[c].label).join(', ');
       fillWinRows(); NET.teardown();
-      setTimeout(()=>{
+      WINREVEAL = ()=>setTimeout(()=>{
         const wc = document.querySelector('.wincard');
         if(wc && wc.style){ wc.style.animation='none'; void (wc.offsetWidth||0); wc.style.animation=''; }
         refreshWinBtn();
@@ -2436,8 +2435,9 @@ function checkAllWin(){
         sfx(p===me()?'win':'alert');
         haptic(p===me()?[12,60,12,60,24]:20);
         if(p===me()) confetti();
-        showElo(G.players.indexOf(p));
-      }, 700);
+      }, 120);
+      /* the rating goes first; the results are revealed when it is dismissed */
+      if(!showElo(G.players.indexOf(p))) revealWin();
       return true;
     }
   }
@@ -2483,16 +2483,51 @@ function refreshWinBtn(){
    Every number here comes back from the database. The client owns none of the
    arithmetic: the host writes through record_match, and a client polls its own
    row until it moves, so the figure on screen is the figure that landed. */
-let ELOSHOWN = false;
+let ELOSHOWN = false, ELOCLOSED = false, WINREVEAL = null;
+
+/* The results wait behind the rating. Each ending hands its reveal over rather
+   than running it, so the order is always: rating, then Play Again. */
+function revealWin(){
+  const f = WINREVEAL; WINREVEAL = null;
+  if(typeof f === 'function') f();
+}
+
+/* Opens immediately, with the rating you walked in with, and animates when the
+   real number lands.
+
+   It used to wait for settleRating before showing anything. In a browser with a
+   stubbed backend that is instant; on a phone it is an RPC plus a profile read,
+   so the screen arrived seconds late — after the results, or after Play Again
+   had already been pressed. Nothing was broken, and nothing was visible. Show
+   first, settle second. */
 function showElo(winnerSeat){
-  if(typeof ID === 'undefined' || !ID.user || ELOSHOWN) return;
-  ELOSHOWN = true;
-  Promise.resolve(ID.settleRating(winnerSeat)).then(paintElo).catch(()=>{});
+  if(typeof ID === 'undefined' || !ID.user || ELOSHOWN) return false;
+  ELOSHOWN = true; ELOCLOSED = false;
+  openEloPending();
+  let landed = false;
+  const land = r => { if(landed) return; landed = true; paintElo(r); };
+  Promise.resolve(ID.settleRating(winnerSeat)).then(land).catch(()=>land(null));
+  /* Never strand the player behind a slow network. */
+  setTimeout(()=>land({ rated:false, why:'slow', before: ID.profile ? ID.profile.elo : 0 }), 8000);
+  return true;
+}
+function openEloPending(){
+  const scr = $('#eloscreen'); if(!scr || !scr.classList) return;
+  const at = (ID.profile && ID.profile.elo) || 0;
+  const set = (q, t) => { const e = $(q); if(e) e.textContent = t; };
+  set('#eloverdict', 'Rated game');
+  set('#elonum', at);
+  set('#elodelta', '');
+  const d = $('#elodelta'); if(d) d.className = '';
+  const f = $('#elofill'); if(f){ f.className = ''; f.style.width = Math.max(0, at % 100) + '%'; }
+  set('#elosub', 'Settling the rating…');
+  scr.classList.add('show');
 }
 function eloReason(why, names){
   if(why === 'watching') return 'You were not seated in this one, so nothing changed.';
   if(why === 'toobig')   return 'Five at the table — too many for the ladder. Nothing changed.';
   if(why === 'noprofile')return 'Your profile did not load, so this one went unrated.';
+  if(why === 'slow')     return 'The rating is taking a while to come back. It will be there next time you look.';
   if(why === 'noaccounts'){
     // The game counted; the rating could not move, because the opponents have
     // no rows to move points out of. Name them and name the fix.
@@ -2504,6 +2539,7 @@ function eloReason(why, names){
 }
 function paintElo(r){
   const scr = $('#eloscreen'); if(!scr || !scr.classList) return;
+  if(ELOCLOSED){ revealWin(); return; }   // they have already moved on
   const num = $('#elonum'), dlt = $('#elodelta'), fill = $('#elofill'),
         sub = $('#elosub'), verd = $('#eloverdict');
   if(!r || !r.rated){
@@ -2543,7 +2579,9 @@ function paintElo(r){
   requestAnimationFrame(tick);
 }
 function closeElo(){
+  ELOCLOSED = true;
   const scr = $('#eloscreen'); if(scr && scr.classList) scr.classList.remove('show');
+  revealWin();
 }
 
 function closeWin(){
@@ -3263,9 +3301,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.9"></script>
-<script src="../shared/tablekit.js?v=0.11.9"></script>
-<script src="../shared/identity.js?v=0.11.9"></script>
+<script src="../shared/config.js?v=0.11.10"></script>
+<script src="../shared/tablekit.js?v=0.11.10"></script>
+<script src="../shared/identity.js?v=0.11.10"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3528,7 +3566,8 @@ const NET = {
         $('#wintitle').textContent = w===me() ? 'You win' : w.name+' wins';
         $('#winsub').textContent = 'Three complete sets: ' + completeColors(w).map(c=>COLORS[c].label).join(', ');
         fillWinRows(); NET.teardown();
-        setTimeout(()=>{ refreshWinBtn(); $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); showElo(G.players.indexOf(w)); }, 500);
+        WINREVEAL = ()=>setTimeout(()=>{ refreshWinBtn(); $('#winscreen').classList.add('show'); sfx(w===me()?'win':'alert'); if(w===me()) confetti(); }, 120);
+        if(!showElo(G.players.indexOf(w))) revealWin();
       }
     }
   },
@@ -3934,7 +3973,7 @@ const NET = {
     GAME_STARTED = true;
     newGame();
     G.players = roster.map(r=>({ name:r.name, isAI:!!r.isAI, hand:[], bank:[], props:{}, bldg:{} }));
-    ELOSHOWN = false;              // a fresh online game gets its own stinger
+    ELOSHOWN = false; ELOCLOSED = false; WINREVEAL = null;   // a fresh online game gets its own
     clockStart();
     G.deck = shuffle(buildDeck());
     for(let i=0;i<5;i++) G.players.forEach(p=>p.hand.push(draw()));
@@ -4119,13 +4158,12 @@ function eliminatePlayer(seat, reason){
   if(alive.length===1){
     G.over = true; renderAll();
     if(NET.mode!=='off'){ try{ localStorage.removeItem('it_room'); localStorage.removeItem('it_host'); }catch(e){} }
-    if(typeof ID!=='undefined') ID.recordMatch(alive[0]);   // solo counts too; ID gates on mode
     const w = G.players[alive[0]];
     $('#wintitle').textContent = alive[0]===MYSEAT ? 'You win' : w.name+' wins';
     $('#winsub').textContent = 'Last one standing';
     fillWinRows(); NET.teardown();
-    const ws=$('#winscreen'); if(ws&&ws.classList) ws.classList.add('show');
-    showElo(alive[0]);
+    WINREVEAL = ()=>{ const ws=$('#winscreen'); if(ws&&ws.classList) ws.classList.add('show'); };
+    if(!showElo(alive[0])) revealWin();
     if(NET.mode==='host') NET.pushState();
     return;
   }

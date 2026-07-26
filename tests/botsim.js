@@ -170,7 +170,7 @@ const { htmlFor } = require('./_document');
     T('the delta animation ran', $('#elodelta').className.indexOf('in') >= 0);
     T('and the verdict reads as a win', $('#eloverdict').textContent === 'You win', $('#eloverdict').textContent);
 
-    w.eval('closeElo()');
+    w.eval('closeElo(); ELOCLOSED = false; ELOSHOWN = false;');
     T('it can be dismissed', !scr.classList.contains('show'));
 
     w.eval('paintElo({ rated:true, won:false, before:1000, after:982, delta:-18 })');
@@ -180,7 +180,7 @@ const { htmlFor } = require('./_document');
     T('coloured as a loss', $('#elodelta').className.indexOf('down') >= 0, $('#elodelta').className);
     T('and the verdict does not claim a win', $('#eloverdict').textContent !== 'You win', $('#eloverdict').textContent);
 
-    w.eval('closeElo()');
+    w.eval('closeElo(); ELOCLOSED = false; ELOSHOWN = false;');
     w.eval('paintElo({ rated:false, why:"toobig", before:1000 })');
     await new Promise(r => setTimeout(r, 200));
     T('an unrated game still explains itself', scr.classList.contains('show') &&
@@ -188,7 +188,7 @@ const { htmlFor } = require('./_document');
     T('and shows no change', $('#elodelta').textContent === '±0', $('#elodelta').textContent);
     T('and holds the rating steady', $('#elonum').textContent === '1000', $('#elonum').textContent);
 
-    w.eval('closeElo()');
+    w.eval('closeElo(); ELOCLOSED = false; ELOSHOWN = false;');
     w.eval('paintElo({ rated:false, why:"noaccounts", names:["Bazza","Shazza"], before:1000, after:1000, delta:0, won:true })');
     await new Promise(r => setTimeout(r, 200));
     const msg = $('#elosub').textContent;
@@ -196,10 +196,65 @@ const { htmlFor } = require('./_document');
     T('and names the file that fixes it', /accounts\.sql/.test(msg), msg);
     T('and still calls the win a win', $('#eloverdict').textContent === 'You win', $('#eloverdict').textContent);
 
-    w.eval('closeElo()');
+    w.eval('closeElo(); ELOCLOSED = false; ELOSHOWN = false;');
     w.eval('ID.user = null; ELOSHOWN = false; showElo(0)');
     await new Promise(r => setTimeout(r, 200));
     T('a guest is never shown it', !scr.classList.contains('show'));
+
+    /* ---- the order, against a backend that takes its time ----
+       On a phone the write and the read back are real round trips. The screen
+       used to wait for them, so it arrived after the results or after Play
+       Again had been pressed — working, and never seen. */
+    const win = w.document.querySelector('#winscreen');
+    w.eval(`
+      ID.user = { id:'me' };
+      ID.profile = { id:'me', elo:1000, friend_code:'ABC123' };
+      ID.sb = {
+        rpc: () => new Promise(r => setTimeout(() => r({ data:null, error:null }), 900)),
+        from: () => ({ select: () => ({
+          eq: () => ({ maybeSingle: () => new Promise(r => setTimeout(() => r({ data:{ id:'me', name:'Josh', elo:1031, games:1, wins:1 } }), 600)) }),
+          in: (c, ids) => Promise.resolve({ data: ids.map(id => ({ id })) }),
+        }) }),
+      };
+      MYSEAT = 0;
+      G.players = [{name:'You'},{name:'Bazza',isAI:true},{name:'Shazza',isAI:true}];
+      G.turnCount = 9;
+      ELOSHOWN = false; ELOCLOSED = false;
+      WINREVEAL = () => { document.querySelector('#winscreen').classList.add('show'); };
+      window.__opened = showElo(0);
+    `);
+    await new Promise(r => setTimeout(r, 120));
+    T('the rating screen is up before the network answers', scr.classList.contains('show'));
+    T('showing the rating tells the caller to hold the results', w.__opened === true);
+    T('and it opens on the rating you walked in with', $('#elonum').textContent === '1000', $('#elonum').textContent);
+    T('the results are still hidden behind it', !win.classList.contains('show'));
+
+    const settled = async (want, ms) => {   // the state, not the clock
+      const t0 = Date.now();
+      while (Date.now() - t0 < ms) {
+        if ($('#elonum').textContent === want) return true;
+        await new Promise(r => setTimeout(r, 25));
+      }
+      return $('#elonum').textContent === want;
+    };
+    T('once the result lands the number moves', await settled('1031', 5000), $('#elonum').textContent);
+    T('and the change is the real one, not zero', $('#elodelta').textContent === '+31', $('#elodelta').textContent);
+    T('the results still wait until it is dismissed', !win.classList.contains('show'));
+
+    w.eval('closeElo(); ELOCLOSED = false; ELOSHOWN = false;');
+    await new Promise(r => setTimeout(r, 250));
+    T('dismissing the rating reveals the results', win.classList.contains('show'));
+
+    /* a result that arrives after the player has moved on must not reopen */
+    w.eval(`
+      document.querySelector('#winscreen').classList.remove('show');
+      ELOCLOSED = true;
+      WINREVEAL = () => { document.querySelector('#winscreen').classList.add('show'); };
+      paintElo({ rated:true, won:true, before:1000, after:1031, delta:31 });
+    `);
+    await new Promise(r => setTimeout(r, 150));
+    T('a late result does not reopen over the results', !scr.classList.contains('show'));
+    T('and hands the player straight to them', win.classList.contains('show'));
   }
 
   dom.window.close();

@@ -521,9 +521,13 @@ const ID = {
     return elo;
   },
 
-  /* Called once by whoever owns the game state — the host online, and the
-     browser itself when playing solo. Solo counts: Josh asked for it, and the
-     bots now have somewhere for the points to go. */
+  /* Called by settleRating and nowhere else.
+
+     The page used to call this directly as well, and the two together produced
+     a screen that showed the right new rating and a change of zero: the direct
+     call refreshed this.profile first, so settleRating then read the already-
+     updated number as its "before". The rating itself survived only because
+     record_match refuses a second result inside 45 seconds. One owner. */
   async recordMatch(winnerSeat){
     try{
       if(typeof NET!=='undefined' && NET.mode === 'client') return;   // the host records, not us

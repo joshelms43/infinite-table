@@ -191,9 +191,14 @@ MAILERS.forEach(([label, re]) => {
   T('no seat still says Shaz', !/'Shaz'/.test(mdeal), (/.{0,30}'Shaz'.{0,30}/.exec(mdeal) || [''])[0]);
   T('Bazza is still seated', /name:'Bazza'/.test(mdeal) && /botNames:\s*\[\s*'Bazza'/.test(mdeal));
 
-  /* Solo results must reach the ladder — the old call sites refused unless hosting. */
-  T('the win path records without requiring a host', /if\(typeof ID!=='undefined'\) ID\.recordMatch\(G\.players\.indexOf\(p\)\)/.test(mdeal));
-  T('the last-standing path too', /if\(typeof ID!=='undefined'\) ID\.recordMatch\(alive\[0\]\)/.test(mdeal));
+  /* Solo results must reach the ladder. The call sites once refused unless
+     hosting; they then recorded directly, which double-recorded against
+     settleRating. Neither shape should come back: the endings reach showElo,
+     and nothing else records. */
+  T('the win path reaches the ladder without requiring a host',
+    /if\(!showElo\(G\.players\.indexOf\(p\)\)\) revealWin\(\)/.test(mdeal));
+  T('the last-standing path too', /if\(!showElo\(alive\[0\]\)\) revealWin\(\)/.test(mdeal));
+  T('and no ending is gated on being the host', !/NET\.mode==='host' && typeof ID/.test(mdeal));
 
   /* seatUids is the only thing that turns a table into a list of accounts. */
   function seats(ctxExtra) {
@@ -494,7 +499,7 @@ MAILERS.forEach(([label, re]) => {
       T('with a number, a delta and a verdict',
         /id="elonum"/.test(mdeal) && /id="elodelta"/.test(mdeal) && /id="eloverdict"/.test(mdeal));
       T('it can be dismissed', /function closeElo\(/.test(mdeal) && /id="eloclose"/.test(mdeal));
-      T('guests never see it', /if\(typeof ID === 'undefined' \|\| !ID\.user \|\| ELOSHOWN\) return;/.test(mdeal));
+      T('guests never see it', /if\(typeof ID === 'undefined' \|\| !ID\.user \|\| ELOSHOWN\) return false;/.test(mdeal));
       T('it fires once per game, not once per page', /ELOSHOWN = true/.test(mdeal) && (mdeal.match(/ELOSHOWN = false/g) || []).length >= 2);
 
       /* all three endings, or the screen is missing exactly where it matters */
@@ -505,6 +510,25 @@ MAILERS.forEach(([label, re]) => {
       T('the last-standing ending passes the survivor', /showElo\(alive\[0\]\)/.test(mdeal));
 
       T('the number is counted across rather than snapped', /requestAnimationFrame\(tick\)/.test(mdeal));
+      /* Recording has exactly one owner. When the page called recordMatch as
+         well, the direct call refreshed the profile first and settleRating read
+         the already-updated number as its "before" — a screen showing the right
+         new rating and a change of zero. */
+      T('the page never records a match itself — settleRating owns it',
+        !/ID\.recordMatch/.test(mdeal), (/.{0,40}ID\.recordMatch.{0,20}/.exec(mdeal) || [''])[0]);
+
+      /* The rating comes first, the results wait behind it. */
+      T('each ending hands its reveal over rather than running it',
+        (mdeal.match(/WINREVEAL = /g) || []).length >= 4);
+      T('and falls back to showing them when the rating will not appear',
+        (mdeal.match(/if\(!showElo\(.*?\)\) revealWin\(\)/g) || []).length === 3);
+      T('dismissing the rating is what reveals the results',
+        /function closeElo\(\)\{[\s\S]{0,200}revealWin\(\)/.test(mdeal));
+      T('the screen opens before the network answers', /function openEloPending\(/.test(mdeal));
+      T('and a late result does not reopen it over the results',
+        /if\(ELOCLOSED\)\{ revealWin\(\); return; \}/.test(mdeal));
+      T('a slow settle still lets the player through', /why:'slow'/.test(mdeal) && /8000/.test(mdeal));
+
       T('an unmoved rating names the file that fixes it', /accounts\.sql/.test(mdeal) && /noaccounts/.test(mdeal));
       T('and does not call a win unrated just because nothing moved',
         /\(r && r\.won\) \? 'You win' : 'Unrated'/.test(mdeal));

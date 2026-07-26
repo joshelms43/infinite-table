@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.11.10 — 2026-07-26
+The right new rating and a change of zero — two calls to the same write.
+
+**Root cause: the page recorded the match, and so did the rating screen.** v0.11.7 put `ID.recordMatch(...)` at two win sites. v0.11.8 added `showElo(...)` beside them without removing the originals, and `settleRating` records as well. The direct call landed first and refreshed `ID.profile` to the new number, so `settleRating` then read the already-updated value as its "before" and computed a delta of zero. The screen was working perfectly; it was subtracting the answer from itself.
+
+The rating itself was never wrong, but only by luck: `record_match` refuses a second result inside 45 seconds, so the duplicate write was swallowed server-side. Recording now has exactly one owner, and `tests/identitysim.js` fails if the page ever records again.
+
+**The rating comes before the results.** Each ending hands its reveal to `WINREVEAL` instead of running it, and dismissing the rating is what shows the results and Play Again. If the rating will not appear — a guest, or already shown — `showElo` says so and the results reveal immediately.
+
+**And it opens without waiting for the network.** It used to show nothing until `settleRating` resolved. Against a stubbed backend that is instant, which is why every test passed and a real phone saw it late — after the results, or after Play Again had been pressed. It now opens straight away on the rating you walked in with, says "Settling the rating…", and animates when the real number lands. A result arriving after the player has moved on hands them to the results rather than reopening over them, and an eight-second ceiling means a slow network never strands anyone.
+
+Pins: against a deliberately slow backend — 900ms to write, 600ms to read — the screen is up within 120ms showing 1000, the results stay hidden, the number then moves to 1031 showing +31, and only dismissing it reveals the results. Three mutations bite: restoring the duplicate record, revealing the results immediately, and waiting for the network before opening.
+
+**Four pins had to move with the architecture rather than be worked around.** Two were asserting the direct `recordMatch` calls that are now the bug; one matched the old `return;` in a guard that now reports whether it will show; and one used `[^)]*` to match an argument containing a bracket, so it only ever saw one of three call sites. The botsim DOM cascade was mine too: `closeElo` now sets `ELOCLOSED`, and the harness was not clearing it between scenarios the way a new game does, so every later paint was correctly suppressed. The settle check now waits on the number rather than a guessed 2600ms.
+
 ## v0.11.9 — 2026-07-26
 "No rating gained from winning on solo" — reproduced, and the silence is what needed fixing.
 
