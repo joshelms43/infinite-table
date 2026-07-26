@@ -1,5 +1,29 @@
 # Coastline — Changelog
 
+## v0.11.7 — 2026-07-26
+Shaz is Shazza. She and Bazza hold real accounts now, and solo games count.
+
+**The bots are players.** `supabase/accounts.sql` seeds two accounts with fixed ids — Bazza `ba22a000…0001`, Shazza `5a22a000…0002` — and the client resolves a bot to its account by name when a game ends. They are rated exactly like anyone else: beating them pays, losing to them costs. Nobody can sign in as one; the password hash is bcrypt over 32 random bytes that are generated during the seed and never stored.
+
+**Solo counts.** Both win paths previously read `if(NET.mode==='host')`, so a solo game could not reach the ladder even with a signed-in player at the table — there was nowhere for the points to go, because the opponents had no accounts. Both call sites now defer to `ID.recordMatch`, which decides for itself: guests stay unrated, a client never records (the host does), and the game must contain at least two real accounts including mine.
+
+Verified against Postgres 16 with a mock of Supabase's auth schema, not reasoned about. A solo win took 1000 → 1031 while Bazza fell to 984 and Shazza to 985; Bazza then won one and the numbers came back to 1013 / 1017 / 970. The 45-second brake in `record_match` swallowed an immediate replay, `games`/`wins` tracked, and the match logged all three names. Seeding twice leaves two rows.
+
+**On farming, since solo is now rated:** it converges rather than climbing. A bot's Elo falls as it loses, so each win off the same bot is worth less than the last, and the floor of 100 makes a ground-down bot worth almost nothing. The existing 45-second brake caps the rate. No extra friction was added.
+
+**A latent bug found while wiring this:** `record_match` rejects more than four players, but the online lobby seats five. A five-seat table would have raised rather than recorded. The client now declines to submit those games instead of throwing — they stay off the ladder. Raising the SQL cap to five is the actual fix and needs a schema change, so it is left flagged rather than done quietly.
+
+Pins: the two bot ids live in `accounts.sql` and `identity.js` and must agree, which is checked directly — drift there would not throw, it would rate a stranger or nobody. Also pinned: Shazza is seated in both the solo game and the online bot pool and no seat still says Shaz; `seatUids` resolves bots by name in both modes and refuses to invent an account for an unseeded bot like Davo; and seven ladder cases covering guests, clients, guest hosts, single-account tables, five-seat tables, and games I am not seated in. Three of four mutations bite. The fourth — deleting the guest guard — does not change behaviour, because a guest's seat already resolves to null and the winner check catches it; the guard is defence in depth and is recorded as such rather than claimed as proven.
+
+## Test infrastructure — 2026-07-26
+The lastcardtouch flake was never a timing flake.
+
+`picking a colour plays the wild and the uncalled exit costs two` failed about two runs in five in the full chain and never once alone, which looks exactly like timer drift on a hot box — and v0.11.1 treated it as that, replacing fixed sleeps with condition-based waits. It kept failing, because waiting longer cannot fix it.
+
+Instrumented under artificial load, the failing run reported `hand=3 want=5 top=num`. The wild had played and the colour had gone teal; what was missing was the penalty. The assertion only means anything if the wild play leaves exactly one card — that is what makes the exit uncalled — and the hand was four, not two. Between the rigged deal and that step the bot takes turns, and a draw-two landing on the human quietly adds two cards. The precondition was inherited through several opponent turns rather than stated, so the bot's cards decided whether the test was testing anything. Under load more turns elapse, which is the whole of the correlation.
+
+The step now re-rigs the hand to `[coral 7, wild]` immediately before the drag, the way the deal does at setup. Five runs under eight competing CPU hogs, all green, where the same load previously failed two in three. Mutation-proven: deleting the penalty draw from the rulebook fails the assertion. Deleting only the `penalty` event does not, and should not — the assertion is about the cards, not the announcement.
+
 ## v0.11.6 — 2026-07-26
 Registration installs from the SQL editor now, because that is the tool that is actually reachable.
 

@@ -138,6 +138,25 @@ const until = async (fn, ms = 1800) => {          // load-proof: wait for the ST
   /* ---- a wild drop opens the colour picker; picking sends the play ---- */
   await until(() => !doc.querySelector('.dragclone'));
   await sleep(60);
+
+  /* Re-rig before this step, rather than inheriting the hand from the deal.
+     The assertion below only means anything if playing the wild leaves exactly
+     one card — that is what makes the exit uncalled and costs two. Between the
+     deal and here the bot takes turns, and a draw-two landing on me makes the
+     hand four: the wild then leaves three, no call is owed, no penalty fires,
+     and the assertion fails reporting hand=3 want=5. That reads as a timing
+     flake and is not one; it is an uncontrolled precondition, which is why it
+     survived the condition-based waits added in v0.11.1 and still failed about
+     two runs in five under load. State the precondition. */
+  const heldWild = E.players[0].hand.find(c => c.kind === 'wild')
+                || { id: idm++, kind: 'wild', colour: null };
+  E.players[0].hand = [N('coral', 7), heldWild];   // the wild play leaves one card
+  E.discard = [N('teal', 5)];
+  E.activeColour = 'teal';
+  E.turn = 0; E.phase = 'play';
+  vm.runInContext('syncFromEngine([])', ctx);
+  await sleep(20);
+
   const wildNow = [...doc.querySelectorAll('#hand .cardw')].find(w => {
     const c = E.players[0].hand.find(x => x.id === +w.dataset.cid);
     return c && c.kind === 'wild';

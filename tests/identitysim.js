@@ -159,6 +159,69 @@ MAILERS.forEach(([label, re]) => {
     seen.size + ' distinct of ' + cases.length);
 }
 
+/* ---------- 4b. the bots hold real accounts ---------- */
+{
+  const idsrc = fs.readFileSync(path.join(ROOT, 'shared', 'identity.js'), 'utf8');
+  const sql   = fs.readFileSync(path.join(ROOT, 'supabase', 'accounts.sql'), 'utf8');
+  const mdeal = fs.readFileSync(path.join(ROOT, 'coastline', 'index.html'), 'utf8');
+
+  /* The ids exist in exactly two places and must agree. Drift between them
+     would not throw — it would quietly rate a stranger, or nobody. */
+  const ctx = vm.createContext({ console, SUPABASE_URL: '', SUPABASE_ANON: '' });
+  vm.runInContext(idsrc + '\n;globalThis.__ID = ID;', ctx);
+  const ID = ctx.__ID;
+
+  const names = Object.keys(ID.BOT_UIDS || {});
+  T('the client knows both bots', names.length === 2 && names.indexOf('bazza') >= 0 && names.indexOf('shazza') >= 0, names.join(','));
+  names.forEach(n => {
+    const uid = ID.BOT_UIDS[n];
+    T('the ' + n + ' id is a real uuid', /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uid), uid);
+    T('and accounts.sql seeds that exact id', sql.indexOf(uid) >= 0, uid);
+  });
+  T('the two bots do not share an id', new Set(Object.values(ID.BOT_UIDS)).size === 2);
+  T('the seed names them the way the client looks them up',
+    /"name"\s*:\s*"Bazza"/.test(sql) && /"name"\s*:\s*"Shazza"/.test(sql));
+  T('bots get an unguessable password, so nobody signs in as one',
+    /gen_random_bytes/.test(sql));
+  T('and seeding twice does not duplicate them', (sql.match(/on conflict \(id\) do nothing/g) || []).length >= 2);
+
+  /* Shaz is Shazza now, everywhere she is seated. */
+  T('Shazza is the solo opponent', /name:'Shazza'/.test(mdeal));
+  T('and is in the online bot pool', /botNames:\s*\[[^\]]*'Shazza'/.test(mdeal));
+  T('no seat still says Shaz', !/'Shaz'/.test(mdeal), (/.{0,30}'Shaz'.{0,30}/.exec(mdeal) || [''])[0]);
+  T('Bazza is still seated', /name:'Bazza'/.test(mdeal) && /botNames:\s*\[\s*'Bazza'/.test(mdeal));
+
+  /* Solo results must reach the ladder — the old call sites refused unless hosting. */
+  T('the win path records without requiring a host', /if\(typeof ID!=='undefined'\) ID\.recordMatch\(G\.players\.indexOf\(p\)\)/.test(mdeal));
+  T('the last-standing path too', /if\(typeof ID!=='undefined'\) ID\.recordMatch\(alive\[0\]\)/.test(mdeal));
+
+  /* seatUids is the only thing that turns a table into a list of accounts. */
+  function seats(ctxExtra) {
+    const c = vm.createContext(Object.assign({ console, SUPABASE_URL: '', SUPABASE_ANON: '' }, ctxExtra));
+    vm.runInContext(idsrc + '\n;globalThis.__ID = ID;', c);
+    return c.__ID;
+  }
+  const BZ = ID.BOT_UIDS.bazza, SZ = ID.BOT_UIDS.shazza, ME = 'aaaaaaaa-0000-4000-8000-000000000009';
+
+  {   // solo: no roster at all
+    const i2 = seats({ MYSEAT: 0, G: { players: [{ name: 'You' }, { name: 'Bazza', isAI: true }, { name: 'Shazza', isAI: true }] } });
+    i2.user = { id: ME };
+    const got = i2.seatUids();
+    T('solo resolves me and both bots by seat', JSON.stringify(got) === JSON.stringify([ME, BZ, SZ]), JSON.stringify(got));
+  }
+  {   // online: roster carries uids for humans, names for bots
+    const i2 = seats({ NET: { roster: [{ uid: ME }, { name: 'Bazza', isAI: true }, { uid: 'bbbbbbbb-0000-4000-8000-000000000009' }] } });
+    i2.user = { id: ME };
+    const got = i2.seatUids();
+    T('online resolves a bot sitting between two humans', got[1] === BZ && got[0] === ME, JSON.stringify(got));
+  }
+  {   // an unseeded bot has no account and must not be invented
+    const i2 = seats({ MYSEAT: 0, G: { players: [{ name: 'You' }, { name: 'Davo', isAI: true }] } });
+    i2.user = { id: ME };
+    T('a bot without an account resolves to nothing', i2.seatUids()[1] === null);
+  }
+}
+
 /* ---------- 5. registration routes correctly and never falls back to mail ---------- */
 {
   const src = fs.readFileSync(path.join(ROOT, 'shared', 'identity.js'), 'utf8');
@@ -245,6 +308,81 @@ MAILERS.forEach(([label, re]) => {
       const r = rig({ rpc: { data: { ok: false, err: 'throttled' }, error: null }, edge: E200 });
       await r.ID._register();
       T('the SQL abuse brake reaches the screen', /TOO MANY SIGNUPS/.test(r.banners.join('|')), r.banners.join('|'));
+    }
+
+    /* ---------- 6. what actually reaches the ladder ---------- */
+    {
+      const idsrc = fs.readFileSync(path.join(ROOT, 'shared', 'identity.js'), 'utf8');
+      const ME = 'aaaaaaaa-0000-4000-8000-000000000009';
+
+      function table(extra) {
+        const calls = [];
+        const sb = {
+          rpc: (n, a) => { calls.push([n, a]); return Promise.resolve({ data: null, error: null }); },
+          from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }) }),
+        };
+        const c = vm.createContext(Object.assign({ console: { error() {}, log() {} }, SUPABASE_URL: '', SUPABASE_ANON: '' }, extra));
+        vm.runInContext(idsrc + '\n;globalThis.__ID = ID;', c);
+        const I = c.__ID;
+        I.sb = sb; I.renderProfile = () => {};
+        return { I, calls };
+      }
+      const solo3 = { MYSEAT: 0, G: { turnCount: 11, players: [{ name: 'You' }, { name: 'Bazza', isAI: true }, { name: 'Shazza', isAI: true }] } };
+      const BZ = 'ba22a000-0000-4000-8000-000000000001', SZ = '5a22a000-0000-4000-8000-000000000002';
+
+      {
+        const t = table(solo3); t.I.user = { id: ME };
+        await t.I.recordMatch(0);
+        T('a solo win reaches the ladder', t.calls.length === 1 && t.calls[0][0] === 'record_match');
+        T('and carries all three accounts, me first',
+          JSON.stringify(t.calls[0][1].p_players) === JSON.stringify([ME, BZ, SZ]), JSON.stringify(t.calls[0][1] && t.calls[0][1].p_players));
+        T('and names me the winner', t.calls[0][1].p_winner === ME);
+      }
+      {
+        const t = table(solo3); t.I.user = { id: ME };
+        await t.I.recordMatch(1);
+        T('a bot win is recorded against the bot', t.calls.length === 1 && t.calls[0][1].p_winner === BZ);
+      }
+      {
+        const t = table(solo3); t.I.user = null;
+        await t.I.recordMatch(0);
+        T('a guest stays unrated', t.calls.length === 0);
+      }
+      {
+        const t = table({ MYSEAT: 0, NET: { mode: 'client', roster: [{ uid: ME }, { name: 'Bazza', isAI: true }] }, G: { turnCount: 4, players: [] } });
+        t.I.user = { id: ME };
+        await t.I.recordMatch(0);
+        T('a client does not record — the host does', t.calls.length === 0);
+      }
+      {
+        const t = table({ MYSEAT: 0, G: { turnCount: 4, players: [{ name: 'You' }, { name: 'Davo', isAI: true }] } });
+        t.I.user = { id: ME };
+        await t.I.recordMatch(0);
+        T('a table of one real account does not record', t.calls.length === 0);
+      }
+      {
+        const five = [{ uid: ME }, { name: 'Bazza', isAI: true }, { name: 'Shazza', isAI: true },
+                      { uid: 'bbbbbbbb-0000-4000-8000-000000000001' }, { uid: 'cccccccc-0000-4000-8000-000000000002' }];
+        const t = table({ MYSEAT: 0, NET: { mode: 'host', roster: five }, G: { turnCount: 9, players: [] } });
+        t.I.user = { id: ME };
+        await t.I.recordMatch(0);
+        T('a five-seat table stays off the ladder rather than throwing', t.calls.length === 0);
+      }
+      {
+        /* A guest hosting for signed-in mates: two real accounts are on the
+           table and neither is mine. Without the guest guard this reaches
+           this.user.id on a null and survives only by being caught. */
+        const t = table({ MYSEAT: 0, NET: { mode: 'host', roster: [{ uid: null }, { uid: 'eeeeeeee-0000-4000-8000-000000000004' }, { uid: 'ffffffff-0000-4000-8000-000000000005' }] }, G: { turnCount: 9, players: [] } });
+        t.I.user = null;
+        await t.I.recordMatch(1);
+        T('a guest host does not record a game between other people', t.calls.length === 0);
+      }
+      {
+        const t = table({ MYSEAT: 0, NET: { mode: 'host', roster: [{ uid: 'dddddddd-0000-4000-8000-000000000003' }, { name: 'Bazza', isAI: true }] }, G: { turnCount: 9, players: [] } });
+        t.I.user = { id: ME };
+        await t.I.recordMatch(0);
+        T('a game I am not seated in is not recorded', t.calls.length === 0);
+      }
     }
 
     console.log(fails ? 'IDENTITY: ' + fails + ' FAILED' : 'IDENTITY: ALL PASS');

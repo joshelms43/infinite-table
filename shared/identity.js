@@ -404,16 +404,53 @@ const ID = {
     NET.joinGame();
   },
 
-  /* --- match recording: host calls once per finished online game --- */
+  /* --- the bots are players too ---
+
+     Bazza and Shazza hold real accounts, seeded once by supabase/accounts.sql
+     with these fixed ids. They are rated like anyone else: beating them pays,
+     losing to them costs. The ids live here and in that file, and nowhere
+     else — the client resolves a bot by name at the moment a game ends. */
+  BOT_UIDS: {
+    bazza:  'ba22a000-0000-4000-8000-000000000001',
+    shazza: '5a22a000-0000-4000-8000-000000000002',
+  },
+  botUid(name){ return this.BOT_UIDS[String(name||'').trim().toLowerCase()] || null; },
+
+  /* One account id per seat, in seat order, whichever mode we are in.
+     Online, the roster carries uids for humans and only names for bots.
+     Solo, there is no roster at all: my seat is MYSEAT, the rest are bots. */
+  seatUids(){
+    const online = (typeof NET!=='undefined') && NET.roster && NET.roster.length;
+    if(online) return NET.roster.map(r => (r && (r.uid || this.botUid(r.name))) || null);
+    if(typeof G==='undefined' || !G || !G.players) return [];
+    const mine = (typeof MYSEAT!=='undefined') ? MYSEAT : 0;
+    return G.players.map((pl, i) => pl.isAI ? this.botUid(pl.name)
+                                  : (i === mine && this.user ? this.user.id : null));
+  },
+
+  /* Called once by whoever owns the game state — the host online, and the
+     browser itself when playing solo. Solo counts: Josh asked for it, and the
+     bots now have somewhere for the points to go. */
   async recordMatch(winnerSeat){
     try{
-      if(!this.sb || typeof NET==='undefined' || NET.mode!=='host' || !NET.roster) return;
-      const ids = NET.roster.map(r=>r.uid).filter(Boolean);
-      if(ids.length < 2) return;
-      const winnerUid = NET.roster[winnerSeat] && NET.roster[winnerSeat].uid;
+      if(!this.sb || !this.user) return;                       // guests stay unrated
+      if(typeof NET!=='undefined' && NET.mode === 'client') return;   // the host records, not us
+      const seats = this.seatUids();
+      const winnerUid = seats[winnerSeat];
       if(!winnerUid) return;
+      const ids = seats.filter(Boolean);
+      if(ids.length < 2) return;
+      if(ids.indexOf(this.user.id) < 0) return;                // record_match requires a participant
+      if(ids.length > 4) return;                               // record_match caps at four; a five-seat
+                                                               // table stays off the ladder rather than throwing
       await this.sb.rpc('record_match', { p_players: ids, p_winner: winnerUid, p_rounds: G.turnCount });
-      this.init && this.sb.from('profiles').select('*').eq('id', this.user.id).maybeSingle().then(r=>{ if(r.data){ this.profile=r.data; this.renderProfile(); } });
+      const r = await this.sb.from('profiles').select('id,name,elo,games,wins').eq('id', this.user.id).maybeSingle();
+      if(r && r.data){
+        const code = this.profile && this.profile.friend_code;
+        this.profile = r.data;
+        if(code) this.profile.friend_code = code;
+        this.renderProfile();
+      }
     }catch(e){}
   },
 };

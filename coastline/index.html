@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.6
+  Version: 0.11.7
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -770,7 +770,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.6"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.7"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -803,7 +803,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.6</span>
+    <span class="ver">v0.11.7</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -936,7 +936,7 @@ function newGame(){
   G.players = [
     {name:'You',   isAI:false, hand:[], bank:[], props:{}, bldg:{}},
     {name:'Bazza', isAI:true,  hand:[], bank:[], props:{}, bldg:{}},
-    {name:'Shaz',  isAI:true,  hand:[], bank:[], props:{}, bldg:{}},
+    {name:'Shazza',isAI:true,  hand:[], bank:[], props:{}, bldg:{}},
   ];
   for(let i=0;i<5;i++) G.players.forEach(p => p.hand.push(draw()));
   G.turn = 0; G.playsLeft = 0; G.over = false; G.turnCount = 1;
@@ -2366,7 +2366,7 @@ function checkAllWin(){
     if(checkWin(p)){
       G.over = true; renderAll();
       if(NET.mode!=='off'){ try{ localStorage.removeItem('it_room'); localStorage.removeItem('it_host'); }catch(e){} }
-      if(NET.mode==='host' && typeof ID!=='undefined') ID.recordMatch(G.players.indexOf(p));
+      if(typeof ID!=='undefined') ID.recordMatch(G.players.indexOf(p));   // solo counts too; ID gates on mode
       $('#wintitle').textContent = p===me() ? 'You win' : p.name+' wins';
       $('#winsub').textContent = 'Three complete sets: ' + completeColors(p).map(c=>COLORS[c].label).join(', ');
       fillWinRows(); NET.teardown();
@@ -3131,9 +3131,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.6"></script>
-<script src="../shared/tablekit.js?v=0.11.6"></script>
-<script src="../shared/identity.js?v=0.11.6"></script>
+<script src="../shared/config.js?v=0.11.7"></script>
+<script src="../shared/tablekit.js?v=0.11.7"></script>
+<script src="../shared/identity.js?v=0.11.7"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3707,7 +3707,7 @@ const NET = {
     return list.slice(0,5);
   },
   bots: [],
-  botNames: ['Bazza','Shaz','Davo'],
+  botNames: ['Bazza','Shazza','Davo'],
   addBot(){
     if(this.tableSeats().length>=5) return;
     const used = this.bots.map(b=>b.name);
@@ -3986,7 +3986,7 @@ function eliminatePlayer(seat, reason){
   if(alive.length===1){
     G.over = true; renderAll();
     if(NET.mode!=='off'){ try{ localStorage.removeItem('it_room'); localStorage.removeItem('it_host'); }catch(e){} }
-    if(NET.mode==='host' && typeof ID!=='undefined') ID.recordMatch(alive[0]);
+    if(typeof ID!=='undefined') ID.recordMatch(alive[0]);   // solo counts too; ID gates on mode
     const w = G.players[alive[0]];
     $('#wintitle').textContent = alive[0]===MYSEAT ? 'You win' : w.name+' wins';
     $('#winsub').textContent = 'Last one standing';

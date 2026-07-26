@@ -119,3 +119,53 @@ end $$;
 -- Registration happens before sign-in, so the caller is anonymous.
 revoke all on function public.create_account(text, text) from public;
 grant execute on function public.create_account(text, text) to anon, authenticated;
+
+
+-- ============================================================
+-- The bots are players too  (M Deal v0.11.7)
+-- ============================================================
+--
+-- Bazza and Shazza hold real accounts with real ratings, so beating them
+-- moves your Elo and losing to them costs you. They are seeded once with
+-- fixed ids the client knows by name.
+--
+-- They cannot be signed into. The password hash below is bcrypt over a value
+-- generated here and never stored, so no password verifies against it.
+--
+-- A note on farming, since solo games are rated: `record_match` already
+-- refuses a second result inside 45 seconds, and a bot's Elo falls as it
+-- loses — so a bot you beat repeatedly is worth less each time, and the
+-- floor of 100 makes it worth almost nothing. Grinding converges rather
+-- than climbing.
+
+do $$
+declare
+  bots constant jsonb := '[
+    {"id":"ba22a000-0000-4000-8000-000000000001","name":"Bazza", "code":"BAZZA2"},
+    {"id":"5a22a000-0000-4000-8000-000000000002","name":"Shazza","code":"SHAZZA"}
+  ]';
+  b jsonb;
+begin
+  for b in select * from jsonb_array_elements(bots) loop
+    insert into auth.users (
+      instance_id, id, aud, role, email, encrypted_password,
+      email_confirmed_at, created_at, updated_at,
+      raw_app_meta_data, raw_user_meta_data,
+      confirmation_token, recovery_token, email_change_token_new, email_change
+    ) values (
+      '00000000-0000-0000-0000-000000000000',
+      (b->>'id')::uuid, 'authenticated', 'authenticated',
+      lower(b->>'name') || '@bot.coastline.game',
+      extensions.crypt(encode(extensions.gen_random_bytes(32), 'hex'), extensions.gen_salt('bf')),
+      now(), now(), now(),
+      '{"provider":"email","providers":["email"],"bot":true}'::jsonb,
+      json_build_object('username', lower(b->>'name'), 'bot', true)::jsonb,
+      '', '', '', ''
+    )
+    on conflict (id) do nothing;
+
+    insert into profiles (id, name, friend_code)
+    values ((b->>'id')::uuid, b->>'name', b->>'code')
+    on conflict (id) do nothing;
+  end loop;
+end $$;
