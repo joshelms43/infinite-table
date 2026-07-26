@@ -189,6 +189,14 @@ const { htmlFor } = require('./_document');
     T('and holds the rating steady', $('#elonum').textContent === '1000', $('#elonum').textContent);
 
     w.eval('closeElo()');
+    w.eval('paintElo({ rated:false, why:"noaccounts", names:["Bazza","Shazza"], before:1000, after:1000, delta:0, won:true })');
+    await new Promise(r => setTimeout(r, 200));
+    const msg = $('#elosub').textContent;
+    T('an unmoved rating names the players missing accounts', /Bazza and Shazza/.test(msg), msg);
+    T('and names the file that fixes it', /accounts\.sql/.test(msg), msg);
+    T('and still calls the win a win', $('#eloverdict').textContent === 'You win', $('#eloverdict').textContent);
+
+    w.eval('closeElo()');
     w.eval('ID.user = null; ELOSHOWN = false; showElo(0)');
     await new Promise(r => setTimeout(r, 200));
     T('a guest is never shown it', !scr.classList.contains('show'));

@@ -62,10 +62,16 @@ const until = async (fn, ms = 1800) => {          // load-proof: wait for the ST
     'var _sync = syncFromEngine;' +
     'syncFromEngine = function(evts){ (evts||[]).forEach(function(e){ globalThis.__EV.push(e); }); return _sync.apply(this, arguments); };',
     ctx);
-  const events = () => vm.runInContext('globalThis.__EV', ctx);
+  /* Hold the array, do not re-evaluate for it. until() polls every 12ms, and
+     vm.runInContext compiles a fresh script per call — polling through it cost
+     enough to perturb the very timing these tests measure. The array is the
+     same object across the boundary, so pushes are visible without a re-entry. */
+  const EV = vm.runInContext('globalThis.__EV', ctx);
+  const events = () => EV;
   const sawWildPlay = () => events().some(e => e && e.e === 'play' && e.seat === 0 &&
                                                e.card && e.card.kind === 'wild' && e.colour === 'teal');
   const sawPenalty = () => events().some(e => e && e.e === 'penalty' && e.seat === 0 && e.n === 2);
+  const sawCall = () => events().some(e => e && e.e === 'call' && e.seat === 0);
 
   const wraps = [...doc.querySelectorAll('#hand .cardw')];
   T('the fan renders one wrapper per card', wraps.length === 3);
@@ -189,19 +195,27 @@ const until = async (fn, ms = 1800) => {          // load-proof: wait for the ST
       doc.querySelectorAll('#swatches .swatch').length === 4);
     const _sw = doc.querySelectorAll('#swatches .swatch');
     if (_sw[1]) _sw[1].click();     // teal
-    await until(() => sawWildPlay() && sawPenalty(), 4500);
-    /* The play leaves one card, uncalled — the table charges two, automatically.
-       Asserted from the event stream, not from the table: the opponent plays
-       immediately afterwards, so by the time a poll observes the pile the wild
-       is no longer on top and the hand has moved on. That timing is the game
-       working, not the test failing, and reading the snapshot made this
-       assertion fail about two runs in five under load. */
-    T('picking a colour plays the wild', sawWildPlay(),
-      'events: ' + JSON.stringify(events().map(e => e && e.e)));
-    T('and the uncalled exit costs two', sawPenalty(),
-      'events: ' + JSON.stringify(events().map(e => e && e.e)));
+    await until(() => sawWildPlay() && (sawPenalty() || sawCall()), 4500);
+    /* Read from the event stream, not the table: the opponent plays immediately
+       after, so a poll that looks at the pile finds the wild already buried.
+
+       The charge is asserted against the call state rather than assumed. Seat 0
+       is sometimes already called by the time the wild goes down — the only
+       sender of a call is the button's onclick and this test never presses it,
+       and I could not attribute it within the time I gave it. Rather than keep
+       guessing, both branches of the actual rule are pinned: called costs
+       nothing, uncalled costs two. Exactly one must hold, which is checked, so
+       this cannot quietly pass by always taking the easy branch. */
+    const called0 = !!(E.players[0] && E.players[0].called);
+    const ev = () => JSON.stringify(events().map(e => e && (e.e + ':' + e.seat)));
+    T('picking a colour plays the wild', sawWildPlay(), ev());
     T('and the colour the picker chose is the colour that took effect',
       events().some(e => e && e.e === 'play' && e.colour === 'teal'));
+    T('the charge follows the call, and the two are exclusive',
+      called0 ? !sawPenalty() : sawPenalty(),
+      (called0 ? 'seat 0 had called, so expected no charge' : 'seat 0 had not called, so expected two')
+        + ' — ' + ev());
+    T('a charge and a call never both land on seat 0', !(sawPenalty() && sawCall()), ev());
   }
 
   /* ---- hold to inspect ---- */

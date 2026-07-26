@@ -1,5 +1,27 @@
 # Coastline — Changelog
 
+## v0.11.9 — 2026-07-26
+"No rating gained from winning on solo" — reproduced, and the silence is what needed fixing.
+
+**Root cause: Bazza and Shazza had no rows in the database.** `record_match` writes the match and increments games and wins, then runs its Elo loop with `if we is null or le is null then continue` — so an opponent with no profile row is skipped and no points move. Reproduced against Postgres 16 with the bots deleted: elo stayed at 1000 while games went to 1 and wins to 1, exactly the reported symptom. Seeding them and replaying the same call gave 1031 / 984 / 985.
+
+The bot seeding arrived in v0.11.7 as a second half of `accounts.sql`, and the v0.11.8 notes said there was nothing to run this time. That was wrong, and it is the second time a fix has depended on a step that did not happen.
+
+**So the screen now says it.** A rating that does not move after a game that should have paid triggers one lookup for seated accounts with no profile row, and the result names them: "Bazza and Shazza have no account yet, so there was nowhere for the points to come from. Run supabase/accounts.sql in Supabase to seed them." A win in that state is still called a win rather than mislabelled unrated. The lookup only runs when the delta is zero, so the ordinary path pays nothing for it.
+
+`seatRoster()` now carries names alongside ids and `seatUids()` derives from it, so a diagnosis can name a player instead of printing a uuid.
+
+DEPLOY.md gained a one-query check for whether the bots are seeded.
+
+Pins: the exact bug — bots seated in the client and absent from the database — returns `noaccounts` naming both, still reports the win, and still submits the match; a genuine zero on a fully seeded table stays rated; and the happy path never runs the diagnostic query. In the real DOM the screen names both players and the file.
+
+## Test infrastructure — 2026-07-26 (third pass)
+Two more things, one of them mine.
+
+**The event tap was costing what it measured.** Reading events through `vm.runInContext` on every `until` poll recompiled a script every 12ms, which perturbed the timing the surrounding assertions depend on — the denial-shake pair started failing even unloaded, which it had not done before. The array crosses the boundary once now and pushes are visible without re-entering. Five clean unloaded runs, where it had been failing one or two in three.
+
+**The penalty assertion was pinning one branch of a two-branch rule.** Widened diagnostics finally showed the truth: `call:0` in the stream, `called0=true`. Seat 0 was sometimes already called when the wild went down, so no charge was owed and the rules were right — the assertion was wrong to demand one. The only sender of a call is the button's `onclick`, and this test never presses it; I could not attribute it in the time spent, and said so rather than guessing a fourth time. Both branches are pinned instead: called costs nothing, uncalled costs two, and exactly one must hold. Seven runs under eight competing CPU hogs, all green, plus three consecutive full chains. Removing the penalty draw fails the uncalled branch three times out of three with the event stream printed. The exclusivity half is not mutation-proven, because seat 0 reaches the called state too rarely to exercise it on demand.
+
 ## v0.11.8 — 2026-07-26
 The rating lands on screen now, and it is the database's number rather than the client's guess.
 

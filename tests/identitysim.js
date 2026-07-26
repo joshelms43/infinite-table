@@ -393,13 +393,16 @@ MAILERS.forEach(([label, re]) => {
 
       /* elos: the sequence the profile row reports on each successive read. */
       function ratingRig(extra, elos, startElo) {
-        const st = { rpc: 0, reads: 0 };
+        const st = { rpc: 0, reads: 0, lookups: 0 };
         const sb = {
           rpc: () => { st.rpc++; return Promise.resolve({ data: null, error: null }); },
-          from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => {
-            const e = elos[Math.min(st.reads++, elos.length - 1)];
-            return Promise.resolve({ data: { id: ME, name: 'Josh', elo: e, games: 1, wins: 1 } });
-          } }) }) }),
+          from: () => ({ select: () => ({
+            eq: () => ({ maybeSingle: () => {
+              const e = elos[Math.min(st.reads++, elos.length - 1)];
+              return Promise.resolve({ data: { id: ME, name: 'Josh', elo: e, games: 1, wins: 1 } });
+            } }),
+            in: (col, ids) => { st.lookups++; return Promise.resolve({ data: ids.filter(id => !(extra.__noProfile || []).includes(id)).map(id => ({ id })) }); },
+          }) }),
         };
         const c = vm.createContext(Object.assign({
           console: { error() {}, log() {} }, SUPABASE_URL: '', SUPABASE_ANON: '',
@@ -440,6 +443,30 @@ MAILERS.forEach(([label, re]) => {
         T('an unmoved rating settles at zero rather than hanging', out.delta === 0);
         T('and the polling is bounded', r.st.reads <= 12, String(r.st.reads));
       }
+      {   // the exact bug: bots seated in the client, absent from the database
+        const cfg = solo3();
+        cfg.__noProfile = ['ba22a000-0000-4000-8000-000000000001', '5a22a000-0000-4000-8000-000000000002'];
+        const r = ratingRig(cfg, [1000], 1000);
+        const out = await r.I.settleRating(0);
+        T('a win that moved nothing is not reported as rated',
+          out.rated === false && out.why === 'noaccounts', JSON.stringify(out));
+        T('and it names the players that have no rows',
+          JSON.stringify(out.names) === '["Bazza","Shazza"]', JSON.stringify(out.names));
+        T('and still records that I won', out.won === true);
+        T('the match was still submitted — the game counted', r.st.rpc === 1);
+      }
+      {   // a genuine zero on a fully seeded table is not misreported
+        const r = ratingRig(solo3(), [1000], 1000);
+        const out = await r.I.settleRating(0);
+        T('a zero change with every account present stays rated',
+          out.rated === true && out.delta === 0, JSON.stringify(out));
+        T('and the lookup only runs when something looks wrong', r.st.lookups === 1, String(r.st.lookups));
+      }
+      {   // the happy path must not pay for the diagnosis
+        const r = ratingRig(solo3(), [1031], 1000);
+        await r.I.settleRating(0);
+        T('a normal win never runs the diagnostic query', r.st.lookups === 0, String(r.st.lookups));
+      }
       {   // a guest has nothing to report
         const r = ratingRig(solo3(), [1000], 1000); r.I.user = null;
         const out = await r.I.settleRating(0);
@@ -478,6 +505,9 @@ MAILERS.forEach(([label, re]) => {
       T('the last-standing ending passes the survivor', /showElo\(alive\[0\]\)/.test(mdeal));
 
       T('the number is counted across rather than snapped', /requestAnimationFrame\(tick\)/.test(mdeal));
+      T('an unmoved rating names the file that fixes it', /accounts\.sql/.test(mdeal) && /noaccounts/.test(mdeal));
+      T('and does not call a win unrated just because nothing moved',
+        /\(r && r\.won\) \? 'You win' : 'Unrated'/.test(mdeal));
       T('the client does no Elo arithmetic of its own',
         !/32\s*\*\s*\(1\s*-/.test(mdeal) && !/eloDelta\(/.test(mdeal));
     }

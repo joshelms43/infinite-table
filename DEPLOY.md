@@ -53,6 +53,32 @@ never installed looked exactly like a typo'd password. It now says:
 
 The profile sheet prints the longer reason under the buttons. Send me that line.
 
+## 1b. The bots need seeding too
+
+`accounts.sql` grew a second half in v0.11.7 that seeds Bazza and Shazza as real
+accounts. **If you ran the file before that, re-run it** — it is idempotent, so
+running it again costs nothing.
+
+Without those two rows, a solo win records the game and counts the win but does
+not move your rating at all. `record_match` skips its Elo loop for any player it
+cannot read an Elo for, so an opponent with no row means there is nowhere for
+the points to come from — and it fails silently in the database.
+
+### Check it in one query
+SQL Editor → New query → Run:
+
+```sql
+select name, elo, friend_code from profiles
+where id in ('ba22a000-0000-4000-8000-000000000001',
+             '5a22a000-0000-4000-8000-000000000002');
+```
+
+- **Two rows (Bazza, Shazza)** → seeded, solo games will rate.
+- **No rows** → re-run `supabase/accounts.sql`.
+
+The game now says this for itself: win a solo game and the rating screen will
+name whoever is missing and point at the file, rather than showing a silent ±0.
+
 ## 2. Database schema (already done)
 `supabase/schema.sql` ran successfully long ago — nothing to redo. If it's ever needed on a fresh project, it goes in **SQL Editor → New query**, run once.
 

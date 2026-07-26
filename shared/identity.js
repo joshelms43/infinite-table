@@ -419,13 +419,34 @@ const ID = {
   /* One account id per seat, in seat order, whichever mode we are in.
      Online, the roster carries uids for humans and only names for bots.
      Solo, there is no roster at all: my seat is MYSEAT, the rest are bots. */
-  seatUids(){
+  seatRoster(){
     const online = (typeof NET!=='undefined') && NET.roster && NET.roster.length;
-    if(online) return NET.roster.map(r => (r && (r.uid || this.botUid(r.name))) || null);
+    if(online) return NET.roster.map(r => ({
+      name: (r && r.name) || '', uid: (r && (r.uid || this.botUid(r.name))) || null }));
     if(typeof G==='undefined' || !G || !G.players) return [];
     const mine = (typeof MYSEAT!=='undefined') ? MYSEAT : 0;
-    return G.players.map((pl, i) => pl.isAI ? this.botUid(pl.name)
-                                  : (i === mine && this.user ? this.user.id : null));
+    return G.players.map((pl, i) => ({
+      name: pl.name || '',
+      uid: pl.isAI ? this.botUid(pl.name) : (i === mine && this.user ? this.user.id : null) }));
+  },
+  seatUids(){ return this.seatRoster().map(s => s.uid); },
+
+  /* Which of these accounts have no profile row.
+
+     record_match writes the match and counts the win, then skips its Elo loop
+     for any player it cannot read an Elo for — `if we is null or le is null
+     then continue`. So an unseeded opponent produces a game that counted and a
+     rating that did not move, silently. That is what "no rating gained from
+     winning on solo" was: Bazza and Shazza had accounts in the client and no
+     rows in the database. Ask, so the screen can say so. */
+  async _seatsWithoutProfiles(ids){
+    try{
+      const r = await this.sb.from('profiles').select('id').in('id', ids);
+      if(!r || r.error || !r.data) return [];
+      const have = {};
+      r.data.forEach(x => { have[x.id] = true; });
+      return ids.filter(id => !have[id]);
+    }catch(e){ return []; }
   },
 
   /* Does this table pay out at all? One place decides, so the end-of-game
@@ -460,7 +481,22 @@ const ID = {
     if(!iAmClient) await this.recordMatch(winnerSeat);
 
     const after = await this._pollElo(before, iAmClient ? 10 : 3);
-    return { rated:true, won:t.won, before, after, delta: after - before };
+    const delta = after - before;
+
+    /* A rating that did not move after a game that should have paid is worth a
+       query to explain. Only paid for on the failing path. */
+    if(delta === 0){
+      const missing = await this._seatsWithoutProfiles(t.ids);
+      if(missing.length){
+        const seats = this.seatRoster();
+        const names = missing.map(id => {
+          const seat = seats.filter(x => x.uid === id)[0];
+          return (seat && seat.name) || 'a player';
+        });
+        return { rated:false, why:'noaccounts', names, before, after, delta:0, won:t.won };
+      }
+    }
+    return { rated:true, won:t.won, before, after, delta };
   },
 
   /* Re-read my row until it moves, or until we run out of patience. The host's
