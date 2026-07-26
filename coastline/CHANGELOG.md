@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.11.5 — 2026-07-23
+The hand-limit soft-lock: latent since the drag-feel pass, exposed the day overflowing became easy.
+
+Live report: more than 7 cards, cannot discard, cannot end turn, game frozen. Root cause found by DOM-level reproduction: the finger-lift fast-tap (added for instant drag response) called toggleSelect unconditionally AND deliberately swallowed the trailing click — which was the only route into the discard picker. Taps in discard mode literally could not reach discardToggle: selection stayed empty, the Discard button stayed disabled, the turn sat mid-end forever. The picker's own logic was fine the whole time — repro3 proved it green for weeks by calling discardToggle directly, the exact blind spot: testing the destination while the road was dead. Organically exceeding 7 cards is rare, so the break slept until Buzzy made overflow trivial.
+
+The fix routes the fast-tap through tapCard, which dispatches by mode — discard taps mark cards, normal play raises exactly as before — and drag activation is refused mid-discard so a card can never be dragged into play while the hand limit is being settled. The permanent pin dispatches REAL pointer events in jsdom and asserts the tap lands, the pick completes, and the turn moves on; mutation-proven — restoring the hijack fails it on the spot.
+
 ## v0.11.4 — 2026-07-26
 Accounts work, they are M Deal's alone for now, and the email wall is gone by construction rather than by care.
 
@@ -16,7 +23,6 @@ Now pinned rather than merely fixed. `tests/identitysim.js` walks every `.js`, `
 **Every failure now names itself** — `SIGN UP OFFLINE` for a missing function, `SIGN UP REJECTED` for a refused key, `SERVER NOT CONFIGURED` for a missing service role, plus taken / rate-limited / no-connection — and the profile sheet prints the longer reason under the buttons. No two causes share a message, and the gate checks that.
 
 **Accounts are M Deal's for now.** The lobby dropped the identity module and everything that rendered into it: the profile chip, the stats strip, the sheet, the banner and invite-toast styles, and the adapter that read `display_name` and `losses`, two fields the schema has never had. The lobby is guest-first again and 40% smaller (17.5 KB → 10.4 KB). Sign-in lives at the M Deal profile chip.
-
 ## v0.11.3 — 2026-07-23
 The bench never empties. Two prompts now: name the card, then give it its line — both travel host-authoritatively, both sanitized (names to 24 characters, sayings to 60). Every press mints a fresh card straight into Josh's hand with a unique id counting up from 9001 off the catalog, so no two collide and the migration rebuild ignores them all naturally (non-catalog ids simply never re-mint). The one-shot gate is gone. The public log announces the chosen name — "Josh put Big Dazza in." — while the hand stays private, so the reveal is still the play. Pins rewritten for the multi era: two cards land in the hand and never the deck, each carries its own name and words, ids never collide.
 

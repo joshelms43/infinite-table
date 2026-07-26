@@ -71,6 +71,22 @@ const T = (n,c)=>console.log((c?'PASS':'FAIL')+' — '+n) || (c?0:process.exitCo
   await sleep(800);
   T('discard confirmed from hand picks', me.hand.length===before-need);
 
+  /* THE TOUCH ROUTE ITSELF: a finger-lift tap must reach the picker. The section above
+     calls discardToggle directly — exactly the blind spot that let the fast-tap hijack
+     ship: the picker's logic was tested while the road to it was dead. This one taps. */
+  win.eval("G.over=false; G.turn=MYSEAT; G.players[MYSEAT].isAI=false; while(G.players[MYSEAT].hand.length<9) G.players[MYSEAT].hand.push(G.deck.pop()); endTurn();");
+  await sleep(120);
+  T('picker reopened for the touch test', win.eval("MODE.type==='discard'"));
+  const tapEl = win.document.querySelector('#hand .cardw');
+  T('a hand card is on screen to tap', !!tapEl);
+  tapEl.dispatchEvent(new win.MouseEvent('pointerdown',{bubbles:true,clientX:100,clientY:500}));
+  win.document.dispatchEvent(new win.MouseEvent('pointerup',{bubbles:true,clientX:102,clientY:501}));
+  T('a finger-lift tap reaches the discard picker', win.eval('MODE.sel.size')===1);
+  win.eval("G.players[MYSEAT].hand.filter(c=>!MODE.sel.has(c.id)).slice(0, MODE.need-MODE.sel.size).forEach(c=>discardToggle(c.id));");
+  win.hudGo();
+  await sleep(800);
+  T('the touched discard completes and the turn moves on', win.eval("G.players[MYSEAT].hand.length===7 && MODE.type===null"));
+
   T('zero window errors across all flows', errors.length===0);
   errors.forEach(e=>console.log('  *',e));
   process.exit(process.exitCode||0);

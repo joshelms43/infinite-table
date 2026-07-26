@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.4
+  Version: 0.11.5
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -770,7 +770,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.4"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.5"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -803,7 +803,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.4</span>
+    <span class="ver">v0.11.5</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -2059,7 +2059,9 @@ document.addEventListener('pointerup', e=>{
     const pend = DRAG.pend; DRAG.pend = null;
     const dist = Math.hypot(e.clientX-pend.x, e.clientY-pend.y);
     if(dist < 8 && !G.over){
-      toggleSelect(pend.c.id);           // instant response on finger lift
+      tapCard(pend.c.id);                // route by mode: the discard picker gets its tap; normal play raises as before.
+                                          // (raw toggleSelect here swallowed the click AND bypassed the picker —
+                                          //  the hand-limit flow was unreachable by touch since the drag-feel pass)
       SUPPRESSTAP = true;                 // swallow the trailing click
       setTimeout(()=>{ SUPPRESSTAP=false; }, 400);
     }
@@ -2088,6 +2090,7 @@ document.addEventListener('pointercancel', ()=>{
 });
 
 function startDrag(e){
+  if(MODE.type==='discard'){ DRAG.pend=null; return; }   // mid-discard, cards tap to mark — they must never drag into play
   const { w, c } = DRAG.pend;
   unpress();
   clearSelection();
@@ -3128,9 +3131,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.4"></script>
-<script src="../shared/tablekit.js?v=0.11.4"></script>
-<script src="../shared/identity.js?v=0.11.4"></script>
+<script src="../shared/config.js?v=0.11.5"></script>
+<script src="../shared/tablekit.js?v=0.11.5"></script>
+<script src="../shared/identity.js?v=0.11.5"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
