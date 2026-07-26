@@ -204,6 +204,8 @@ const ID = {
     if(err === 'username')    return ['USERNAME: 3+ LETTERS', 'username too short'];
     if(err === 'password')    return ['PASSWORD: 6+ CHARACTERS', 'password too short'];
     if(err === 'serverconfig')return ['SERVER NOT CONFIGURED', 'the register function has no service-role key'];
+    if(err === 'throttled')   return ['TOO MANY SIGNUPS', 'too many accounts made in the last hour'];
+    if(err === 'nobackend')   return ['SIGN UP NOT INSTALLED', 'run supabase/accounts.sql in the Supabase SQL editor'];
     if(status === 404)        return ['SIGN UP OFFLINE', 'the register function is not deployed on Supabase'];
     if(status === 401 || status === 403) return ['SIGN UP REJECTED', 'Supabase refused the anon key (JWT verification)'];
     if(status === 429)        return ['TOO MANY TRIES', 'rate limited — wait a minute'];
@@ -211,13 +213,34 @@ const ID = {
     return ['SIGN UP FAILED', 'server said ' + status + (err ? ' / ' + err : '')];
   },
 
-  async _register(){
-    const u = this.sanitizeU(($('#acctuser')||{}).value);
-    const pw = (($('#acctpass')||{}).value)||'';
-    if(u.length<3){ banner('USERNAME: 3+ LETTERS','var(--danger-red)'); return; }
-    if(pw.length<6){ banner('PASSWORD: 6+ CHARACTERS','var(--danger-red)'); return; }
-    const sb = await this.ensureSB();
-    if(!sb){ this.fail('config', 'no supabase keys'); return; }
+  /* PostgREST says this specific thing when the SQL function was never
+     installed, which is different from the function running and refusing. */
+  _rpcMissing(err){
+    const c = (err && err.code) || '';
+    const m = ((err && err.message) || '').toLowerCase();
+    return c === 'PGRST202' || c === '404'
+        || m.indexOf('could not find the function') >= 0
+        || m.indexOf('schema cache') >= 0;
+  },
+
+  /* Two ways to mint an account, both server-side, neither able to send mail.
+
+     The SQL function is tried first because it installs from the Supabase SQL
+     editor, which needs no terminal. The Edge Function does the same job and
+     is the supported path, but it only deploys from the dashboard's Functions
+     page — a step that is easy to miss, and missing it was the whole bug.
+
+     Whichever answers, the shape coming back is the same. */
+  async _mint(sb, u, pw){
+    const rpc = await sb.rpc('create_account', { p_username: u, p_password: pw });
+    if(!rpc.error){
+      const out = rpc.data;
+      if(out && out.ok) return { ok:true, via:'sql', out };
+      return { ok:false, via:'sql', status:200, out };
+    }
+    if(!this._rpcMissing(rpc.error)){
+      return { ok:false, via:'sql', status:500, out:{ err:'sql', detail:rpc.error.message } };
+    }
 
     let status = 0, out = null;
     try{
@@ -228,11 +251,27 @@ const ID = {
       });
       status = res.status;
       try{ out = await res.json(); }catch(e){ out = null; }
-      if(!res.ok || !out || !out.ok) throw new Error('rejected');
-    }catch(e){
-      const [msg, why] = this._authFault(status, out);
+      if(res.ok && out && out.ok) return { ok:true, via:'edge', out };
+    }catch(e){ status = 0; }
+
+    // Neither is installed: name the one that is easiest to install.
+    if(status === 404) return { ok:false, via:'none', status:404, out:{ err:'nobackend' } };
+    return { ok:false, via:'edge', status, out };
+  },
+
+  async _register(){
+    const u = this.sanitizeU(($('#acctuser')||{}).value);
+    const pw = (($('#acctpass')||{}).value)||'';
+    if(u.length<3){ banner('USERNAME: 3+ LETTERS','var(--danger-red)'); return; }
+    if(pw.length<6){ banner('PASSWORD: 6+ CHARACTERS','var(--danger-red)'); return; }
+    const sb = await this.ensureSB();
+    if(!sb){ this.fail('config', 'no supabase keys'); return; }
+
+    const r = await this._mint(sb, u, pw);
+    if(!r.ok){
+      const [msg, why] = this._authFault(r.status, r.out);
       this.lastError = 'sign up — ' + why;
-      try{ console.error('[identity] register', status, out); }catch(_){}
+      try{ console.error('[identity] register', r.via, r.status, r.out); }catch(_){}
       banner(msg, 'var(--danger-red)');
       if(this.sheetOpen) this.renderProfileSheet();
       return;

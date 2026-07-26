@@ -8,52 +8,50 @@
 - **Mafia** — no setup. No SQL, no functions, no tables. It uses the same channels M Deal already uses.
 - **Anything ending in .js from the tests folder** (netsim, mafiasim, etc.) — these run on Claude's machine before every push. They are not for Supabase, not for anywhere.
 
-## 1. Accounts — deploy the register Edge Function
-**Accounts are M Deal only for now.** The lobby is guest-first and asks nothing.
-Sign-in lives at `/coastline/` → profile chip.
+## 1. Accounts — run ONE SQL file
 
-**Edge Functions do NOT deploy from a GitHub push.** Vercel deploys the site;
-Supabase does not watch this repo. Pushing `index.ts` changes nothing on the
-server. This step is manual, and it is the one thing that makes sign-up work.
+**Accounts are M Deal only.** The lobby is guest-first and asks nothing. Sign-in
+lives at `/coastline/` → profile chip.
 
-**This is TypeScript, not SQL — it does not go in the SQL editor.** (Pasting it
-there errors on line 1 at `import`.)
+### Do this
+1. Supabase Dashboard → **SQL Editor** → New query
+2. Paste the whole of **`supabase/accounts.sql`**
+3. **Run**
 
-### Check whether it is already deployed — 5 seconds, phone is fine
-Open this in any browser:
+That is the entire setup. It is idempotent — running it again is harmless.
+
+It installs one function, `create_account(username, password)`, which mints the
+user already-confirmed, bcrypts the password, and creates the profile row with a
+friend code. **It sends no email**, so the two-mails-an-hour ceiling is never
+approached.
+
+### The old TypeScript file is not this
+`supabase/functions/register/index.ts` does the same job as an Edge Function.
+It still works and the app still falls back to it, but **Edge Functions only
+deploy from the dashboard's Functions page — never from a GitHub push**, which
+is why sign-up was broken. Pasting that file into the SQL editor gives you:
 
 ```
-https://spkhqgzgnzeeizxrycjq.supabase.co/functions/v1/register
+ERROR: 42601: syntax error at or near "//"
 ```
 
-- **`{"ok":true,"service":"register","email":"never"}`** → deployed and healthy. Skip to step 3 below.
-- **401 / "Missing authorization header"** → deployed. Fine — the app sends the key.
-- **404 / "NOT_FOUND" / "Function not found"** → **not deployed.** This is why sign-up fails. Do the steps below.
+That error means you have the TypeScript file in the SQL editor. You want
+`accounts.sql` instead — it starts with `-- ====`, not `// supabase/`.
 
-### Deploy it
-1. Supabase Dashboard → your project → **Edge Functions** (left sidebar, ⚡ icon)
-2. **Deploy a new function** → choose "Via Editor"
-3. Name it exactly: `register` (lowercase, no spaces — the URL is built from this)
-4. Delete the template code, paste the entire contents of `supabase/functions/register/index.ts`
-5. **Deploy**. No secrets to configure — the service key is injected automatically.
-6. Re-open the URL above. It should now answer `{"ok":true,...}`.
-7. Test: M Deal → profile chip → username + password → Create Account.
-
-### If sign-up still fails, the screen now names the cause
-The old build printed `SIGN UP: FAILED` for everything, which is why a function
-that was never deployed looked exactly like a typo'd password. It now says:
+### If sign-up still fails, the screen names the cause
+The old build printed `SIGN UP: FAILED` for everything, so a backend that was
+never installed looked exactly like a typo'd password. It now says:
 
 | On screen | Means |
 |---|---|
-| `SIGN UP OFFLINE` | the function is not deployed (404) — do the steps above |
-| `SIGN UP REJECTED` | Supabase refused the anon key — check `shared/config.js` |
-| `SERVER NOT CONFIGURED` | the function deployed but has no service-role key |
+| `SIGN UP NOT INSTALLED` | neither backend is installed — run `accounts.sql` |
+| `TOO MANY SIGNUPS` | more than 40 accounts in an hour; the abuse brake |
 | `USERNAME TAKEN` | pick another one |
+| `SIGN UP OFFLINE` | the Edge Function 404'd (only reached if SQL is absent) |
+| `SIGN UP REJECTED` | Supabase refused the anon key — check `shared/config.js` |
 | `NO CONNECTION` | the phone could not reach Supabase at all |
-| `TOO MANY TRIES` | rate limited — wait a minute |
 
-The profile sheet prints the longer reason underneath the buttons. Send me that
-line and I can act on it directly.
+The profile sheet prints the longer reason under the buttons. Send me that line.
 
 ## 2. Database schema (already done)
 `supabase/schema.sql` ran successfully long ago — nothing to redo. If it's ever needed on a fresh project, it goes in **SQL Editor → New query**, run once.

@@ -90,6 +90,31 @@ MAILERS.forEach(([label, re]) => {
     /friend_code/.test(src) && /attempt/.test(src));
 }
 
+/* ---------- 2b. the SQL path, which installs without a terminal ---------- */
+{
+  const f = path.join(ROOT, 'supabase', 'accounts.sql');
+  T('the SQL account path exists', fs.existsSync(f));
+  const sql = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '';
+  const code = sql.replace(/^\s*--.*$/gm, '');
+
+  T('it writes the account already confirmed, so nothing is ever mailed',
+    /email_confirmed_at/.test(code));
+  T('it hashes the password rather than storing it',
+    /crypt\s*\(\s*p_password/.test(code) && /gen_salt/.test(code));
+  T('it never stores the password in the clear',
+    !/encrypted_password[^,]*p_password\s*[,)]/.test(code));
+  T('it runs as definer, since anon cannot write auth.users',
+    /security\s+definer/.test(code));
+  T('and is reachable by anon, because registration precedes sign-in',
+    /grant\s+execute[\s\S]{0,120}to\s+anon/.test(code));
+  T('it leaves GoTrue string columns non-null',
+    /confirmation_token/.test(code) && /recovery_token/.test(code));
+  T('it brakes on abuse, being callable by strangers', /throttled/.test(code));
+  T('it survives an identity-table shape change rather than losing the account',
+    /exception\s+when\s+others/.test(code));
+  T('it is safe to run twice', /create\s+or\s+replace\s+function/.test(code));
+}
+
 /* ---------- 3. accounts are scoped to M Deal ---------- */
 {
   const lobby = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -120,6 +145,8 @@ MAILERS.forEach(([label, re]) => {
     ['a missing service-role key', 500, { err: 'serverconfig' }, /NOT CONFIGURED/, /service-role/],
     ['being rate limited', 429, null, /TOO MANY/, /rate limited/],
     ['no network at all', 0, null, /NO CONNECTION/, /could not reach/],
+    ['the abuse brake', 200, { err: 'throttled' }, /TOO MANY SIGNUPS/, /last hour/],
+    ['neither backend installed', 404, { err: 'nobackend' }, /NOT INSTALLED/, /accounts\.sql/],
   ];
   const seen = new Set();
   cases.forEach(([name, status, out, banner, why]) => {
@@ -132,52 +159,93 @@ MAILERS.forEach(([label, re]) => {
     seen.size + ' distinct of ' + cases.length);
 }
 
-/* ---------- 5. a failed registration reports, and does not fall back to mail ---------- */
+/* ---------- 5. registration routes correctly and never falls back to mail ---------- */
 {
   const src = fs.readFileSync(path.join(ROOT, 'shared', 'identity.js'), 'utf8');
-  const banners = [];
-  const fields = { '#acctuser': { value: 'josh' }, '#acctpass': { value: 'hunter2' } };
-  let signUpCalled = false, signedInWith = null;
 
-  const sb = {
-    auth: {
-      signUp: () => { signUpCalled = true; return Promise.resolve({ error: null, data: {} }); },
-      signInWithPassword: (a) => { signedInWith = a; return Promise.resolve({ data: { session: null }, error: { message: 'x' } }); },
-    },
-  };
+  /* One rig, driven by what the two backends are pretending to be. */
+  function rig({ rpc, edge }) {
+    const state = { banners: [], fetched: 0, rpcCalls: [], signUpCalled: false, signedInWith: null };
+    const fields = { '#acctuser': { value: 'josh' }, '#acctpass': { value: 'hunter2' } };
+    const sb = {
+      rpc: (name, args) => { state.rpcCalls.push([name, args]); return Promise.resolve(rpc); },
+      auth: {
+        signUp: () => { state.signUpCalled = true; return Promise.resolve({ error: null, data: {} }); },
+        signInWithPassword: (a) => {
+          state.signedInWith = a;
+          return Promise.resolve({ data: { session: null }, error: { message: 'stop here' } });
+        },
+      },
+    };
+    const ctx = vm.createContext({
+      console: { error() {}, log() {} },
+      SUPABASE_URL: 'https://x.test', SUPABASE_ANON: 'anon',
+      $: (q) => fields[q],
+      banner: (t) => state.banners.push(t),
+      fetch: () => { state.fetched++; return edge(); },
+    });
+    vm.runInContext(src + '\n;globalThis.__ID = ID;', ctx);
+    const ID = ctx.__ID;
+    ID.ensureSB = async () => sb;
+    ID.renderProfile = () => {};
+    ID.renderProfileSheet = () => {};
+    state.ID = ID;
+    return state;
+  }
 
-  const ctx = vm.createContext({
-    console: { error() {}, log() {} },
-    SUPABASE_URL: 'https://x.test',
-    SUPABASE_ANON: 'anon',
-    $: (q) => fields[q],
-    banner: (t) => banners.push(t),
-    fetch: () => Promise.resolve({ ok: false, status: 404, json: () => Promise.reject(new Error('html')) }),
-  });
-  vm.runInContext(src + '\n;globalThis.__ID = ID;', ctx);
-  const ID = ctx.__ID;
-  ID.ensureSB = async () => sb;
-  ID.renderProfile = () => {};
-  ID.renderProfileSheet = () => {};
+  const MISSING = { error: { code: 'PGRST202', message: 'Could not find the function public.create_account' } };
+  const E404 = () => Promise.resolve({ ok: false, status: 404, json: () => Promise.reject(new Error('html')) });
+  const E200 = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, username: 'josh' }) });
 
   return (async () => {
-    await ID._register();
+    /* a. SQL installed: it answers, and the Edge Function is never needed */
+    {
+      const r = rig({ rpc: { data: { ok: true, username: 'josh' }, error: null }, edge: E404 });
+      await r.ID._register();
+      T('the SQL function is tried first', r.rpcCalls.length === 1 && r.rpcCalls[0][0] === 'create_account');
+      T('and it is passed the sanitised username and password',
+        r.rpcCalls[0][1] && r.rpcCalls[0][1].p_username === 'josh' && r.rpcCalls[0][1].p_password === 'hunter2');
+      T('with SQL installed the Edge Function is never called', r.fetched === 0, String(r.fetched));
+      T('and the new account signs in as username@coastline.game',
+        r.signedInWith && r.signedInWith.email === 'josh@coastline.game');
+      T('no mailing call on the SQL happy path', r.signUpCalled === false);
+    }
 
-    T('a 404 from the register function is reported as offline, not as a bad password',
-      /OFFLINE/.test(banners.join('|')), banners.join('|'));
-    T('and the reason is kept for the profile sheet',
-      /not deployed/.test(ID.lastError || ''), ID.lastError);
-    T('and it does not quietly fall back to a mailing signup', signUpCalled === false);
-    T('and it never reached the sign-in call', signedInWith === null);
+    /* b. SQL absent, Edge Function present: fall through cleanly */
+    {
+      const r = rig({ rpc: MISSING, edge: E200 });
+      await r.ID._register();
+      T('a missing SQL function falls through to the Edge Function', r.fetched === 1, String(r.fetched));
+      T('and the account still signs in',
+        r.signedInWith && r.signedInWith.email === 'josh@coastline.game');
+      T('no mailing call on the Edge fallback', r.signUpCalled === false);
+    }
 
-    /* the happy path addresses the account by its synthetic, never-delivered address */
-    banners.length = 0;
-    ctx.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, username: 'josh' }) });
-    await ID._register();
-    T('a created account signs in as username@coastline.game',
-      signedInWith && signedInWith.email === 'josh@coastline.game',
-      signedInWith && signedInWith.email);
-    T('still no mailing call on the happy path', signUpCalled === false);
+    /* c. neither installed: say which one to install */
+    {
+      const r = rig({ rpc: MISSING, edge: E404 });
+      await r.ID._register();
+      T('with neither backend installed it says so', /NOT INSTALLED/.test(r.banners.join('|')), r.banners.join('|'));
+      T('and points at the file that fixes it',
+        /accounts\.sql/.test(r.ID.lastError || ''), r.ID.lastError);
+      T('and does not quietly fall back to a mailing signup', r.signUpCalled === false);
+      T('and never reaches the sign-in call', r.signedInWith === null);
+    }
+
+    /* d. SQL answers with a refusal: report it, do not retry against the Edge */
+    {
+      const r = rig({ rpc: { data: { ok: false, err: 'taken' }, error: null }, edge: E200 });
+      await r.ID._register();
+      T('a username taken in SQL is reported as taken', /TAKEN/.test(r.banners.join('|')), r.banners.join('|'));
+      T('and a refusal is not retried against the other backend', r.fetched === 0, String(r.fetched));
+    }
+
+    /* e. the abuse brake reaches the screen */
+    {
+      const r = rig({ rpc: { data: { ok: false, err: 'throttled' }, error: null }, edge: E200 });
+      await r.ID._register();
+      T('the SQL abuse brake reaches the screen', /TOO MANY SIGNUPS/.test(r.banners.join('|')), r.banners.join('|'));
+    }
 
     console.log(fails ? 'IDENTITY: ' + fails + ' FAILED' : 'IDENTITY: ALL PASS');
     process.exitCode = fails ? 1 : 0;

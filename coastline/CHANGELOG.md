@@ -1,5 +1,19 @@
 # Coastline — Changelog
 
+## v0.11.6 — 2026-07-26
+Registration installs from the SQL editor now, because that is the tool that is actually reachable.
+
+**Root cause, restated honestly: v0.11.4 fixed the diagnosis and not the blocker.** The 404 was correctly identified — the register Edge Function had never been deployed — but the remedy was still "open the Edge Functions page and deploy it," and that page kept not getting reached. Three attempts landed in the SQL editor instead, each returning `42601: syntax error at or near "//"`, which is Postgres reading TypeScript. A fix that depends on a step that keeps not happening is not yet a fix.
+
+`supabase/accounts.sql` does the same work as the Edge Function in one file that runs where the paste was already going. It installs `create_account(username, password)`: sanitises the username, bcrypts the password with pgcrypto, writes `auth.users` with `email_confirmed_at` set, adds the identity row, and mints the profile with a unique friend code — one round trip, no terminal, no email. Idempotent.
+
+Tested against a real Postgres 16 with a mock of Supabase's auth schema rather than shipped on reasoning. Verified: bcrypt emits `$2a$` and round-trips (right password verifies, wrong one does not); duplicate usernames return `taken`; the sanitiser turns `J O$S h!!2` into `josh2`; the abuse brake fires at 40 accounts an hour and releases when the window passes; the file survives being run twice. The friend-code retry was proven by seeding the RNG — seed 0.42 deterministically mints `2N8BCG`, so squatting that code and replaying the identical seed forces a real collision, which the loop absorbs and completes on a different code. The first attempt at that test squatted the code before freeing it and so never collided at all; it proved nothing until it was rewritten.
+
+**The identity insert is wrapped in an exception block on purpose.** `auth.identities` has changed shape across GoTrue versions, and this writes into Supabase's schema rather than ours. Renaming a column out from under it was simulated: the account still mints, the password still verifies, the profile is still created, and the response reports `identity:false` instead of losing the signup.
+
+Client picks the SQL path first and falls through to the Edge Function only when PostgREST says the function does not exist (`PGRST202`). A refusal — taken, throttled — is reported as-is and never retried against the other backend. With neither installed the banner reads `SIGN UP NOT INSTALLED` and names `accounts.sql`, rather than describing whichever backend happened to answer last.
+
+The gate stage grew to cover both paths: SQL is tried first, the Edge Function is not called when SQL answers, the fallback fires only on a missing function, refusals do not double-submit, and the password is never stored in the clear. Still no code path anywhere in the repo can send an email.
 ## v0.11.5 — 2026-07-23
 The hand-limit soft-lock: latent since the drag-feel pass, exposed the day overflowing became easy.
 
