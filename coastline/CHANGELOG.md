@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.11.10 — 2026-07-27
+White headings, everywhere. Josh looked at the inked version and overruled it.
+
+All ink removed from the palette — including Yellow and Cyan, which had carried it since long before yesterday's pass. Every band heading is white now, on every card, with the existing drop shadow doing the work of keeping it readable on the light colours. The renderer still honours an `ink` field if one is ever added, so this is a one-line change per colour if the call ever changes.
+
+The measured-contrast pin is replaced by pins that enforce the decision instead: no colour may override the white heading, and the yellow, cyan, teal, rainbow and split-wild faces are each asserted to render without a colour override. Mutation-proven — sneaking ink back onto Yellow turns the gate red. The point of the old pin was to stop legibility drifting; the point of these is to stop a future contrast-minded pass quietly undoing a call the person holding the cards already made.
+
 ## v0.11.9 — 2026-07-27
 Two from the felt.
 
