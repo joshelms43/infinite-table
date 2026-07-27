@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## Process — 2026-07-27
+The gate stopped being a promise and became a mechanism.
+
+Shipping v0.12.1 the push went out over a RED gate. The command was written as `npm run check > log && echo GREEN || echo RED` with the push on the next line: the `||` swallowed the failing exit code, the word RED was printed to the terminal, and the push proceeded regardless. The stage that failed was the Last Card drag choreography — a known timing-sensitive stage, in a different game from the one being changed — and it passed six consecutive times immediately after, with Last Card provably not loading the M Deal rulebook. Main was fine. That is luck, not process.
+
+The rule here has always been that a failing stage blocks the ship no matter how unrelated it looks. It was enforced by typing the right thing every time, which is not enforcement. tools/ship.sh now runs the gate and pushes only on a clean exit, refuses without a commit message or token, and offers --retry-flaky for the timing-sensitive stages — where a second consecutive failure is treated as real and blocks. Proven both ways before being trusted: a sabotaged assertion makes it exit 1 and push nothing, and this entry was itself shipped through it.
+
+Left standing as known debt: the drag-choreography stages fail under container load. They are testing real animation timing, so the honest fix is to make them wait on state rather than elapsed time — worth doing before they cry wolf often enough to be ignored.
+
 ## v0.12.1 — 2026-07-27
 Colour names, not descriptions. Josh: "swap the colour names not make new names."
 
