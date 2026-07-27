@@ -1,5 +1,10 @@
 # Coastline — Changelog
 
+## v0.14.2 — 2026-07-27
+"Tap to skip" under the No Deal window.
+
+Tapping the window has always passed immediately — the handler was there from the start — but nothing on screen said so, so the only discoverable option was to sit out the whole timer. One quiet line under the draining bar, in the window's own voice rather than a button, since the point is to be noticed once and then ignored.
+
 ## v0.14.1 — 2026-07-27
 No Deal window tuned to 5.5 seconds — 2.6 was a reflex test, 7 dragged.
 

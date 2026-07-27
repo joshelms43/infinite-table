@@ -231,6 +231,8 @@ T('every set name is a plain colour word, short enough to render whole',
   Object.values(COLORS).every(c=>/^[A-Z][a-z]+$/.test(c.label) && c.label.length<=6));
 
 // ===== the No Deal window is long enough to actually use =====
+// Tapping the window has always passed; nothing said so, so people sat out the whole timer.
+T('the block window says it can be skipped', HTML_SRC.includes('Tap to skip') && HTML_SRC.includes('.reactskip{'));
 // The exact value is Josh's ear, tuned live. The pin only fences the range: long enough
 // to read an attack and answer it, short enough that the table does not stall on every card.
 T('the block window is human-usable, not a reflex test', REACT_MS >= 4500 && REACT_MS <= 9000);

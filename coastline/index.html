@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.14.1
+  Version: 0.14.2
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -558,6 +558,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .reactcard .card{width:102px;height:150px}
 .reactbar{width:130px;height:4px;border-radius:2px;background:rgba(244,239,229,.18);overflow:hidden}
 .reactbar span{display:block;height:100%;width:100%;background:var(--money-gold);transform-origin:left;animation:reactdrain linear forwards}
+.reactskip{font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--card-ivory);opacity:.42;text-shadow:0 1px 3px rgba(8,12,10,.6)}
 @keyframes reactdrain{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 @media (prefers-reduced-motion: reduce){ .reactbar span{animation:none} }
 /* ---------- home / lobby ---------- */
@@ -817,7 +818,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.14.1"></script>
+<script src="../shared/mdeal-rules.js?v=0.14.2"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -850,7 +851,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.14.1</span>
+    <span class="ver">v0.14.2</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -3024,7 +3025,8 @@ function enterReactMode(info, onUse, onPass){
   w.id = 'reactwrap';
   w.innerHTML = `<div class="reactatk">${info.atk} · ${info.desc}</div>
     <div class="reactcard">${staticCardHTML(info.card, null)}</div>
-    <div class="reactbar"><span style="animation-duration:${info.ms}ms"></span></div>`;
+    <div class="reactbar"><span style="animation-duration:${info.ms}ms"></span></div>
+    <div class="reactskip">Tap to skip</div>`;
   w.onclick = ()=>{ if(MODE.reactPass) MODE.reactPass(); };
   document.body.appendChild(w);
   MODE.reactT = setTimeout(()=>{ if(MODE.type==='react' && MODE.reactPass) MODE.reactPass(); }, info.ms);
@@ -3291,9 +3293,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.14.1"></script>
-<script src="../shared/tablekit.js?v=0.14.1"></script>
-<script src="../shared/identity.js?v=0.14.1"></script>
+<script src="../shared/config.js?v=0.14.2"></script>
+<script src="../shared/tablekit.js?v=0.14.2"></script>
+<script src="../shared/identity.js?v=0.14.2"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
