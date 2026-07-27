@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.12.0
+  Version: 0.12.1
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -815,7 +815,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.12.0"></script>
+<script src="../shared/mdeal-rules.js?v=0.12.1"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -848,7 +848,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.12.0</span>
+    <span class="ver">v0.12.1</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -2858,7 +2858,7 @@ function reassignWild(id){
   pickColor(choices, col=>{ moveWildTo(id, col); closeSheet(); }, 'Move wild card (free)');
 }
 function pickColor(colors, cb, title){
-  openSheet(`<h3>${title||'Pick a colour'}</h3><div class="colorpickrow">${colors.map(col=>`<button class="colorpick" style="background:${COLORS[col].hex};${inkFor(col)}" onclick="window._colcb('${col}')">${COLORS[col].short || COLORS[col].label.slice(0,4)}</button>`).join('')}</div>
+  openSheet(`<h3>${title||'Pick a colour'}</h3><div class="colorpickrow">${colors.map(col=>`<button class="colorpick" style="background:${COLORS[col].hex};${inkFor(col)}" onclick="window._colcb('${col}')">${COLORS[col].label}</button>`).join('')}</div>
     <div style="height:10px"></div><button class="optbtn" onclick="closeSheet()">Cancel</button>`);
   window._colcb = cb;
 }
@@ -3317,9 +3317,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.12.0"></script>
-<script src="../shared/tablekit.js?v=0.12.0"></script>
-<script src="../shared/identity.js?v=0.12.0"></script>
+<script src="../shared/config.js?v=0.12.1"></script>
+<script src="../shared/tablekit.js?v=0.12.1"></script>
+<script src="../shared/identity.js?v=0.12.1"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.12.1 — 2026-07-27
+Colour names, not descriptions. Josh: "swap the colour names not make new names."
+
+Fair — v0.12.0 fixed the right problem the wrong way, inventing "Dark Blue", "Light Blue", "Railroad" and "Utility" where this game has always spoken in single colour words. The ten original names are back, still sitting on the sets they actually belong to:
+
+Blue (the 3/8 pair), Green (2/4/7), Red, Teal (the $2 pair that takes no houses), Pink, Orange, Brown, Cyan, Yellow, Black (the four stations).
+
+Four are genuine swaps from where they used to be: what the game called Yellow is Blue, what it called Green is Yellow, what it called Teal is Green, and what it called Blue is Teal. Each hex now matches the word on the band — standard Monopoly colours for the eight classic sets, teal for the utilities, black for the stations. The colour picker shows names whole again; there is nothing left to truncate.
+
+The dual-wild comments were speaking the old language too, and now match. The signature pin is unchanged in spirit but reads in these names, and gained a guard that every label is a single plain colour word — so a future pass cannot drift back to descriptions. Mutation-proven: "Dark Blue" fails the gate.
+
 ## v0.12.0 — 2026-07-27
 The sets are the real Monopoly Deal sets now — by name and by colour.
 

@@ -15,28 +15,29 @@
   var RULEBOOK = '2026-07-12-official';   // bump when the rules themselves change; both repos compare it
 
   /* Heading text is WHITE on every band — Josh's call, made with the cards in his hand.
-     The renderer still honours an `ink` field if one is ever added, so it is a one-line
-     change per colour if that ever changes.
+     The renderer still honours an `ink` field if one is ever added.
 
-     The KEYS below are legacy and do not describe the sets: `gold` is Dark Blue, `sage`
-     is Yellow, `teal` is Green and `green` is Utility. They are opaque ids referenced by
-     saved games, the AI and the deck, so renaming them would be a migration for no gain —
-     but the labels and hexes players actually see are now the real Monopoly Deal sets.
-     Each set's identity is proven by its own signature (size + rent ladder + card value),
-     which is why the mislabelling was invisible for so long: the RULES were always right,
-     only the names and colours were wrong. Utility and Railroad are also the two sets
-     buildable() bans houses on, which independently confirms the mapping. */
+     Ten colour names, none invented: the same words this game has always used, finally
+     sitting on the sets they belong to. Four were swapped — what was called Yellow is the
+     3/8 pair (Blue), what was called Green is the 2/4/6 trio (Yellow), what was called Teal
+     is the 2/4/7 trio (Green), and what was called Blue is the $2 pair (Teal, the set that
+     cannot take houses alongside Black).
+
+     The KEYS are legacy and describe nothing: `gold` is Blue, `sage` is Yellow, `teal` is
+     Green, `green` is Teal. They are opaque ids held by saved games, the AI and the deck,
+     so renaming them would be a migration for no gain. Each set's real identity is proven
+     by its signature — size, rent ladder and card value — which is what the gate checks. */
   const COLORS = {
-    gold:  {label:'Dark Blue',  short:'DK BL', hex:'#0072BB', size:2, rent:[3,8]},
-    teal:  {label:'Green',      short:'GRN',   hex:'#1FB25A', size:3, rent:[2,4,7]},
-    coral: {label:'Red',        short:'RED',   hex:'#ED1B24', size:3, rent:[2,3,6]},
-    green: {label:'Utility',    short:'UTIL',  hex:'#B9CE43', size:2, rent:[1,2]},
-    purple:{label:'Pink',       short:'PINK',  hex:'#D93A96', size:3, rent:[1,2,4]},
-    orange:{label:'Orange',     short:'ORG',   hex:'#F7941D', size:3, rent:[1,3,5]},
-    brown: {label:'Brown',      short:'BRN',   hex:'#955436', size:2, rent:[1,2]},
-    sky:   {label:'Light Blue', short:'LT BL', hex:'#AAE0FA', size:3, rent:[1,2,3]},
-    sage:  {label:'Yellow',     short:'YEL',   hex:'#FEF200', size:3, rent:[2,4,6]},
-    black: {label:'Railroad',   short:'RAIL',  hex:'#2B2B2B', size:4, rent:[1,2,3,4]},
+    gold:  {label:'Blue',   hex:'#0072BB', size:2, rent:[3,8]},
+    teal:  {label:'Green',  hex:'#1FB25A', size:3, rent:[2,4,7]},
+    coral: {label:'Red',    hex:'#ED1B24', size:3, rent:[2,3,6]},
+    green: {label:'Teal',   hex:'#1FA8A0', size:2, rent:[1,2]},
+    purple:{label:'Pink',   hex:'#D93A96', size:3, rent:[1,2,4]},
+    orange:{label:'Orange', hex:'#F7941D', size:3, rent:[1,3,5]},
+    brown: {label:'Brown',  hex:'#955436', size:2, rent:[1,2]},
+    sky:   {label:'Cyan',   hex:'#AAE0FA', size:3, rent:[1,2,3]},
+    sage:  {label:'Yellow', hex:'#FEF200', size:3, rent:[2,4,6]},
+    black: {label:'Black',  hex:'#2B2B2B', size:4, rent:[1,2,3,4]},
   };
   const PROPS = [
     ['gold','',4],['gold','',4],
@@ -65,11 +66,11 @@
   };
   const MONEY = [[1,6],[2,5],[3,3],[4,3],[5,2],[10,1]];
   const DUAL_WILDS = [
-    [['gold','teal'],4,1],      // Dark Blue / Green
-    [['teal','black'],4,1],     // Green / Railroad
-    [['sky','black'],4,1],      // Light Blue / Railroad
-    [['green','black'],2,1],    // Utility / Railroad
-    [['sky','brown'],1,1],      // Light Blue / Brown
+    [['gold','teal'],4,1],      // Blue / Green
+    [['teal','black'],4,1],     // Green / Black
+    [['sky','black'],4,1],      // Cyan / Black
+    [['green','black'],2,1],    // Teal / Black
+    [['sky','brown'],1,1],      // Cyan / Brown
     [['orange','purple'],2,2],  // Pink / Orange
     [['coral','sage'],3,2],     // Red / Yellow
   ];

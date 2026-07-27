@@ -201,17 +201,18 @@ T('the band keeps a shadow so white survives the light sets',
 // exactly why it went unnoticed. This pin checks the NAME against the SIGNATURE, so a
 // mislabelled set can never ship again.
 (function(){
+  // the Monopoly Deal set each signature belongs to, in this game's own colour names
   const OFFICIAL = {
     '2|1,2|1'    : 'Brown',
-    '2|1,2|2'    : 'Utility',
-    '3|1,2,3|1'  : 'Light Blue',
+    '2|1,2|2'    : 'Teal',     // the utilities: $2 pair, no houses
+    '3|1,2,3|1'  : 'Cyan',     // light blue
     '3|1,2,4|2'  : 'Pink',
     '3|1,3,5|2'  : 'Orange',
     '3|2,3,6|3'  : 'Red',
     '3|2,4,6|3'  : 'Yellow',
     '3|2,4,7|4'  : 'Green',
-    '2|3,8|4'    : 'Dark Blue',
-    '4|1,2,3,4|2': 'Railroad',
+    '2|3,8|4'    : 'Blue',     // dark blue
+    '4|1,2,3,4|2': 'Black',    // the stations
   };
   const valueOf = {};
   PROPS.forEach(([k,,v])=>{ valueOf[k]=v; });
@@ -226,10 +227,10 @@ T('the band keeps a shadow so white survives the light sets',
   T('all ten sets are present and distinct',
     new Set(Object.values(COLORS).map(c=>c.label)).size===10);
 })();
-T('the two sets houses are banned on are Railroad and Utility',
+T('houses are banned on exactly the stations and utilities (Black and Teal)',
   !buildable('black') && !buildable('green') && buildable('teal') && buildable('gold'));
-T('every set carries a short name for the colour picker',
-  Object.values(COLORS).every(c=>typeof c.short==='string' && c.short.length>0 && c.short.length<=5));
+T('every set name is a plain colour word, short enough to render whole',
+  Object.values(COLORS).every(c=>/^[A-Z][a-z]+$/.test(c.label) && c.label.length<=6));
 
 // ===== NET protocol =====
 newGame();
