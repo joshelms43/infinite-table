@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.14.3
+  Version: 0.14.4
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -818,7 +818,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.14.3"></script>
+<script src="../shared/mdeal-rules.js?v=0.14.4"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -851,7 +851,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.14.3</span>
+    <span class="ver">v0.14.4</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1705,13 +1705,12 @@ function faceHTML(c, assignedColor){
     if(assignedColor){
       const col=COLORS[assignedColor];
       const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
-      /* Placed, a 50/50 leads with the colour it is actually counting as, keeping a slim
-         edge of its other face so it still reads as a wild. It used to wear a permanent
-         half-and-half band, which meant moving it between its two sets changed the small
-         label and nothing else — the card looked the same in either set. NOT .bandsplit:
-         that class forces the even split with !important. */
+      /* An even 50/50 always — but the colour it is currently counting as takes the LEFT
+         half, so moving it between its two sets visibly swaps the sides. The split stays
+         honest about the card being a wild; the side says which set it is in. NOT
+         .bandsplit: that class fixes the order with !important, so it could never swap. */
       const other = COLORS[c.colors.find(x=>x!==assignedColor)] || col;
-      return `${coin}<div class="band" style="background:linear-gradient(90deg,${col.hex} 0 78%,${other.hex} 78% 100%)">${col.label}</div>
+      return `${coin}<div class="band" style="background:linear-gradient(90deg,${col.hex} 0 50%,${other.hex} 50% 100%)">${col.label}</div>
         <div class="propfield"></div>
         <div class="ladder">${ladder}</div>`;
     }
@@ -2247,17 +2246,23 @@ function buildZones(c){
       const cols = c.t==='wild' ? c.colors : Object.keys(COLORS);
       cols.forEach(col=>{
         const g = group(col);
-        if(g) add(g, ()=>playProp(c, col));
-        else {
-          const ghost = document.createElement('div');
-          ghost.className='setghost';
-          ghost.innerHTML = `<span class="setdot" style="background:${COLORS[col].hex}"></span> ${COLORS[col].label}`;
-          $('#myprops').appendChild(ghost);
-          add(ghost, ()=>playProp(c, col));
-        }
+        if(g){ add(g, ()=>playProp(c, col)); return; }
+        /* An empty set gets a ghost slot to aim at — but ONLY for a 50/50, which may start
+           a set. A rainbow may not, and offering it the slot anyway meant the drag completed,
+           the card flew out of the hand, and only then did the play refuse: the card looked
+           lost. Not offering it is the honest fix. */
+        if(c.t==='wildall') return;
+        const ghost = document.createElement('div');
+        ghost.className='setghost';
+        ghost.innerHTML = `<span class="setdot" style="background:${COLORS[col].hex}"></span> ${COLORS[col].label}`;
+        $('#myprops').appendChild(ghost);
+        add(ghost, ()=>playProp(c, col));
       });
     }
-    hint = free ? 'Tap a set to place the wild' : 'No plays left';
+    const anyTarget = (c.t==='wild' ? c.colors : Object.keys(COLORS)).some(col=>group(col));
+    hint = !free ? 'No plays left'
+         : (c.t==='wildall' && !anyTarget) ? 'A rainbow needs a set already started'
+         : 'Tap a set to place the wild';
   }
   if(c.t==='action'){
     const k=c.kind;
@@ -2703,6 +2708,7 @@ function playProp(c,color,by){
   const p0 = G.players[(by==null?MYSEAT:by)];
   if(c.t==='wildall' && p0 && !((p0.props[color]||[]).length)){   // checked before anything is sent or predicted
     if((by==null?MYSEAT:by)===MYSEAT) banner("RAINBOWS CAN'T START A SET",'var(--warning-amber)');
+    renderAll();   // a drag may already have lifted the card out of the hand: put it back
     return;
   }
   const play = ()=>{
@@ -3299,9 +3305,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.14.3"></script>
-<script src="../shared/tablekit.js?v=0.14.3"></script>
-<script src="../shared/identity.js?v=0.14.3"></script>
+<script src="../shared/config.js?v=0.14.4"></script>
+<script src="../shared/tablekit.js?v=0.14.4"></script>
+<script src="../shared/identity.js?v=0.14.4"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

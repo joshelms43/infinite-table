@@ -187,13 +187,36 @@ T('an unplaced rainbow flows too',
   !/<div class="band"[^>]*background:/.test(faceHTML({t:'wildall',v:0})));
 T('and the flow animation is still in the stylesheet',
   HTML_SRC.includes('animation:rainbowflow') && HTML_SRC.includes('@keyframes rainbowflow'));
-T('a placed 50/50 leads with the colour it counts as',
-  faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'teal').includes('linear-gradient(90deg,'+COLORS.teal.hex)
-  && faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'gold').includes('linear-gradient(90deg,'+COLORS.gold.hex));
-T('so moving it visibly changes the card, not just its label',
+T('a placed 50/50 splits evenly, never weighted',
+  faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'teal').includes(' 0 50%,')
+  && faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'gold').includes(' 0 50%,'));
+T('the set it counts as takes the left half',
+  faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'teal').includes('90deg,'+COLORS.teal.hex)
+  && faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'gold').includes('90deg,'+COLORS.gold.hex));
+T('so moving it swaps the sides visibly',
   faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'teal') !== faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'gold'));
 T('an unplaced 50/50 still shows both halves evenly',
   faceHTML({t:'wild',colors:['gold','teal'],v:4}).includes('bandsplit'));
+
+// A rainbow may never start a set, so it must never be OFFERED an empty one: the drag
+// completed, the card left the hand, and only then was the play refused — it looked lost.
+T('a rainbow is refused an empty set and the card stays put', (function(){
+  newGame(); G.over=false; G.turn=0; G.playsLeft=3; MYSEAT=0; NET.mode='off';
+  const p=me(); clearHoldings(p);
+  const rb = pull(c=>c.t==='wildall');
+  p.hand=[rb];
+  playProp(rb,'teal');
+  return p.hand.some(c=>c.id===rb.id) && !((p.props['teal']||[]).length);
+})());
+T('and the drag zones never offer a rainbow an empty set',
+  /if\(c\.t==='wildall'\) return;/.test(HTML_SRC));
+T('but it joins a set that already exists', (function(){
+  const p=me(); const seed = pull(c=>c.t==='prop' && c.color==='teal');
+  addProp(p, seed, 'teal');
+  const rb = p.hand.find(c=>c.t==='wildall');
+  playProp(rb,'teal');
+  return (p.props['teal']||[]).some(c=>c.id===rb.id) && !p.hand.some(c=>c.id===rb.id);
+})());
 T('a plain property still paints its own colour inline',
   faceHTML({t:'prop',color:'teal',v:4}).includes('background:'+COLORS.teal.hex));
 T('split wild bands stay white', !faceHTML({t:'wild',colors:['gold','sky'],v:0}).includes('color:#'));

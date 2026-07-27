@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.14.4 — 2026-07-27
+The 50/50 band back to an even split, and rainbows can no longer be dropped where they cannot go.
+
+**Even split, swapping sides.** The weighted 78/22 band from v0.14.3 is gone; a placed 50/50 shows both colours evenly again, as it always did. What is new is that the set it currently counts as takes the LEFT half, so moving it between its two sets visibly swaps the sides — the split stays honest about the card being a wild, and the side says which set it is in. Deliberately not the .bandsplit class, which fixes the order with !important and so could never swap.
+
+**The disappearing rainbow.** Dragging a rainbow onto an empty set made the card vanish from the hand, and it was a genuine bug with a clear anatomy: the drag zone builder offered a rainbow every colour in the game, inventing a ghost slot for sets you have not started. Dropping there completed the drag — the card flew out of the hand and the hand re-rendered without it — and only then did playProp refuse, because a rainbow may not start a set. Nothing put the card back, so it read as gone. It was never actually lost from the data, but that is no comfort mid-game.
+
+Fixed as Josh suggested, by not offering the move at all: ghost slots are now built only for 50/50s, which may legitimately start a set. The hint says so too, reading "a rainbow needs a set already started" when there is nowhere for it to go. As a second layer, the refusal itself now re-renders, so no refused play of any kind can leave a card hidden mid-drag again.
+
+Pins: the split is even and the live colour takes the left; a rainbow offered an empty set keeps the card in hand and joins a started set normally; and the zone rule is asserted at the source, since the builder is DOM-only and the engine suite cannot reach it.
+
 ## v0.14.3 — 2026-07-27
 A placed 50/50 now leads with the colour it is actually counting as.
 
