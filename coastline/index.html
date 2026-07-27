@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.8
+  Version: 0.11.9
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -815,7 +815,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.8"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.9"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -848,7 +848,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.8</span>
+    <span class="ver">v0.11.9</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1695,7 +1695,7 @@ function faceHTML(c, assignedColor){
   if(c.t==='prop'){
     const col=COLORS[c.color];
     const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
-    return `${coin}<div class="band" style="background:${col.hex};${col.ink?`color:${col.ink};text-shadow:none;`:''}">${col.label}</div>
+    return `${coin}<div class="band" style="background:${col.hex};${inkFor(c.color)}">${col.label}</div>
       <div class="propfield"></div>
       <div class="ladder">${ladder}</div>`;
   }
@@ -1704,11 +1704,11 @@ function faceHTML(c, assignedColor){
     if(assignedColor){
       const col=COLORS[assignedColor];
       const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
-      return `${coin}<div class="band bandsplit">${col.label}</div>
+      return `${coin}<div class="band bandsplit" style="${inkForSplit(c.colors[0],c.colors[1])}">${col.label}</div>
         <div class="propfield"></div>
         <div class="ladder">${ladder}</div>`;
     }
-    return `${coin}<div class="band bandsplit">Wild</div>
+    return `${coin}<div class="band bandsplit" style="${inkForSplit(c.colors[0],c.colors[1])}">Wild</div>
       <div class="body">
         <div class="wopt"><span class="wswatch" style="background:${a.hex}"></span>${a.label}</div>
         <div class="wopt"><span class="wswatch" style="background:${b.hex}"></span>${b.label}</div>
@@ -1718,7 +1718,7 @@ function faceHTML(c, assignedColor){
     if(assignedColor){
       const col=COLORS[assignedColor];
       const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
-      return `${coin}<div class="band">${col.label}</div>
+      return `${coin}<div class="band" style="background:${col.hex};${inkFor(assignedColor)}">${col.label}</div>
         <div class="propfield"></div>
         <div class="ladder">${ladder}</div>`;
     }
@@ -1750,6 +1750,12 @@ function cardClasses(c){
   if(c.t==='wildall') return 'card wildall';
   return 'card';
 }
+/* headings: white by default, near-black where white fails contrast (see COLORS.ink).
+   One chokepoint — the prop band used to be the only site that honoured ink, so wild and
+   rainbow bands rendered white-on-yellow and white-on-cyan. Split bands take ink only when
+   BOTH halves want it, since black over a dark half is just as unreadable as white over a light one. */
+function inkFor(colorKey){ const c=COLORS[colorKey]; return (c && c.ink) ? `color:${c.ink};text-shadow:none;` : ''; }
+function inkForSplit(k1,k2){ const a=COLORS[k1], b=COLORS[k2]; return (a&&a.ink&&b&&b.ink) ? `color:${a.ink};text-shadow:none;` : ''; }
 function cardVars(c){
   if(c.t==='wild'||c.t==='rent'){ const a=COLORS[c.colors[0]],b=COLORS[c.colors[1]]; return `--b1:${a.hex};--b2:${b.hex};`; }
   if(c.t==='rentall') return '--b1:#E8B93B;--b2:#8E5EA8;';
@@ -2245,7 +2251,7 @@ function buildZones(c){
   }
   if(c.t==='action'){
     const k=c.kind;
-    if(k!=='nodeal') add($('#mybank'), ()=>{ sfx('coin'); bankCard(c); });
+    if(canBank(c)) add($('#mybank'), ()=>{ sfx('coin'); bankCard(c); });
     // property area becomes the action play zone for non-building actions
     const canPlayHere =
       (k==='payday' || k==='shout' || k==='favour' || k==='buzzy') ||   // BUZZY
@@ -2694,7 +2700,7 @@ function openOptions(c){
     }
     if(k==='hike') opts.push({label:'Rent Hike',hint:'plays together with a Rent card',fn:null,disabled:true});
     if(k==='nodeal') opts.push({label:'No Deal! is reactive',hint:"it's offered when you're attacked",fn:null,disabled:true});
-    if(k!=='nodeal') opts.push({label:'Bank it',hint:'$'+c.v+'M',fn:()=>{sfx('coin');bankCard(c);},disabled:noPlays});
+    if(canBank(c)) opts.push({label:'Bank it',hint:'$'+c.v+'M',fn:()=>{sfx('coin');bankCard(c);},disabled:noPlays});
   }
   if(c.t==='rent'){
     c.colors.forEach(col=>{
@@ -2715,6 +2721,11 @@ function openOptions(c){
 }
 function runOpt(i){ const o=window._opts[i]; if(o&&o.fn){ o.fn(); } }
 function removeHand(c){ const p=me(); const i=p.hand.findIndex(x=>x.id===c.id); if(i>-1)p.hand.splice(i,1); }
+/* Every card with a value may be banked as money — action cards included. No Deal was
+   barred from the bank in both the drag zone and the options sheet, which is not the
+   official rule: banking one is a real choice (it is $4M, and it stops being a shield
+   the moment it leaves your hand). One predicate now, so the two entry points cannot drift. */
+function canBank(c){ return !!c && typeof c.v==='number' && c.v>0; }
 function bankCard(c, by){
   if(NET.intercept('bank',{id:c.id})) return;
   const b=(by==null?MYSEAT:by); removeHandOf(G.players[b], c); G.players[b].bank.push(c); log(nameOf(b)+' banked $'+c.v+'M.'); announcePlay(b,c); usePlay(); if(b===MYSEAT) zonePop('#mybank'); closeSheet(); }
@@ -2847,7 +2858,7 @@ function reassignWild(id){
   pickColor(choices, col=>{ moveWildTo(id, col); closeSheet(); }, 'Move wild card (free)');
 }
 function pickColor(colors, cb, title){
-  openSheet(`<h3>${title||'Pick a colour'}</h3><div class="colorpickrow">${colors.map(col=>`<button class="colorpick" style="background:${COLORS[col].hex}" onclick="window._colcb('${col}')">${COLORS[col].label.slice(0,4)}</button>`).join('')}</div>
+  openSheet(`<h3>${title||'Pick a colour'}</h3><div class="colorpickrow">${colors.map(col=>`<button class="colorpick" style="background:${COLORS[col].hex};${inkFor(col)}" onclick="window._colcb('${col}')">${COLORS[col].label.slice(0,4)}</button>`).join('')}</div>
     <div style="height:10px"></div><button class="optbtn" onclick="closeSheet()">Cancel</button>`);
   window._colcb = cb;
 }
@@ -3306,9 +3317,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.8"></script>
-<script src="../shared/tablekit.js?v=0.11.8"></script>
-<script src="../shared/identity.js?v=0.11.8"></script>
+<script src="../shared/config.js?v=0.11.9"></script>
+<script src="../shared/tablekit.js?v=0.11.9"></script>
+<script src="../shared/identity.js?v=0.11.9"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

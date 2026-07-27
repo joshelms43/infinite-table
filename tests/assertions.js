@@ -172,6 +172,42 @@ T('shared evaluator scores any player (bank + play candidates)',
   cands.some(x=>x.mode==='bank'&&x.cardId===96001) && cands.some(x=>x.mode==='play'&&x.cardId===96002) && cands.every(x=>x.ev>0));
 
 
+// ===== banking: every valued card, action cards included (Josh: 'cant play no deals into the bank') =====
+newGame(); G.over=false; G.turn=0; G.playsLeft=3; MYSEAT=0; NET.mode='off';
+const ndB = pull(c=>c.t==='action' && c.kind==='nodeal');
+clearHoldings(me()); me().hand=[ndB];
+T('No Deal is bankable — it is a $4M action card like any other', canBank(ndB) && ndB.v===4);
+const bankBefore = me().bank.length;
+bankCard(ndB);
+T('and banking one actually moves it', me().bank.length===bankBefore+1 && me().bank.some(c=>c.id===ndB.id) && !me().hand.some(c=>c.id===ndB.id));
+T('a banked No Deal no longer shields you', !hasNoDeal(me()));
+T('property cards still cannot be banked', !canBank({t:'prop',color:'teal'}));
+T('conservation holds across banking', allCards()===106);
+
+// ===== heading contrast: white unless white fails WCAG AA, then near-black =====
+(function(){
+  const lin = v => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); };
+  const lum = h => { const r=parseInt(h.slice(1,3),16), g=parseInt(h.slice(3,5),16), b=parseInt(h.slice(5,7),16);
+    return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b); };
+  const ratio = (a,b) => { const hi=Math.max(a,b)+0.05, lo=Math.min(a,b)+0.05; return hi/lo; };
+  const wrong = [];
+  Object.entries(COLORS).forEach(([k,c])=>{
+    const whiteContrast = ratio(lum(c.hex), 1);
+    const needsInk = whiteContrast < 4.5;          // white is unreadable here
+    if(needsInk !== !!c.ink) wrong.push(k+' (white '+whiteContrast.toFixed(2)+':1, ink '+(c.ink?'set':'unset')+')');
+  });
+  T('every band sets ink exactly where white fails AA'+(wrong.length?' — wrong: '+wrong.join(', '):''), wrong.length===0);
+})();
+T('the yellow band renders in ink, not white', faceHTML({t:'prop',color:'gold',v:4}).includes(COLORS.gold.ink));
+T('the teal band renders in ink, not white', faceHTML({t:'prop',color:'teal',v:4}).includes(COLORS.teal.ink));
+T('the cyan band renders in ink, not white', faceHTML({t:'prop',color:'sky',v:1}).includes(COLORS.sky.ink));
+T('a dark band keeps its white heading', !faceHTML({t:'prop',color:'green',v:2}).includes('color:#'));
+T('a rainbow assigned to yellow inks its heading too',
+  faceHTML({t:'wildall',v:0}, 'gold').includes(COLORS.gold.ink));
+T('a split wild inks only when both halves want it',
+  faceHTML({t:'wild',colors:['gold','sky'],v:0}).includes(COLORS.gold.ink)
+  && !faceHTML({t:'wild',colors:['gold','green'],v:0}).includes('color:#'));
+
 // ===== NET protocol =====
 newGame();
 G.players[1].bank=[{id:97001,t:'money',v:5}];

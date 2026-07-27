@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.11.9 — 2026-07-27
+Two from the felt.
+
+**No Deal can be banked.** It was barred from the bank in both entry points — the drag zone and the options sheet — which is not the official rule: every valued card may be played into your bank as money, action cards included, and No Deal is $4M. Banking one is a genuine choice, since it stops shielding you the moment it leaves your hand. The rule now lives in a single predicate, canBank(), so the two entry points cannot drift apart again. Pins cover the choice and its cost: it banks, it moves, and afterwards hasNoDeal() is false.
+
+**Headings are legible again.** The palette already marked Yellow and Cyan for near-black ink, but only the property band ever honoured it — wild, rainbow and colour-picker headings rendered white regardless, which is why light bands looked wrong. Ink now flows through one chokepoint applied at every heading site. Josh's hunch about teal was right, and measuring found three more: white text fails WCAG AA (4.5:1) on Yellow 1.67, Cyan 2.04, Orange 2.51, Teal 2.93, Pink 3.57 and Green(sage) 3.93, so all six take ink; Red 4.86, Brown 5.83, Blue 6.37 and Black 13.49 keep white. Split wild bands take ink only when BOTH halves want it — black over a dark half is as unreadable as white over a light one.
+
+The contrast pin recomputes luminance from the hex rather than hard-coding a list, so a future palette change that hurts legibility fails the gate and says which colour and at what ratio. Both fixes mutation-proven.
+
 ## v0.11.8 — 2026-07-27
 Hardening the auth path for a table nobody can rehearse.
 

@@ -14,16 +14,21 @@
 
   var RULEBOOK = '2026-07-12-official';   // bump when the rules themselves change; both repos compare it
 
+  /* ink: heading text is white by default. Where white fails WCAG AA (4.5:1) against the
+     band, the label is set in near-black instead — measured, not eyeballed. White-vs-black
+     contrast per colour: gold 1.67/12.57, sky 2.04/10.30, orange 2.51/8.37, teal 2.93/7.17,
+     purple 3.57/5.89, sage 3.93/5.34 -> ink. coral 4.86, brown 5.83, green 6.37, black 13.49
+     -> white stands. */
   const COLORS = {
     gold:  {label:'Yellow', hex:'#E8C63B', ink:'#24241D', size:2, rent:[3,8]},
-    teal:  {label:'Teal',   hex:'#1FA8A0', size:3, rent:[2,4,7]},
+    teal:  {label:'Teal',   hex:'#1FA8A0', ink:'#24241D', size:3, rent:[2,4,7]},
     coral: {label:'Red',    hex:'#C8433A', size:3, rent:[2,3,6]},
     green: {label:'Blue',   hex:'#2E5EAA', size:2, rent:[1,2]},
-    purple:{label:'Pink',   hex:'#DE559C', size:3, rent:[1,2,4]},
-    orange:{label:'Orange', hex:'#F08A24', size:3, rent:[1,3,5]},
+    purple:{label:'Pink',   hex:'#DE559C', ink:'#24241D', size:3, rent:[1,2,4]},
+    orange:{label:'Orange', hex:'#F08A24', ink:'#24241D', size:3, rent:[1,3,5]},
     brown: {label:'Brown',  hex:'#8A5A38', size:2, rent:[1,2]},
     sky:   {label:'Cyan',   hex:'#4FC3E8', ink:'#24241D', size:3, rent:[1,2,3]},
-    sage:  {label:'Green',  hex:'#3F9142', size:3, rent:[2,4,6]},
+    sage:  {label:'Green',  hex:'#3F9142', ink:'#24241D', size:3, rent:[2,4,6]},
     black: {label:'Black',  hex:'#2B2F33', size:4, rent:[1,2,3,4]},
   };
   const PROPS = [
