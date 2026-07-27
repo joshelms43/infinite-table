@@ -1,5 +1,24 @@
 # Coastline — Changelog
 
+## v0.12.0 — 2026-07-27
+The sets are the real Monopoly Deal sets now — by name and by colour.
+
+Josh: "the set colours arent correct to real monopoly deal colours." Right, and worse than it looked: four sets were wearing the wrong name entirely. Each set has a unique official signature — how many cards it takes, its rent ladder, and what a card is worth — and reading those told the true story:
+
+- what the game called **Yellow** is actually **Dark Blue** (2 cards, 3/8, $4)
+- what it called **Green** is actually **Yellow** (3 cards, 2/4/6, $3)
+- what it called **Teal** is actually **Green** (3 cards, 2/4/7, $4)
+- what it called **Blue** is actually **Utility** (2 cards, 1/2, $2)
+- **Cyan** and **Black** were merely non-standard names for **Light Blue** and **Railroad**
+
+The rules were right the whole time — sizes, ladders and values all matched official Monopoly Deal exactly, which is precisely why this hid for so long. Only the names and hexes were wrong, and the mapping is independently confirmed by buildable(), which bans houses on exactly the two sets that turn out to be Railroad and Utility.
+
+All ten now carry their real names and the standard Monopoly colours. The internal keys (gold, sage, teal, green) stay as they are: they are opaque ids held by saved games, the AI and the deck, so renaming them would be a migration for no gain — the comment in the rulebook now says plainly which set each one really is. The colour picker gained short names, since "Light Blue" does not survive being cut to four characters.
+
+Headings stay white, as instructed. True Monopoly Yellow and Light Blue are much paler than the old palette, so the band's drop shadow was deepened to carry white text over them — text colour untouched, and trivially revertible if the heavier shadow reads wrong.
+
+The pin checks each label against its official signature and names the offender when it fails ("sage is labelled Green but its signature is Yellow"). Mutation-proven. A mislabelled set cannot ship again.
+
 ## v0.11.10 — 2026-07-27
 White headings, everywhere. Josh looked at the inked version and overruled it.
 

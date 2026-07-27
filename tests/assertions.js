@@ -192,8 +192,44 @@ T('the cyan band heading stays white', !faceHTML({t:'prop',color:'sky',v:1}).inc
 T('the teal band heading stays white', !faceHTML({t:'prop',color:'teal',v:4}).includes('color:#'));
 T('a rainbow assigned to yellow stays white too', !faceHTML({t:'wildall',v:0}, 'gold').includes('color:#'));
 T('split wild bands stay white', !faceHTML({t:'wild',colors:['gold','sky'],v:0}).includes('color:#'));
-T('the shadow that keeps white readable is still on the band',
-  HTML_SRC.includes('text-shadow:0 1px 2px rgba(0,0,0,.4)'));
+T('the band keeps a shadow so white survives the light sets',
+  /\.card \.band\{[^}]*text-shadow:[^;]*rgba\(0,0,0,\.(5[0-9]|[6-9][0-9])\)/.test(HTML_SRC));
+
+// ===== the sets are the real Monopoly Deal sets, by name and by colour =====
+// Every set has a unique official signature: how many cards, the rent ladder, and what a
+// card is worth. The rules here were always right — only the labels were wrong, which is
+// exactly why it went unnoticed. This pin checks the NAME against the SIGNATURE, so a
+// mislabelled set can never ship again.
+(function(){
+  const OFFICIAL = {
+    '2|1,2|1'    : 'Brown',
+    '2|1,2|2'    : 'Utility',
+    '3|1,2,3|1'  : 'Light Blue',
+    '3|1,2,4|2'  : 'Pink',
+    '3|1,3,5|2'  : 'Orange',
+    '3|2,3,6|3'  : 'Red',
+    '3|2,4,6|3'  : 'Yellow',
+    '3|2,4,7|4'  : 'Green',
+    '2|3,8|4'    : 'Dark Blue',
+    '4|1,2,3,4|2': 'Railroad',
+  };
+  const valueOf = {};
+  PROPS.forEach(([k,,v])=>{ valueOf[k]=v; });
+  const wrong = [];
+  Object.entries(COLORS).forEach(([k,c])=>{
+    const sig = c.size+'|'+c.rent.join(',')+'|'+valueOf[k];
+    const should = OFFICIAL[sig];
+    if(!should) wrong.push(k+' has no official counterpart ('+sig+')');
+    else if(c.label !== should) wrong.push(k+' is labelled '+c.label+' but its signature is '+should);
+  });
+  T('every set is named after the Monopoly Deal set it actually is'+(wrong.length?' — '+wrong.join('; '):''), wrong.length===0);
+  T('all ten sets are present and distinct',
+    new Set(Object.values(COLORS).map(c=>c.label)).size===10);
+})();
+T('the two sets houses are banned on are Railroad and Utility',
+  !buildable('black') && !buildable('green') && buildable('teal') && buildable('gold'));
+T('every set carries a short name for the colour picker',
+  Object.values(COLORS).every(c=>typeof c.short==='string' && c.short.length>0 && c.short.length<=5));
 
 // ===== NET protocol =====
 newGame();

@@ -15,20 +15,28 @@
   var RULEBOOK = '2026-07-12-official';   // bump when the rules themselves change; both repos compare it
 
   /* Heading text is WHITE on every band — Josh's call, made with the cards in his hand.
-     An earlier pass set near-black on the light colours by measured contrast; he looked at
-     it and said white throughout, so white it is. The renderer still honours an `ink` field
-     if one is ever added, so this is a one-line change per colour if he changes his mind. */
+     The renderer still honours an `ink` field if one is ever added, so it is a one-line
+     change per colour if that ever changes.
+
+     The KEYS below are legacy and do not describe the sets: `gold` is Dark Blue, `sage`
+     is Yellow, `teal` is Green and `green` is Utility. They are opaque ids referenced by
+     saved games, the AI and the deck, so renaming them would be a migration for no gain —
+     but the labels and hexes players actually see are now the real Monopoly Deal sets.
+     Each set's identity is proven by its own signature (size + rent ladder + card value),
+     which is why the mislabelling was invisible for so long: the RULES were always right,
+     only the names and colours were wrong. Utility and Railroad are also the two sets
+     buildable() bans houses on, which independently confirms the mapping. */
   const COLORS = {
-    gold:  {label:'Yellow', hex:'#E8C63B', size:2, rent:[3,8]},
-    teal:  {label:'Teal',   hex:'#1FA8A0', size:3, rent:[2,4,7]},
-    coral: {label:'Red',    hex:'#C8433A', size:3, rent:[2,3,6]},
-    green: {label:'Blue',   hex:'#2E5EAA', size:2, rent:[1,2]},
-    purple:{label:'Pink',   hex:'#DE559C', size:3, rent:[1,2,4]},
-    orange:{label:'Orange', hex:'#F08A24', size:3, rent:[1,3,5]},
-    brown: {label:'Brown',  hex:'#8A5A38', size:2, rent:[1,2]},
-    sky:   {label:'Cyan',   hex:'#4FC3E8', size:3, rent:[1,2,3]},
-    sage:  {label:'Green',  hex:'#3F9142', size:3, rent:[2,4,6]},
-    black: {label:'Black',  hex:'#2B2F33', size:4, rent:[1,2,3,4]},
+    gold:  {label:'Dark Blue',  short:'DK BL', hex:'#0072BB', size:2, rent:[3,8]},
+    teal:  {label:'Green',      short:'GRN',   hex:'#1FB25A', size:3, rent:[2,4,7]},
+    coral: {label:'Red',        short:'RED',   hex:'#ED1B24', size:3, rent:[2,3,6]},
+    green: {label:'Utility',    short:'UTIL',  hex:'#B9CE43', size:2, rent:[1,2]},
+    purple:{label:'Pink',       short:'PINK',  hex:'#D93A96', size:3, rent:[1,2,4]},
+    orange:{label:'Orange',     short:'ORG',   hex:'#F7941D', size:3, rent:[1,3,5]},
+    brown: {label:'Brown',      short:'BRN',   hex:'#955436', size:2, rent:[1,2]},
+    sky:   {label:'Light Blue', short:'LT BL', hex:'#AAE0FA', size:3, rent:[1,2,3]},
+    sage:  {label:'Yellow',     short:'YEL',   hex:'#FEF200', size:3, rent:[2,4,6]},
+    black: {label:'Railroad',   short:'RAIL',  hex:'#2B2B2B', size:4, rent:[1,2,3,4]},
   };
   const PROPS = [
     ['gold','',4],['gold','',4],
