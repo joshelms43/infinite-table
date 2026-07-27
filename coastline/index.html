@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.13.1
+  Version: 0.14.0
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -397,12 +397,10 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .snapped{animation:snapin .28s cubic-bezier(.2,1.4,.4,1)}
 @keyframes snapin{35%{transform:scale(1.06)}}
 .tcard.twild{touch-action:none}
-/* the grab marker lives INSIDE the wild's exposed strip — the card never moves, so stacks sit flat */
-.tcard.twild::before{
-  content:'';position:absolute;right:0;top:0;width:11px;height:26px;
-  border-radius:0 6px 0 6px;background:var(--money-gold);
-  box-shadow:-1px 1px 4px rgba(8,12,10,.3);z-index:3;
-}
+/* No grab marker. It was a gold tab in the wild's top-right corner announcing "you can drag
+   this", and because a wild is only draggable on your own turn it appeared out of nowhere as
+   the turn began — which read as a glitch rather than an affordance. Wilds still drag, and the
+   options sheet still offers the move in words. */
 .wildfly{
   position:fixed;z-index:90;width:68px;pointer-events:none;
   transform:rotate(-4deg) scale(1.06);
@@ -819,7 +817,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.13.1"></script>
+<script src="../shared/mdeal-rules.js?v=0.14.0"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -852,7 +850,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.13.1</span>
+    <span class="ver">v0.14.0</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -883,7 +881,6 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
   <div id="handbar">
     <div id="playsleft"></div>
     <button id="endturn">End turn</button>
-    <button id="buzzybtn" style="display:none">Put Buzzy In</button>
   </div>
   <div id="hand"></div>
 </div>
@@ -976,9 +973,9 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <script>
 /* ================= ENGINE ================= */
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-/* esc: any player-authored text (names, Buzzy's free-text) must be inert before it
-   touches innerHTML. Names render via innerHTML in the log drawer, the showcase, and
-   opponent chrome; Buzzy prints its own name and saying on the card face. Unescaped,
+/* esc: any player-authored text — display names above all — must be inert before it
+   touches innerHTML. Names render that way in the log drawer, the showcase and opponent
+   chrome, and a remote seat's name arrives over presence entirely untrusted. Unescaped,
    a name like <img onerror> is script. This is the one chokepoint. (ChatGPT review #3) */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function cardName(c){
@@ -1538,7 +1535,6 @@ function renderAll(){
   renderHand(p);
   $('#playsleft').innerHTML = 'Plays ' + [0,1,2].map(i=>`<span class="playdot ${isMyTurn()&&i<G.playsLeft?'on':''}"></span>`).join('');
   $('#endturn').disabled = !isMyTurn() || !!MODE.type || (typeof netBusy==='function' && netBusy());
-  if(typeof updateBuzzyBtn==='function') updateBuzzyBtn();                                       // BUZZY
   if($('#endturn').classList) $('#endturn').classList.toggle('pulse', isMyTurn() && G.playsLeft===0 && !MODE.type);
   const nowC = new Set(completeColors(p));
   nowC.forEach(col=>{
@@ -2261,7 +2257,7 @@ function buildZones(c){
     if(canBank(c)) add($('#mybank'), ()=>{ sfx('coin'); bankCard(c); });
     // property area becomes the action play zone for non-building actions
     const canPlayHere =
-      (k==='payday' || k==='shout' || k==='favour' || k==='buzzy') ||   // BUZZY
+      (k==='payday' || k==='shout' || k==='favour') ||
       (k==='swipe' && othersOf(MYSEAT).some(t=>stealTargetsOf(t).length)) ||
       (k==='takeover' && othersOf(MYSEAT).some(t=>completeColors(G.players[t]).length)) ||
       (k==='swap' && propList(me()).some(x=>!isComplete(me(),x.color)) && othersOf(MYSEAT).some(t=>stealTargetsOf(t).length));
@@ -2270,7 +2266,7 @@ function buildZones(c){
       if(props && props.appendChild){
         const az = document.createElement('div');
         az.className = 'actionzone';
-        const subs = { payday:'Draw 2 cards', shout:'Everyone pays you $2M', favour:'Then tap who pays $5M', swipe:'Then tap whose table to raid', takeover:'Then tap whose set to take', swap:'Then tap who to trade with' };   // BUZZY
+        const subs = { payday:'Draw 2 cards', shout:'Everyone pays you $2M', favour:'Then tap who pays $5M', swipe:'Then tap whose table to raid', takeover:'Then tap whose set to take', swap:'Then tap who to trade with' };
         az.innerHTML = `<span class="azname">${(ACTIONS[k]||c).n}</span><span class="azsub">${subs[k]||''}</span>`;
         if(props.classList) props.classList.add('actionmode');
         props.appendChild(az);
@@ -2355,7 +2351,6 @@ function cancelDrag(silent){
   DRAG.pend=null;
 }
 function playActionVia(c,k){
-  if(k==='buzzy') return playBuzzy(c);                                                             // BUZZY
   if(k==='payday') return playPayday(c);
   if(k==='shout') return doShout(c);
   if(k==='favour') return startOppSelect('Tap the player who pays you $5M', i=>true, t=>doFavour(c,t));
@@ -2375,43 +2370,6 @@ function playPayday(c,by){
   usePlay(); closeSheet();
 }
 
-/* ===== BUZZY (temporary joke feature) ==========================================
-   If your name is Josh, a button offers to shuffle one "Put Buzzy In" card into the
-   live deck. Whoever draws it can play it for a moment of glory. Engine-safe: it is
-   a normal action object (v $1M, bankable), it travels the wire and the resurrection
-   blob as a whole object like every card, the champion brain simply never proposes a
-   kind it does not know, and no test counts cards in a game where the button was
-   pressed. Remove the whole gag by deleting every line that mentions BUZZY. */
-function isJoshName(){ try{ return /^josh$/i.test((localStorage.getItem('it_name')||'').trim()); }catch(e){ return false; } }
-function makeBuzzyCard(name, say){                                                                 // BUZZY
-  G._buzzyN = (G._buzzyN||0)+1;                                                                    // BUZZY: unique ids off the catalog, 9001 upward
-  return { t:'action', kind:'buzzy', n:(name||'Buzzy'), d:(say||'BUZZY IS IN!'), v:1, id:9000+G._buzzyN };   // BUZZY
-}   // BUZZY
-function addBuzzy(by, name, say){                                                                  // BUZZY
-  if(G.over) return;                                                                               // BUZZY: no cap — his table, his bench
-  const clean = t => String(t||'').replace(/[\u0000-\u001f]/g,'').trim();                          // BUZZY
-  name = clean(name).slice(0,24); say = clean(say).slice(0,60);                                    // BUZZY
-  const card = makeBuzzyCard(name, say);                                                           // BUZZY
-  G.players[by].hand.push(card);                                                                   // BUZZY: straight to the caller's hand
-  log(nameOf(by)+' put '+card.n+' in.');                                                           // BUZZY: the name is announced; the hand stays private
-  sfx('tick'); haptic(8);                                                                          // BUZZY
-  if(NET.mode==='host') NET.pushState();                                                           // BUZZY
-  renderAll();                                                                                     // BUZZY
-}                                                                                                  // BUZZY
-function playBuzzy(c, by){                                                                         // BUZZY
-  if(NET.intercept('buzzy',{id:c.id})) return;                                                     // BUZZY
-  const b=(by==null?MYSEAT:by), p=G.players[b];                                                    // BUZZY
-  removeHandOf(p,c); G.discard.push(c);                                                            // BUZZY
-  tableDrop(c, nameOf(b));                                                                         // BUZZY
-  NET.evt(b,c);                                                                                    // BUZZY
-  banner(c.d || 'BUZZY IS IN!', 'var(--gold-money)');                                             // BUZZY: the banner says what Josh told it to say
-  sfx('coin'); haptic(14); log(nameOf(b)+' put Buzzy in. The crowd goes wild.');                   // BUZZY
-  usePlay(); closeSheet();                                                                         // BUZZY
-}                                                                                                  // BUZZY
-function updateBuzzyBtn(){                                                                         // BUZZY
-  const b=$('#buzzybtn'); if(!b||!b.style) return;                                                 // BUZZY
-  b.style.display = (isJoshName() && G && !G.over) ? '' : 'none';                                 // BUZZY: the bench never empties
-}                                                                                                  // BUZZY
 /* ----- turn flow ----- */
 function startTurn(){
   if(G.over) return;
@@ -2611,10 +2569,6 @@ function reopenWin(){
   $('#winscreen').classList.add('show');
 }
 $('#endturn').onclick = ()=>{ if(isMyTurn() && !DRAG.active){ haptic(6); sfx('tick'); endTurn(); } };
-$('#buzzybtn').onclick = ()=>{ if(!isJoshName() || !G || G.over) return;                          // BUZZY
-  const name=(prompt('Name the card','Buzzy')||'').trim(); if(!name) return;                       // BUZZY: he picks the name
-  const say=(prompt('What does '+name+' say?','BUZZY IS IN!')||'').trim(); if(!say) return;        // BUZZY: and the words
-  if(NET.intercept('buzzy_add',{name:name,say:say})) return; addBuzzy(MYSEAT, name, say); };   // BUZZY
 function endTurn(){
   if(typeof netBusy==='function' && netBusy()){ showPrompt('Waiting for a payment to resolve…', false); return; }
   if(NET.intercept('endturn',{})) return;
@@ -3055,7 +3009,7 @@ function jsnChain(aIdx, bIdx, count, desc, cb, viaPay){
 function resolveBlock(defIdx, atkIdx, desc, cb, viaPay){
   jsnChain(defIdx, atkIdx, 0, desc, cb, viaPay);
 }
-const REACT_MS = 2600;
+const REACT_MS = 7000;   // long enough to notice an attack, read it, and find the card — 2.6s was a reflex test
 let AI_REACT_MS = 1000;   // the AI's uniform thinking beat on steals; zeroed by tests for sync runs
 function kindForDesc(desc){
   return { 'Sneaky Swipe':'swipe', 'Hostile Takeover':'takeover', 'Swap Meet':'swap' }[desc] || 'nodeal';
@@ -3337,9 +3291,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.13.1"></script>
-<script src="../shared/tablekit.js?v=0.13.1"></script>
-<script src="../shared/identity.js?v=0.13.1"></script>
+<script src="../shared/config.js?v=0.14.0"></script>
+<script src="../shared/tablekit.js?v=0.14.0"></script>
+<script src="../shared/identity.js?v=0.14.0"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3517,7 +3471,6 @@ const NET = {
       if(cb){ delete this.pendingAsks[seat]; delete this.pendingAskInfo[seat]; delete this.pendingAskAt[seat]; cb(a); }
       return;
     }
-    if(k==='buzzy_add'){ if(!G.over) addBuzzy(seat, a && a.name, a && a.say); return; }   // BUZZY: a meta action — legal off-turn; name and words travel
     if(G.over || G.turn!==seat){ this.tx.send('nack', { seat }); return; }   // stale / out-of-turn: bounce it back
     if(Object.keys(this.pendingAsks).length){ this.tx.send('nack', { seat }); return; } // interrupt resolving: bounce
     const p = G.players[seat];
@@ -3531,7 +3484,6 @@ const NET = {
       else if(k==='bank') bankCard(c, seat);
       else if(k==='prop') playProp(c, a.color, seat);
       else if(k==='bldg') placeBldg(c, a.color, a.slot, seat);
-      else if(k==='buzzy') playBuzzy(c, seat);                                                  // BUZZY
       else if(k==='payday') playPayday(c, seat);
       else if(k==='shout') doShout(c, seat);
       else if(k==='favour') doFavour(c, a.t, seat);

@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.14.0 — 2026-07-27
+Three from the table.
+
+**The orange box was an affordance nobody asked for.** A gold tab sat in the top-right corner of wilds on your table, marking them as draggable between sets. Because a wild is only draggable on your own turn, it appeared from nowhere the moment the turn began — which reads as a rendering glitch, not an invitation, and explains why it looked like it only happened to dual wilds and rainbows: those are the only cards it was ever drawn on. Gone. Wilds still drag exactly as before, and the options sheet still offers the move in plain words.
+
+**The No Deal window was a reflex test.** 2.6 seconds to notice you were being attacked, read what it was, find the card and play it. Now 7 seconds. The ask watchdog trails it as always and still lands well inside the fifteen-second ceiling, so nothing downstream shifts.
+
+**Buzzy is gone.** The gag shipped with its own removal instructions — every line tagged so the whole thing could be deleted in one sweep — and that promise held: forty-five tagged lines, plus the button, the name gate and the comment block, lifted out cleanly. Two lines needed editing rather than deleting, since they carried payday, shout and favour alongside the tag; the strip asserts afterwards that the word appears nowhere in the file, in any case. The pins went with it.
+
+One thing checked rather than assumed: a Buzzy card sitting in somebody's hand inside a saved game or a resurrection blob still renders — by its own name, worth its own value, bankable — because unknown action kinds were always made to degrade gracefully rather than crash. The joke leaves without taking a live table with it.
+
+The strip did not go quite as cleanly as advertised, and the gate said so: the XSS test used the gag as one of its two hostile-input vectors, and that file carries no BUZZY tag, so the sweep missed it and the push was blocked twice before anything shipped. A tag convention only sweeps the files that carry the tag — worth remembering the next time something is built to be removable. The test now leans entirely on the vector that cannot be removed anyway: a display name, chosen by a person, arriving from a remote seat over presence, landing in innerHTML in half a dozen places.
+
 ## v0.13.1 — 2026-07-27
 Placed rainbow wilds flow again. My regression, from the colour pass.
 

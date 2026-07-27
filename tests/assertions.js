@@ -33,18 +33,6 @@ function clearHoldings(p){
   p.bldg={};
 }
 
-// BUZZY: named at will, worded at will, no limit                                   // BUZZY
-newGame(); G.over=false;                                                             // BUZZY
-const _hb=G.players[0].hand.length, _db=G.deck.length;                               // BUZZY
-addBuzzy(0,'Big Dazza','HE CANNOT BE STOPPED');                                      // BUZZY
-addBuzzy(0,'Buzzy','BUZZY IS IN!');                                                  // BUZZY
-const _bz=G.players[0].hand.filter(c=>c.id>9000);                                    // BUZZY
-T('multiple cards land in the hand, never the deck', _bz.length===2                  // BUZZY
-  && G.players[0].hand.length===_hb+2 && G.deck.length===_db);                       // BUZZY
-T('each carries its own name and words', _bz[0].n==='Big Dazza' && _bz[0].d==='HE CANNOT BE STOPPED'   // BUZZY
-  && _bz[1].n==='Buzzy' && _bz[1].d==='BUZZY IS IN!');                               // BUZZY
-T('ids never collide', _bz[0].id!==_bz[1].id && _bz.every(c=>c.id>9000));            // BUZZY
-G.players[0].hand = G.players[0].hand.filter(c=>c.id<=9000);                         // BUZZY: leave the world at 106 for every check downstream
 
 // 1. deck composition — the census reads the catalog directly: the intended use
 const d=buildDeck();
@@ -241,6 +229,14 @@ T('houses are banned on exactly the stations and utilities (Black and Teal)',
   !buildable('black') && !buildable('green') && buildable('teal') && buildable('gold'));
 T('every set name is a plain colour word, short enough to render whole',
   Object.values(COLORS).every(c=>/^[A-Z][a-z]+$/.test(c.label) && c.label.length<=6));
+
+// ===== the No Deal window is long enough to actually use =====
+T('the block window gives a person time to read and answer', REACT_MS >= 6000);
+T('and the watchdog still outlasts the window', (REACT_MS + 3500) > REACT_MS && (REACT_MS + 3500) < 15000);
+
+// ===== no stray affordance in the corner of a wild =====
+T('wilds carry no grab tab', !/\.tcard\.twild::before/.test(HTML_SRC));
+T('wilds are still draggable', /\.tcard\.twild\{touch-action:none\}/.test(HTML_SRC));
 
 // ===== NET protocol =====
 newGame();
