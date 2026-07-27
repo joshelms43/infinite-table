@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.7
+  Version: 0.11.8
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -815,7 +815,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.7"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.8"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -848,7 +848,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.7</span>
+    <span class="ver">v0.11.8</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -3306,9 +3306,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.7"></script>
-<script src="../shared/tablekit.js?v=0.11.7"></script>
-<script src="../shared/identity.js?v=0.11.7"></script>
+<script src="../shared/config.js?v=0.11.8"></script>
+<script src="../shared/tablekit.js?v=0.11.8"></script>
+<script src="../shared/identity.js?v=0.11.8"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3343,9 +3343,19 @@ const NET = {
     setTimeout(()=>renderAll(), 60);   // the hand re-renders from truth — nothing dangles mid-air
     return true;
   },
-  _afterSign(fields, use){   // sync signer returns a value (tests) -> send now; real ECDSA returns a Promise -> send on resolve
-    const r = TableKit.ident.sign(fields);
-    if(r && typeof r.then==='function') r.then(use); else use(r);
+  _afterSign(fields, use){
+    /* sync signer returns a value (tests) -> send now; real ECDSA returns a Promise -> send on resolve.
+       FAIL-SAFE: if signing throws or rejects (key not ready, no WebCrypto, insecure context) the
+       intent is sent UNSIGNED rather than swallowed. A registered seat then gets a visible nack from
+       the host; an unregistered one plays on. What must never happen is silence — an intent that
+       vanishes inside a callback is a frozen game with no error, which is how the discard soft-lock
+       felt from the sofa. Availability fails loud; authority still fails closed at the host. */
+    let r;
+    try{ r = TableKit.ident.sign(fields); }
+    catch(e){ try{ TableKit._record && TableKit._record('sign','signing failed: '+(e&&e.message),''); }catch(_){} return use(null); }
+    if(r && typeof r.then==='function'){
+      r.then(use).catch(e=>{ try{ TableKit._record && TableKit._record('sign','signing rejected: '+(e&&e.message),''); }catch(_){} use(null); });
+    } else use(r);
   },
   reply(type, payload){
     const a = Object.assign({rt:type, aid:this._curAid}, payload);
@@ -3682,6 +3692,7 @@ const NET = {
   makeCode(){ return TableKit.roomCode(); },
   async connect(code, hosting){
     const self = this;
+    try{ await TableKit.ident.keys(); }catch(e){}   // mint/load the signing key before the room exists: no intent can outrun it
     try{
       this.tx = await TableKit.join({
         prefix: 'room',

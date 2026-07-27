@@ -1,5 +1,16 @@
 # Coastline — Changelog
 
+## v0.11.8 — 2026-07-27
+Hardening the auth path for a table nobody can rehearse.
+
+Josh reports solo plays fine but he cannot test multiplayer — which is precisely where v0.11.6's signing runs. That asymmetry is the risk: the wire path's first real exercise would be a live game with friends waiting.
+
+**The soft-lock that was waiting.** Signing returns a Promise and the intent is sent inside its callback. If signing failed — key not ready on a fast first tap, no WebCrypto, an insecure context — the promise rejected, the callback never ran, and the intent simply vanished. No error, no send, the player left staring at "Sent…". Exactly the shape of the discard soft-lock, and unreachable by solo testing.
+
+Closed twice over. The signing key is now minted or loaded during connect(), before the room exists, so no intent can outrun it. And if signing fails anyway, the intent is sent UNSIGNED rather than swallowed: a registered seat then receives a visible nack from the host, an unregistered one plays on, and the failure is written to the error ledger. Availability fails loud; authority still fails closed at the host, which is the correct split — a frozen game protects nobody.
+
+Two pins, both mutation-proven (removing the guard turns the gate red): a signing failure still sends exactly one intent with a null signature and still makes no local mutation, and — locking in what Josh actually verified — solo play never signs anything at all, while still mutating locally as it always has.
+
 ## v0.11.7 — 2026-07-27
 Review #3 (HTML injection in names) — real, and worse than the single-file view could show, because Buzzy now hands players a free-text field that flows onto the felt.
 

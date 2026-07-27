@@ -186,6 +186,30 @@ const sent=[]; NET.tx={ send:(t,p)=>sent.push({t,p}) };
 const handN=G.players[1].hand.length, bankN=G.players[1].bank.length;
 bankCard(G.players[1].hand[0]);
 T('client intercept: intent sent, no local mutation', sent.length===1 && sent[0].t==='intent' && sent[0].p.k==='bank' && G.players[1].hand.length===handN && G.players[1].bank.length===bankN);
+/* FAIL-SAFE: a signing failure must never swallow the intent. An intent that vanishes
+   inside a callback is a frozen game with no error — the discard soft-lock's shape. */
+const _goodSigner = TableKit.ident._syncSigner;
+TableKit.ident._syncSigner = { sign(){ throw new Error('no WebCrypto here'); }, verify(){ return false; } };
+const sentF=[]; NET.tx={ send:(t,p)=>sentF.push({t,p}) };
+const handF=G.players[1].hand.length;
+bankCard(G.players[1].hand[0]);
+T('a signing failure still sends the intent (unsigned, never silent)',
+  sentF.length===1 && sentF[0].t==='intent' && sentF[0].p.k==='bank' && sentF[0].p.msig===null);
+T('and it still made no local mutation', G.players[1].hand.length===handF);
+TableKit.ident._syncSigner = _goodSigner;
+
+/* SOLO never signs: no wire, no seat registration, nothing to authenticate.
+   (Josh plays solo constantly — this is the path that must stay untouched.) */
+let _signCalls=0;
+TableKit.ident._syncSigner = { sign(f){ _signCalls++; return 'S'+JSON.stringify(f); }, verify:()=>true };
+NET.mode='off'; MYSEAT=0; G.turn=0; G.playsLeft=3; G.over=false;
+const soloHand=G.players[0].hand.length, soloBank=G.players[0].bank.length;
+if(!G.players[0].hand.length) G.players[0].hand.push(G.deck.pop());
+bankCard(G.players[0].hand[0]);
+T('solo play never signs anything', _signCalls===0);
+T('solo play mutates locally, as it always has', G.players[0].bank.length>soloBank);
+TableKit.ident._syncSigner = _goodSigner;
+
 NET.mode='host'; MYSEAT=0; G.turn=1; G.playsLeft=3; G.over=false;
 NET.applyIntent({seat:1,k:'bank',a:{id:97003}});
 T('host applyIntent executes as that seat', G.players[1].bank.some(c=>c.id===97003));
