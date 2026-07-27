@@ -191,6 +191,16 @@ T('the yellow band heading stays white', !faceHTML({t:'prop',color:'gold',v:4}).
 T('the cyan band heading stays white', !faceHTML({t:'prop',color:'sky',v:1}).includes('color:#'));
 T('the teal band heading stays white', !faceHTML({t:'prop',color:'teal',v:4}).includes('color:#'));
 T('a rainbow assigned to yellow stays white too', !faceHTML({t:'wildall',v:0}, 'gold').includes('color:#'));
+/* The rainbow band is animated in the stylesheet, so ANY inline background on it wins and
+   kills the flow — which is exactly how it was lost. Pin the absence, not the presence. */
+T('a placed rainbow keeps its flowing band (no inline background)',
+  !/<div class="band"[^>]*background:/.test(faceHTML({t:'wildall',v:0}, 'teal')));
+T('an unplaced rainbow flows too',
+  !/<div class="band"[^>]*background:/.test(faceHTML({t:'wildall',v:0})));
+T('and the flow animation is still in the stylesheet',
+  HTML_SRC.includes('animation:rainbowflow') && HTML_SRC.includes('@keyframes rainbowflow'));
+T('a plain property still paints its own colour inline',
+  faceHTML({t:'prop',color:'teal',v:4}).includes('background:'+COLORS.teal.hex));
 T('split wild bands stay white', !faceHTML({t:'wild',colors:['gold','sky'],v:0}).includes('color:#'));
 T('the band keeps a shadow so white survives the light sets',
   /\.card \.band\{[^}]*text-shadow:[^;]*rgba\(0,0,0,\.(5[0-9]|[6-9][0-9])\)/.test(HTML_SRC));

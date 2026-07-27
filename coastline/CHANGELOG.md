@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.13.1 — 2026-07-27
+Placed rainbow wilds flow again. My regression, from the colour pass.
+
+When v0.12.0 taught every heading to honour ink, the rainbow band was given an inline background alongside it — the set's solid colour. Inline styles outrank stylesheet rules, so that silently switched off the animated gradient in .card.wildall .band. A rainbow sitting in a set went flat, which is exactly what Josh saw. The inline background is gone; the band is bare again and the CSS animation owns it.
+
+Note left at the scene for the next person tempted to bulletproof it: this band cannot be defended with !important the way .bandsplit is, because a CSS animation loses to an !important declaration — marking the background important would freeze the flow rather than protect it. The guard has to be a test, so it is one: no inline background may be rendered onto a rainbow band, placed or unplaced, and the keyframes must still exist. A plain property is separately pinned to keep painting its colour inline, since that one genuinely needs to. Mutation-proven.
+
 ## v0.13.0 — 2026-07-27
 Two phones on a table at last, and the first thing they said: the non-host is laggy, and nobody likes "Sent…".
 

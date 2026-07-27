@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.13.0
+  Version: 0.13.1
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -247,6 +247,10 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 .card.actioncard .band{background:linear-gradient(180deg,var(--coral),var(--coral-deep))}
 .card.rentcard .band{background:linear-gradient(90deg,var(--b1),var(--b2))}
 .card.wildall .band{
+  /* This band cannot be defended with !important the way .bandsplit is: a CSS animation
+     loses to an !important declaration, so marking the background important would freeze
+     the flow instead of protecting it. The guard is a test asserting no inline background
+     is ever rendered onto this band — which is how it was broken in v0.12.0. */
   color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.45);
   background:linear-gradient(90deg,#E84A4A,#F0912E,#EFD22F,#3FBF5E,#2FBBD6,#4A6CE8,#A44AE0,#E84A8F,#E84A4A);
   background-size:400% 100%;
@@ -815,7 +819,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.13.0"></script>
+<script src="../shared/mdeal-rules.js?v=0.13.1"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -848,7 +852,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.13.0</span>
+    <span class="ver">v0.13.1</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1718,7 +1722,10 @@ function faceHTML(c, assignedColor){
     if(assignedColor){
       const col=COLORS[assignedColor];
       const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
-      return `${coin}<div class="band" style="background:${col.hex};${inkFor(assignedColor)}">${col.label}</div>
+      /* NO inline background here: the rainbow band is animated in CSS (.card.wildall .band),
+         and an inline background silently outranks a stylesheet rule. Giving this band the
+         set's solid colour in v0.12.0 is what stopped placed rainbows flowing. */
+      return `${coin}<div class="band">${col.label}</div>
         <div class="propfield"></div>
         <div class="ladder">${ladder}</div>`;
     }
@@ -3330,9 +3337,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.13.0"></script>
-<script src="../shared/tablekit.js?v=0.13.0"></script>
-<script src="../shared/identity.js?v=0.13.0"></script>
+<script src="../shared/config.js?v=0.13.1"></script>
+<script src="../shared/tablekit.js?v=0.13.1"></script>
+<script src="../shared/identity.js?v=0.13.1"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
