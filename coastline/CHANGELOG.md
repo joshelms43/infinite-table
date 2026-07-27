@@ -1,5 +1,12 @@
 # Coastline — Changelog
 
+## v0.11.7 — 2026-07-27
+Review #3 (HTML injection in names) — real, and worse than the single-file view could show, because Buzzy now hands players a free-text field that flows onto the felt.
+
+A display name or a Buzzy name/saying like <img src=x onerror=…> was being written into innerHTML unescaped. Fixed with one chokepoint, esc(), applied at every sink where player-authored text becomes markup: the Buzzy card face (its own name and saying), the opponent nameplate and avatar initial, the lobby seat list, the win rows, the POV header, the AI showcase, and the log drawer. Names are also sanitized at the source now (control characters and angle brackets stripped, then length-capped) as defence in depth — but esc() at the sink is the guarantee, since a remote seat's name arrives over presence entirely untrusted. Sinks that use textContent (the banner, the live log line, the pay prompt) were already inert and left alone.
+
+New gate stage, xsssim: renders a hostile name and a hostile Buzzy card through real jsdom and asserts no <img>/<script> node is ever created and no on* handler fires. It earned its keep immediately — it caught the opponent-nameplate sink that a source grep had missed — and it is mutation-proven: removing a single esc() fails it. Inline onclick handlers were audited too; every interpolated value there is a card id, colour key, seat index or generated key, never a name, so none needed escaping.
+
 ## v0.11.6 — 2026-07-27
 An outside review (ChatGPT, from the single file) flagged the multiplayer trust boundary. Its finding was right; its fix could not have worked; the real fix is cryptographic and now ships.
 

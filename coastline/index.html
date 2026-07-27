@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.6
+  Version: 0.11.7
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -815,7 +815,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.6"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.7"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -848,7 +848,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.6</span>
+    <span class="ver">v0.11.7</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -972,6 +972,11 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <script>
 /* ================= ENGINE ================= */
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+/* esc: any player-authored text (names, Buzzy's free-text) must be inert before it
+   touches innerHTML. Names render via innerHTML in the log drawer, the showcase, and
+   opponent chrome; Buzzy prints its own name and saying on the card face. Unescaped,
+   a name like <img onerror> is script. This is the one chokepoint. (ChatGPT review #3) */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function cardName(c){
   if(c.t==='prop') return COLORS[c.color].label+' property';
   if(c.t==='wild') return COLORS[c.colors[0]].label+' / '+COLORS[c.colors[1]].label;
@@ -1149,7 +1154,7 @@ function aiShowcase(card, oppIdx){
   VISLOCK = Date.now() + HOLD + FLY + 180;
   const f = document.createElement('div');
   f.className = 'showcase';
-  f.innerHTML = `<div class="scname">${G.players[oppIdx].name}</div>${staticCardHTML(card)}`;
+  f.innerHTML = `<div class="scname">${esc(G.players[oppIdx].name)}</div>${staticCardHTML(card)}`;
   f.style.left = (r.left + r.width/2 - 51)+'px';
   f.style.top = (r.top + r.height - 20)+'px';
   f.style.transform = 'scale(.32)';
@@ -1401,7 +1406,7 @@ function log(msg){
   logs.unshift(msg);
   if(logs.length > 120) logs.length = 120;   // the ledger grew forever — a slow leak across long games
   $('#log').textContent = msg;
-  $('#loglist').innerHTML = logs.slice(0,120).map(l=>`<div>${l}</div>`).join('');
+  $('#loglist').innerHTML = logs.slice(0,120).map(l=>`<div>${esc(l)}</div>`).join('');
 }
 $('#logbtn').onclick = ()=> $('#logdrawer').classList.add('show');
 $('#rulesbtn').onclick = ()=> openRules();
@@ -1548,7 +1553,7 @@ let HAND_MINE = null;
 function oppPanelHTML(idx, clickable){
   const p = G.players[idx];
   const away = (typeof NET!=='undefined') && NET.isGone && NET.isGone(idx);
-  const label = (idx===MYSEAT ? 'You' : p.name) + (p.out ? ' · out' : (away ? ' · away' : ''));
+  const label = (idx===MYSEAT ? 'You' : esc(p.name)) + (p.out ? ' · out' : (away ? ' · away' : ''));   // name escaped here; the suffixes are literal and safe
   const avs = ['var(--action-info)','var(--c-orange)','var(--c-purple)','var(--c-teal)'];
   const av = idx===MYSEAT ? 'var(--action-info)' : avs[idx%avs.length];
   const awayCls = (p.out ? ' isout' : '') + (away ? ' away' : '');
@@ -1558,7 +1563,7 @@ function oppPanelHTML(idx, clickable){
   }).join('');
   return `<div class="opp ${G.turn===idx?'active':''}${awayCls}" data-idx="${idx}" ${clickable?`onclick="oppTapped(${idx})"`:''}>
     <div class="opp-top">
-      <span class="avatar" style="background:${av}">${label[0]}</span>
+      <span class="avatar" style="background:${av}">${esc(((idx===MYSEAT?'You':p.name)||'?')[0])}</span>
       <span class="opp-id">
         <span class="opp-name">${label}</span>
         <span class="opp-meta">${p.hand.length} cards · $${bankTotal(p)}M</span>
@@ -1724,8 +1729,8 @@ function faceHTML(c, assignedColor){
   if(c.t==='action'){
     const a=ACTIONS[c.kind]||{n:c.n||'Card',d:c.d||'',v:c.v||0};   // an unknown kind is still a card
     return `${coin}<div class="band">Action</div>
-      <div class="body"><div class="cname">${a.n}</div>
-      <div class="cdesc">${a.d}</div></div>`;
+      <div class="body"><div class="cname">${esc(a.n)}</div>
+      <div class="cdesc">${esc(a.d)}</div></div>`;
   }
   if(c.t==='rent'){
     const a=COLORS[c.colors[0]], b=COLORS[c.colors[1]];
@@ -1994,7 +1999,7 @@ function updatePile(landed){
 function openPlays(){
   if(!TABLEPILE.length){ log('Nothing played yet.'); return; }
   const rows = [...TABLEPILE].reverse().map(e=>
-    `<div class="fullcol">${staticCardHTML(e.c)}<span style="font-size:10px;font-weight:800;opacity:.7">${e.by}</span></div>`
+    `<div class="fullcol">${staticCardHTML(e.c)}<span style="font-size:10px;font-weight:800;opacity:.7">${esc(e.by)}</span></div>`
   ).join('');
   openSheet(`<h3>Recent plays</h3><div class="sub">Newest first · ${G.discard.length} cards in the pile total</div>
     <div class="fullrow">${rows}</div>
@@ -2453,7 +2458,7 @@ function fillWinRows(){
                 : p.out ? '<span class="wbadge red">OUT</span>' : '';
     const dots = sets.map(c=>`<span class="wdot" style="background:${COLORS[c].hex}"></span>`).join('');
     return { won, html: `<div class="wrow ${p.out?'wout':''}">
-      <span class="wname">${i===MYSEAT?'You':p.name}</span>
+      <span class="wname">${i===MYSEAT?'You':esc(p.name)}</span>
       <span class="wsets">${dots}</span>
       <span class="wworth">$${bankTotal(p)}M</span>
       ${badge}
@@ -2924,7 +2929,7 @@ function renderPOV(idx){
   const notes = p.bank.map((c,i)=>`<span class="note ${c.t!=='money'?'notealt':''}" style="z-index:${i+1};${i>0?'margin-left:-14px;':''}"><b>$${c.v}M</b></span>`).join('');
   $('#pov').innerHTML = `
     <div class="povhdr">
-      <span class="povname">${p.name}'s ${picking?'table':'seat'}</span>
+      <span class="povname">${esc(p.name)}'s ${picking?'table':'seat'}</span>
       <span class="povsub">${picking?'tap elsewhere to cancel':''}</span>
     </div>
     <div class="povopps">${others.map(i=>oppPanelHTML(i, false)).join('')}</div>
@@ -3301,9 +3306,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.6"></script>
-<script src="../shared/tablekit.js?v=0.11.6"></script>
-<script src="../shared/identity.js?v=0.11.6"></script>
+<script src="../shared/config.js?v=0.11.7"></script>
+<script src="../shared/tablekit.js?v=0.11.7"></script>
+<script src="../shared/identity.js?v=0.11.7"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3576,7 +3581,7 @@ const NET = {
       logs.length = 0;
       st.logs.forEach(l=>logs.push(l));
       const ll = $('#loglist');
-      if(ll && ll.innerHTML!==undefined) ll.innerHTML = logs.slice(0,120).map(l=>`<div>${l}</div>`).join('');
+      if(ll && ll.innerHTML!==undefined) ll.innerHTML = logs.slice(0,120).map(l=>`<div>${esc(l)}</div>`).join('');
     }
     this._lastWaitFor = st.waitFor;
     this._lastWaitAll = waitAll;
@@ -3726,7 +3731,7 @@ const NET = {
     try{ await this._hostGame(); } finally { this._connecting = false; this._busyBtn(btn, false); }
   },
   async _hostGame(){
-    this.myName = (this.myName||'Host').slice(0,12) || 'Host';
+    this.myName = String(this.myName||'Host').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,12) || 'Host';   // bound at the source too; esc() still guards every sink
     if(typeof localStorage!=='undefined' && localStorage.setItem) localStorage.setItem('it_name', this.myName);
     const code = this.makeCode();
     if(!(await this.connect(code, true))) return;
@@ -3964,8 +3969,8 @@ const NET = {
     this._seatN = seats.length;
     el.innerHTML = seats.map((mm,i)=>{
       const mine = !mm.isAI && mm.key===this.pkey;
-      const nameCell = `<span style="flex:1;text-align:left"><span class="seatdot ${mm.isAI?'bot':''}"></span>${mm.name}${mine?' · you':''}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
-      return `<div class="lobbyseat"><span class="avatar" style="background:${mm.isAI?'var(--felt-highlight)':(i===0?'var(--money-gold)':'var(--felt-highlight)')}">${mm.isAI?'☺':(mm.name||'?')[0]}</span>${nameCell}${mm.isAI&&this.mode==='lobby-host'?`<button class="frremove" onclick="NET.removeBot('${mm.key}')">✕</button>`:''}</div>`;
+      const nameCell = `<span style="flex:1;text-align:left"><span class="seatdot ${mm.isAI?'bot':''}"></span>${esc(mm.name)}${mine?' · you':''}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
+      return `<div class="lobbyseat"><span class="avatar" style="background:${mm.isAI?'var(--felt-highlight)':(i===0?'var(--money-gold)':'var(--felt-highlight)')}">${mm.isAI?'☺':esc((mm.name||'?')[0])}</span>${nameCell}${mm.isAI&&this.mode==='lobby-host'?`<button class="frremove" onclick="NET.removeBot('${mm.key}')">✕</button>`:''}</div>`;
     }).join('')
       + (seats.length<2 ? '<div class="sub" style="opacity:.5">Share the code</div>' : '');
     const ab = $('#addbot'); if(ab && ab.style) ab.style.display = (this.mode==='lobby-host' && seats.length<4) ? '' : 'none';
