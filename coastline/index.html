@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.14.2
+  Version: 0.14.3
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -818,7 +818,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.14.2"></script>
+<script src="../shared/mdeal-rules.js?v=0.14.3"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -851,7 +851,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.14.2</span>
+    <span class="ver">v0.14.3</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -1705,7 +1705,13 @@ function faceHTML(c, assignedColor){
     if(assignedColor){
       const col=COLORS[assignedColor];
       const ladder = col.rent.map((r,i)=>`<div class="rrow"><span>${i+1} card${i?'s':''}${i+1===col.size?' <span class="star">★</span>':''}</span><b>$${r}M</b></div>`).join('');
-      return `${coin}<div class="band bandsplit" style="${inkForSplit(c.colors[0],c.colors[1])}">${col.label}</div>
+      /* Placed, a 50/50 leads with the colour it is actually counting as, keeping a slim
+         edge of its other face so it still reads as a wild. It used to wear a permanent
+         half-and-half band, which meant moving it between its two sets changed the small
+         label and nothing else — the card looked the same in either set. NOT .bandsplit:
+         that class forces the even split with !important. */
+      const other = COLORS[c.colors.find(x=>x!==assignedColor)] || col;
+      return `${coin}<div class="band" style="background:linear-gradient(90deg,${col.hex} 0 78%,${other.hex} 78% 100%)">${col.label}</div>
         <div class="propfield"></div>
         <div class="ladder">${ladder}</div>`;
     }
@@ -3293,9 +3299,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.14.2"></script>
-<script src="../shared/tablekit.js?v=0.14.2"></script>
-<script src="../shared/identity.js?v=0.14.2"></script>
+<script src="../shared/config.js?v=0.14.3"></script>
+<script src="../shared/tablekit.js?v=0.14.3"></script>
+<script src="../shared/identity.js?v=0.14.3"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

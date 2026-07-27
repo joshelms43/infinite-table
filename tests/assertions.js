@@ -187,6 +187,13 @@ T('an unplaced rainbow flows too',
   !/<div class="band"[^>]*background:/.test(faceHTML({t:'wildall',v:0})));
 T('and the flow animation is still in the stylesheet',
   HTML_SRC.includes('animation:rainbowflow') && HTML_SRC.includes('@keyframes rainbowflow'));
+T('a placed 50/50 leads with the colour it counts as',
+  faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'teal').includes('linear-gradient(90deg,'+COLORS.teal.hex)
+  && faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'gold').includes('linear-gradient(90deg,'+COLORS.gold.hex));
+T('so moving it visibly changes the card, not just its label',
+  faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'teal') !== faceHTML({t:'wild',colors:['gold','teal'],v:4}, 'gold'));
+T('an unplaced 50/50 still shows both halves evenly',
+  faceHTML({t:'wild',colors:['gold','teal'],v:4}).includes('bandsplit'));
 T('a plain property still paints its own colour inline',
   faceHTML({t:'prop',color:'teal',v:4}).includes('background:'+COLORS.teal.hex));
 T('split wild bands stay white', !faceHTML({t:'wild',colors:['gold','sky'],v:0}).includes('color:#'));

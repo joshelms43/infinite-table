@@ -1,5 +1,14 @@
 # Coastline — Changelog
 
+## v0.14.3 — 2026-07-27
+A placed 50/50 now leads with the colour it is actually counting as.
+
+Josh: moving a 50/50 between its two sets doesn't change it. Two things were checked before changing anything, and both were sound: the move itself works (the card leaves one set and joins the other, free of a play, exactly as the rules say), and so does the drag gesture — a jsdom quirk made the first test look like a break, because jsdom does not wire inline onpointerdown attributes at all. Called properly, the wild flipped.
+
+What genuinely does not change is how the card LOOKS. Since v0.8.0 a placed 50/50 has worn a permanent half-and-half band, so sitting in either of its sets it appears identical — only the small uppercase label and the rent ladder differ, neither of which catches the eye on a card whose top strip is all you can see in a stack. Now the band leads with the live colour and keeps a slim edge of its other face, so it still reads as a wild rather than a plain property. Moving it is visible at a glance. Unplaced in hand, it still shows both halves evenly — there, the whole point is that it could be either.
+
+Deliberately not .bandsplit, which forces the even split with !important — the same class-versus-inline trap that cost the rainbow its flow two versions ago.
+
 ## v0.14.2 — 2026-07-27
 "Tap to skip" under the No Deal window.
 
