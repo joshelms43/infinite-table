@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.14.0
+  Version: 0.14.1
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -817,7 +817,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.14.0"></script>
+<script src="../shared/mdeal-rules.js?v=0.14.1"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -850,7 +850,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.14.0</span>
+    <span class="ver">v0.14.1</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -3009,7 +3009,7 @@ function jsnChain(aIdx, bIdx, count, desc, cb, viaPay){
 function resolveBlock(defIdx, atkIdx, desc, cb, viaPay){
   jsnChain(defIdx, atkIdx, 0, desc, cb, viaPay);
 }
-const REACT_MS = 7000;   // long enough to notice an attack, read it, and find the card — 2.6s was a reflex test
+const REACT_MS = 5500;   // tuned at the table: 2.6s was a reflex test, 7s dragged; 5.5s reads and answers
 let AI_REACT_MS = 1000;   // the AI's uniform thinking beat on steals; zeroed by tests for sync runs
 function kindForDesc(desc){
   return { 'Sneaky Swipe':'swipe', 'Hostile Takeover':'takeover', 'Swap Meet':'swap' }[desc] || 'nodeal';
@@ -3291,9 +3291,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.14.0"></script>
-<script src="../shared/tablekit.js?v=0.14.0"></script>
-<script src="../shared/identity.js?v=0.14.0"></script>
+<script src="../shared/config.js?v=0.14.1"></script>
+<script src="../shared/tablekit.js?v=0.14.1"></script>
+<script src="../shared/identity.js?v=0.14.1"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';

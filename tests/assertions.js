@@ -231,7 +231,9 @@ T('every set name is a plain colour word, short enough to render whole',
   Object.values(COLORS).every(c=>/^[A-Z][a-z]+$/.test(c.label) && c.label.length<=6));
 
 // ===== the No Deal window is long enough to actually use =====
-T('the block window gives a person time to read and answer', REACT_MS >= 6000);
+// The exact value is Josh's ear, tuned live. The pin only fences the range: long enough
+// to read an attack and answer it, short enough that the table does not stall on every card.
+T('the block window is human-usable, not a reflex test', REACT_MS >= 4500 && REACT_MS <= 9000);
 T('and the watchdog still outlasts the window', (REACT_MS + 3500) > REACT_MS && (REACT_MS + 3500) < 15000);
 
 // ===== no stray affordance in the corner of a wild =====

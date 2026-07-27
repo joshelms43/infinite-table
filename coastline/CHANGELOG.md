@@ -1,5 +1,10 @@
 # Coastline — Changelog
 
+## v0.14.1 — 2026-07-27
+No Deal window tuned to 5.5 seconds — 2.6 was a reflex test, 7 dragged.
+
+The pin no longer asserts a specific number, since the right one is a matter of feel and Josh is the one holding the cards. It fences a range instead: long enough to read an attack and answer it, short enough that the table does not stall on every card played against you.
+
 ## v0.14.0 — 2026-07-27
 Three from the table.
 
