@@ -175,3 +175,46 @@
   global.TableKit = TableKit;
   if (typeof module !== 'undefined' && module.exports) module.exports = TableKit;
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* ===== ident: real sender authentication for an open channel =====
+   Supabase broadcasts carry NO sender identity — payload only — and presence keys
+   are public strings, so "check the sender's key" is theater: anyone on the channel
+   can claim any seat (the puppeting hole). The only honest fix on this transport is
+   cryptographic: each device holds a persistent P-256 keypair, announces the PUBLIC
+   half, and signs what it sends; the host verifies against the seat's registered
+   key and refuses replays by counter. */
+TableKit.ident = {
+  _priv: null, _pub: null,
+  async keys(){
+    if(this._pub && this._priv) return this._pub;
+    let j = null; try{ j = JSON.parse(localStorage.getItem('it_sig')||'null'); }catch(e){}
+    try{
+      if(j && j.pub && j.priv){
+        this._priv = await crypto.subtle.importKey('jwk', j.priv, {name:'ECDSA', namedCurve:'P-256'}, true, ['sign']);
+        this._pub = j.pub;
+        return this._pub;
+      }
+    }catch(e){ /* stored pair unreadable: mint fresh */ }
+    const kp = await crypto.subtle.generateKey({name:'ECDSA', namedCurve:'P-256'}, true, ['sign','verify']);
+    const pub = await crypto.subtle.exportKey('jwk', kp.publicKey);
+    const priv = await crypto.subtle.exportKey('jwk', kp.privateKey);
+    try{ localStorage.setItem('it_sig', JSON.stringify({pub:pub, priv:priv})); }catch(e){}
+    this._priv = kp.privateKey; this._pub = pub;
+    return pub;
+  },
+  pub(){ return this._pub || null; },
+  _b64(buf){ var u=new Uint8Array(buf), s=''; for(var i=0;i<u.length;i++) s+=String.fromCharCode(u[i]); return btoa(s); },
+  _unb64(str){ var bin=atob(str), u=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; },
+  _syncSigner: null,   // tests may install { sign(fields)->str, verify(pub,fields,str)->bool }; production leaves this null
+  sign(fields){        // NOT async: an async fn always wraps its return in a Promise, defeating the sync test seam.
+    if(this._syncSigner) return this._syncSigner.sign(fields);   // returns a string -> callers send in-line
+    const data = new TextEncoder().encode(JSON.stringify(fields));
+    return crypto.subtle.sign({name:'ECDSA', hash:'SHA-256'}, this._priv, data).then(sig=>this._b64(sig));   // returns a Promise
+  },
+  verify(pubJwk, fields, sigB64){   // NOT async, same reason: sync signer -> boolean in-line; real path -> Promise<boolean>
+    if(this._syncSigner) return this._syncSigner.verify(pubJwk, fields, sigB64);
+    return crypto.subtle.importKey('jwk', pubJwk, {name:'ECDSA', namedCurve:'P-256'}, true, ['verify'])
+      .then(key=>crypto.subtle.verify({name:'ECDSA', hash:'SHA-256'}, key, this._unb64(sigB64), new TextEncoder().encode(JSON.stringify(fields))))
+      .catch(()=>false);
+  }
+};

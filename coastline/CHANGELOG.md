@@ -1,5 +1,20 @@
 # Coastline — Changelog
 
+## v0.11.6 — 2026-07-27
+An outside review (ChatGPT, from the single file) flagged the multiplayer trust boundary. Its finding was right; its fix could not have worked; the real fix is cryptographic and now ships.
+
+**The hole (real).** Clients sent { seat, k, a } and the host acted on the claimed seat. Nothing proved the sender owned it, so a modified client could send { seat:0, k:"endturn" } and puppet another player.
+
+**Why the suggested fix fails.** The review proposed deriving the seat from the sender's key. But Supabase broadcast carries no sender identity at all — the payload is the only thing that arrives — and presence keys are public strings anyone on the channel can copy. Checking the key would have been theater: the impostor simply claims the key too.
+
+**The fix that holds.** Each device now mints a persistent P-256 keypair (WebCrypto, in TableKit.ident) and announces only its public half in hello. Every intent is signed over (room, seat, counter, kind, args); the host registers a seat's key on first hello — later hellos cannot rebind it — and refuses any intent whose signature doesn't verify against that key, or whose counter fails to advance (replay defence). An attacker can copy the public key and the seat number, but cannot forge the signature without the private key that never leaves the honest device. Unregistered seats (solo, AI, pre-start) skip verification — nothing is at stake there.
+
+**New gate stage, authsim:** proves an honest signed intent verifies, a forged seat (right claim, wrong key) is refused, a replayed counter bounces, a fresh counter still works, and a signature from another room does not verify here.
+
+A note on engineering the seam: sign()/verify() are deliberately NOT async functions — an async function always wraps its return in a Promise, which would force every call a microtask later and break the synchronous wire tests. They return a Promise on the real ECDSA path and a plain value when a deterministic test signer is installed, so production stays fully async while netsim, netsoak and the engine suite stay synchronous. Send/verify call sites resolve in-line when the value is synchronous, on-resolve when it's a Promise.
+
+Items #2–#15 from the review are triaged and answered separately; several (private-hand routing, the record_match trust model) are genuine and queued, several (three-player AI, the version split) were already fixed in earlier work, and the architectural split is acknowledged as real debt against the single-file constraint.
+
 ## v0.11.10 — 2026-07-26
 The right new rating and a change of zero — two calls to the same write.
 

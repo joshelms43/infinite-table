@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.11.10
+  Version: 0.11.6
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -815,7 +815,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.11.10"></script>
+<script src="../shared/mdeal-rules.js?v=0.11.6"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -848,7 +848,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.11.10</span>
+    <span class="ver">v0.11.6</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -3301,9 +3301,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.11.10"></script>
-<script src="../shared/tablekit.js?v=0.11.10"></script>
-<script src="../shared/identity.js?v=0.11.10"></script>
+<script src="../shared/config.js?v=0.11.6"></script>
+<script src="../shared/tablekit.js?v=0.11.6"></script>
+<script src="../shared/identity.js?v=0.11.6"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3329,14 +3329,25 @@ const NET = {
       banner('HOST RECONNECTING…','var(--warning-amber)');
       return true;
     }
-    this.tx.send('intent', { seat: this.seat, k, a });
+    const ctr = (this._sigOut = (this._sigOut||0) + 1);
+    const fields = [this.code||'', this.seat, ctr, k, JSON.stringify(a||{})];
+    this._afterSign(fields, msig=>{ this.tx.send('intent', { seat: this.seat, k, a, ctr, msig }); });
     clearSelection(); hidePrompt(); closeSheet();
     this.sentWait = true;
     showPrompt('Sent…', false);
     setTimeout(()=>renderAll(), 60);   // the hand re-renders from truth — nothing dangles mid-air
     return true;
   },
-  reply(type, payload){ this.tx.send('intent', { seat: this.seat, k:'reply', a:Object.assign({rt:type, aid:this._curAid}, payload) }); },
+  _afterSign(fields, use){   // sync signer returns a value (tests) -> send now; real ECDSA returns a Promise -> send on resolve
+    const r = TableKit.ident.sign(fields);
+    if(r && typeof r.then==='function') r.then(use); else use(r);
+  },
+  reply(type, payload){
+    const a = Object.assign({rt:type, aid:this._curAid}, payload);
+    const ctr = (this._sigOut = (this._sigOut||0) + 1);
+    const fields = [this.code||'', this.seat, ctr, 'reply', JSON.stringify(a)];
+    this._afterSign(fields, msig=>{ this.tx.send('intent', { seat: this.seat, k:'reply', a, ctr, msig }); });
+  },
   evt(seat, card){ if(this.mode==='host' && this.tx && card) this.tx.send('evt', { kind:'play', seat, card }); },
 
   /* --- host: ask a remote seat for a decision --- */
@@ -3397,6 +3408,29 @@ const NET = {
 
   /* --- host: apply a client intent as that seat --- */
   applyIntent(m){
+    const seat = m.seat, k = m.k, a = m.a || {};
+    /* AUTHENTICATION (ChatGPT #1 was right that the seat was unverified — but its
+       senderKey fix cannot work: Supabase carries no sender id and presence keys are
+       public. Only a signature the impostor cannot forge closes it.) A registered seat
+       must present a counter-fresh signature over (room,seat,ctr,k,a) matching the key
+       it announced. Unregistered seats (pre-start, AI, solo) pass — nothing at stake. */
+    if(this._sigKey && this._sigKey[seat]){
+      const ctr = (m.ctr|0);
+      if(ctr <= (this._sigCtr[seat]||0)){ this.tx.send('nack', { seat }); return; }   // replay / out-of-order
+      const fields = [this.code||'', seat, ctr, k, JSON.stringify(a)];
+      const self = this, key = this._sigKey[seat];
+      const done = ok=>{
+        if(!ok){ self.tx.send('nack', { seat }); return; }   // forged or tampered: refuse
+        self._sigCtr[seat] = ctr;
+        self._applyIntentTrusted(m);
+      };
+      const rv = TableKit.ident.verify(key, fields, m.msig||'');
+      if(rv && typeof rv.then==='function') rv.then(done); else done(rv);
+      return;
+    }
+    this._applyIntentTrusted(m);
+  },
+  _applyIntentTrusted(m){
     const seat = m.seat, k = m.k, a = m.a || {};
     if(k==='reply'){
       const cb = this.pendingAsks[seat];
@@ -3507,7 +3541,7 @@ const NET = {
       banner('THE TABLE MOVED ON — REJOINING','var(--warning-amber)');
       this.mode = 'joining';
       if(this._meta){ this._meta.host = false; this.tx.track(this._meta); }
-      this.tx.send('hello', { key: this.pkey });
+      this.tx.send('hello', { key: this.pkey, sig: TableKit.ident.pub() });
       return true;
     }
     this.restoreFromBlob(blob);
@@ -3581,6 +3615,11 @@ const NET = {
         if(Object.keys(this._collectedHands).length >= need) this.finishPromotion();
       }
       if(type==='hello'){
+        if(m && m.key && m.sig && this.roster){
+          const hs = this.roster.findIndex(r=>r.key===m.key);
+          if(hs>=0){ this._sigKey=this._sigKey||{}; this._sigCtr=this._sigCtr||{};
+            if(!this._sigKey[hs]){ this._sigKey[hs]=m.sig; this._sigCtr[hs]=0; } }   // first hello binds the seat's key; later ones can't rebind
+        }
         if(m && m.key && this.roster && this.roster.some(r=>r.key===m.key)){
           this.tx.send('start', { roster: this.roster, rules: RULES });   // returning player: hand their seat back
         }
@@ -3675,7 +3714,7 @@ const NET = {
         this.tx.send('start', { roster:this.roster, rules:RULES });
         this.pushState();
       } else if(this.mode==='client' || this.mode==='joining'){
-        this.tx.send('hello', { key:this.pkey });
+        this.tx.send('hello', { key:this.pkey, sig: TableKit.ident.pub() });
       }
       banner('BACK AT THE TABLE','var(--success-green)');
       renderAll();
@@ -3710,7 +3749,7 @@ const NET = {
     if(code.length!==4){ alert('Enter the 4-letter room code.'); return; }
     if(!(await this.connect(code, false))) return;
     this.mode = 'joining';
-    this.tx.send('hello', { key:this.pkey });
+    this.tx.send('hello', { key:this.pkey, sig: TableKit.ident.pub() });
     this._meta = { key:this.pkey, name:this.myName, uid:(ID.user&&ID.user.id)||null, host:false, joined:Date.now(), rev:0 };
     this.tx.track(this._meta);
     $('#homemain').style.display='none'; $('#homelobby').style.display='';
@@ -3734,7 +3773,7 @@ const NET = {
       this._healT = null;
       const stuck = (this._lastWaitAll||[]).includes(this.seat) && !MODE.type && !document.querySelector('#overlay.show');
       if(!stuck || this.mode!=='client') return;
-      this.tx.send('hello', { key: this.pkey });   // the host answers with the pending ask
+      this.tx.send('hello', { key: this.pkey, sig: TableKit.ident.pub() });   // the host answers with the pending ask
       if(++this._healTries < 3) this._healT = setTimeout(tick, 4000);
     };
     this._healT = setTimeout(tick, 1600);
@@ -3771,6 +3810,8 @@ const NET = {
   promoteToHost(deadSeat, deadKey){
     this.mode = 'host';
     this.hostKey = this.pkey;
+    this._sigKey = this._sigKey || {}; this._sigCtr = this._sigCtr || {};   // an heir keeps verifying; keys ride the roster and re-register on next hello
+
     hidePrompt();
     banner('YOU ARE THE HOST NOW','var(--money-gold)');
     if(this._meta){ this._meta.host = true; this._meta.rev = (this._meta.rev||0)+1; try{ this.tx.track(this._meta); }catch(e){} }
@@ -3991,6 +4032,7 @@ function shareCode(){
   try{ navigator.clipboard.writeText(url); banner('LINK COPIED','var(--gold-money)'); }catch(e){}
 }
 let GAME_STARTED = false;
+if(typeof TableKit!=='undefined' && TableKit.ident && TableKit.ident.keys) TableKit.ident.keys().catch(()=>{});   // mint/load this device's signing key early, off the boot path
 if(typeof TableKit!=='undefined') TableKit.watchErrors({   // headless harnesses run the game without a platform
   game: 'mdeal', version: '0.10.4',
   onError: (msg)=>banner('SOMETHING BROKE — '+String(msg).slice(0,42),'var(--danger-red)'),

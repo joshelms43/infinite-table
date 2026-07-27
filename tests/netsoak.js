@@ -1,3 +1,4 @@
+const { TextEncoder, TextDecoder } = require('util');
 /* netsoak.js — the wire soak.
    Random games between two live instances over the in-process bus.
    After every turn: public state must converge, and the host's 106 cards
@@ -26,11 +27,15 @@ function makeContext(name) {
     setTimeout: (fn) => { fn(); return 0; },
     clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
     navigator: {}, URLSearchParams,
+    crypto: globalThis.crypto, TextEncoder: TextEncoder, TextDecoder: TextDecoder, btoa: btoa, atob: atob,
+    localStorage: (function(){ var m={}; return { getItem:function(k){return m[k]||null;}, setItem:function(k,v){m[k]=v;}, removeItem:function(k){delete m[k];} }; })(),
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(gameCode, sandbox, { filename: name });
+  var TK = sandbox.TableKit;   // deterministic sync signer (see netsim): synchronous sends for a synchronous soak
+  if(TK && TK.ident){ TK.ident._syncSigner = { sign:function(f){return 'S'+JSON.stringify(f);}, verify:function(p,f,sg){return sg==='S'+JSON.stringify(f);} }; TK.ident._pub = TK.ident._pub || { t:name }; }
   return sandbox;
 }
 

@@ -1,3 +1,4 @@
+const { TextEncoder, TextDecoder } = require('util');
 /* netsim.js — the wire test.
    Two complete game instances in isolated vm contexts, joined by an in-process
    bus that plays Supabase Realtime (broadcast, self:false). */
@@ -39,11 +40,24 @@ function makeContext(name) {
     setTimeout: (fn) => { fn(); return 0; },
     clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
     navigator: {}, URLSearchParams,
+    crypto: globalThis.crypto, TextEncoder: TextEncoder, TextDecoder: TextDecoder, btoa: btoa, atob: atob,
+    localStorage: (function(){ var m={}; return { getItem:function(k){return m[k]||null;}, setItem:function(k,v){m[k]=v;}, removeItem:function(k){delete m[k];} }; })(),
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(gameCode, sandbox, { filename: name });
+  /* deterministic auth for the wire test: a synchronous signer (no WebCrypto microtask)
+     so sign().then(send) settles in-line and the synchronous relay/assertions still hold.
+     Production signs with real async ECDSA — this seam is test-only. */
+  var TK = sandbox.TableKit;
+  if(TK && TK.ident){
+    TK.ident._syncSigner = {
+      sign: function(f){ return 'S'+JSON.stringify(f); },
+      verify: function(pub,f,sg){ return sg === 'S'+JSON.stringify(f); }
+    };
+    TK.ident._pub = TK.ident._pub || { seat: name };
+  }
   return sandbox;
 }
 
@@ -123,6 +137,7 @@ T('host local play reaches the client', pub(client) === pub(host) && client.__B.
 
 /* rent at the client: no JSN popup — the pay ask itself carries the block option */
 const asks = [];
+var flush = function(){ return new Promise(function(r){ setImmediate(r); }); };
 const realOnMessage = client.__B.NET.onMessage.bind(client.__B.NET);
 client.__B.NET.onMessage = (t, m) => { if (t === 'ask') asks.push(m); realOnMessage(t, m); };
 const payId = client.__B.G.players[1].bank[0].id;

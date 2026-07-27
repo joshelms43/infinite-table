@@ -1,4 +1,11 @@
 if(typeof AI_REACT_MS!=='undefined') AI_REACT_MS = 0;   // engine tests run synchronously
+/* signed intents (ChatGPT #1's auth): the engine suite is synchronous and asserts sends
+   in-line, so install the deterministic sync signer — sign()/verify() return values, not
+   Promises. Production uses real async ECDSA; this is the same test seam netsim uses. */
+if(typeof TableKit!=='undefined' && TableKit.ident){
+  TableKit.ident._syncSigner = { sign:f=>'S'+JSON.stringify(f), verify:(p,f,sg)=>sg==='S'+JSON.stringify(f) };
+  TableKit.ident._pub = TableKit.ident._pub || { test:true };
+}
 // 0. CSS integrity: every load-bearing selector must exist in the stylesheet
 const _P = require('path'), _F = require('fs');
 const HTML_PATH = _F.existsSync(_P.join(__dirname,'coastline.html')) ? _P.join(__dirname,'coastline.html') : _P.join(__dirname,'..','coastline','index.html');
