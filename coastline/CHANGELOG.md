@@ -1,5 +1,18 @@
 # Coastline — Changelog
 
+## v0.13.0 — 2026-07-27
+Two phones on a table at last, and the first thing they said: the non-host is laggy, and nobody likes "Sent…".
+
+Both were the same thing. A client's tap did nothing locally — it posted an intent, showed "Sent…", and waited for the host to apply it and broadcast state back. Every single play cost a full round trip before a card moved. The host felt instant because the host never waits for itself.
+
+**Self-contained plays now happen the moment they are tapped.** Banking a card, laying a property, moving a played wild, placing a building — none of these touch another player or need a ruling, so the client plays them immediately and sends the intent alongside. The host's next state push carries every hand, so its answer silently becomes the truth a moment later; if it refuses, the guess is rolled back exactly and the banner says PUT BACK rather than the vaguer NOT RIGHT NOW. The "Sent…" prompt is gone for all four, which is roughly three plays in four.
+
+Anything that needs the host still waits, and should: rent, swipes, takeovers, swaps and end of turn involve other players or a host-run ask, and predicting them would show a table that never happened.
+
+**Order is the whole trick, and netsim proved it.** The first cut snapshotted, sent, then let the caller play afterwards. Under a synchronous bus the host's reply landed inside the same call stack, reconciled the table, and then the local move was applied on top of it — three wire assertions failed at once. Real networks are far too slow to do that, but correctness resting on latency is not correctness. Intercept now takes the move itself as a callback and runs snapshot, play, send in that order, returning true so the caller cannot play it twice. Moving the wild also had its validation hoisted above the send, so an illegal move no longer reaches the wire at all.
+
+Pins: a predicted play moves at once and still sends; a nack restores the exact prior hand, bank, table and plays-left; an action that needs the host still refuses to move locally; and only those four kinds are ever predicted. Both halves mutation-proven.
+
 ## Process — 2026-07-27
 The gate stopped being a promise and became a mechanism.
 

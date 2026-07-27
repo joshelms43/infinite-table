@@ -242,10 +242,34 @@ const savedSeat=MYSEAT; MYSEAT=1; NET.mode='client';
 G.players[1].hand=[{id:97003,t:'money',v:2}];
 NET.applyState(JSON.parse(JSON.stringify(st)));
 T('applyState: own hand kept, other hands are placeholders', G.players[1].hand[0].id===97003 && G.players[0].hand.every(c=>String(c.id).indexOf('h')===0) && bankTotal(G.players[1])===5);
+NET.seat = 1;
+/* Non-host used to wait a full round trip before anything moved — every tap felt laggy and
+   ended in a "Sent…" prompt. Self-contained plays are now predicted locally and reconciled
+   from the host's state push; a nack takes the guess back. */
 const sent=[]; NET.tx={ send:(t,p)=>sent.push({t,p}) };
 const handN=G.players[1].hand.length, bankN=G.players[1].bank.length;
-bankCard(G.players[1].hand[0]);
-T('client intercept: intent sent, no local mutation', sent.length===1 && sent[0].t==='intent' && sent[0].p.k==='bank' && G.players[1].hand.length===handN && G.players[1].bank.length===bankN);
+const guessed=G.players[1].hand[0];
+bankCard(guessed);
+T('a predicted play moves the instant it is tapped',
+  G.players[1].bank.some(c=>c.id===guessed.id) && G.players[1].hand.length===handN-1);
+T('and the intent still travels to the host',
+  sent.some(x=>x.t==='intent' && x.p.k==='bank' && x.p.a.id===guessed.id));
+T('no prompt is raised for a play that already happened', NET.sentWait !== true);
+NET.onMessage('nack', { seat: 1 });
+T('a nack puts the card back exactly where it was',
+  G.players[1].hand.length===handN && G.players[1].bank.length===bankN
+  && G.players[1].hand.some(c=>c.id===guessed.id) && !G.players[1].bank.some(c=>c.id===guessed.id));
+T('and there is nothing left to undo afterwards', NET._guess===null);
+
+/* A play that needs the host's ruling must still wait — predicting a rent or an end of turn
+   would show the player a table that never happened. */
+const sentW=[]; NET.tx={ send:(t,p)=>sentW.push({t,p}) };
+const turnBefore=G.turn, playsBeforeW=G.playsLeft;
+endTurn();
+T('a play that needs the host still waits for it',
+  G.turn===turnBefore && G.playsLeft===playsBeforeW && sentW.some(x=>x.p.k==='endturn'));
+T('only self-contained plays are ever predicted',
+  Object.keys(NET.PREDICTABLE).every(k=>['bank','prop','rewild','bldg'].includes(k)));
 /* FAIL-SAFE: a signing failure must never swallow the intent. An intent that vanishes
    inside a callback is a frozen game with no error — the discard soft-lock's shape. */
 const _goodSigner = TableKit.ident._syncSigner;
@@ -255,7 +279,8 @@ const handF=G.players[1].hand.length;
 bankCard(G.players[1].hand[0]);
 T('a signing failure still sends the intent (unsigned, never silent)',
   sentF.length===1 && sentF[0].t==='intent' && sentF[0].p.k==='bank' && sentF[0].p.msig===null);
-T('and it still made no local mutation', G.players[1].hand.length===handF);
+T('and the play still happens on screen — a signing failure never freezes the player',
+  G.players[1].hand.length===handF-1);   // bank is predicted: the card moves, the host rules on it after
 TableKit.ident._syncSigner = _goodSigner;
 
 /* SOLO never signs: no wire, no seat registration, nothing to authenticate.
