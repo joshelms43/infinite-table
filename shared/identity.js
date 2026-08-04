@@ -112,9 +112,19 @@ const ID = {
     </div>`;
     const fc = $('#friendcount'); if(fc && fc.textContent!==undefined) fc.textContent = this.friends.length ? '('+this.friends.length+')' : '';
   },
-  openProfile(){
+  /* `why` is shown above the fields when the sheet was opened by something
+     the player was trying to do, rather than by tapping the profile chip. */
+  openProfile(why){
     this.sheetOpen = true;
+    this.gateWhy = why || null;
     this.renderProfileSheet();
+  },
+
+  /* A successful sign-in or registration resumes whatever was interrupted. The
+     host page owns what that was; this only announces that it can proceed. */
+  _announceReady(){
+    this.gateWhy = null;
+    try{ if(typeof accountReady === 'function') accountReady(); }catch(e){}
   },
   renderProfileSheet(){
     const p = this.profile;
@@ -133,7 +143,8 @@ const ID = {
         <button class="homebtn" style="flex:1" onclick="ID.addFriend()">Add</button>
       </div>` : '';
     if(!this.profile){
-      openSheet(`<h3>Profile</h3>
+      openSheet(`<h3>${this.gateWhy ? 'Sign In To Play' : 'Profile'}</h3>
+        ${this.gateWhy ? `<div class="sub" style="margin:0 0 14px">${this.gateWhy}</div>` : ''}
         <div class="zone-label">Table name</div>
         <input class="namefield" maxlength="12" value="${nm}" onchange="ID.saveName(this.value)" placeholder="Your name" style="margin-top:0">
         <div class="zone-label" style="margin-top:14px">Account</div>
@@ -146,7 +157,7 @@ const ID = {
           </div>
           ${this.lastError ? `<div class="sub" style="margin-top:8px;color:var(--danger-red)">${this.lastError}</div>` : ''}
         </div>
-        <button class="optbtn" style="margin-top:14px" onclick="ID.sheetOpen=false;closeSheet()">Done</button>`);
+        <button class="optbtn" style="margin-top:14px" onclick="ID.gateWhy=null;ID.sheetOpen=false;closeSheet()">Done</button>`);
       return;
     }
     const acct = `<div class="coderow"><span>Signed in as <b>@${this.uname()||''}</b></span><b class="fcode" onclick="ID.signOut()">Sign Out</b></div>`;
@@ -288,6 +299,7 @@ const ID = {
     await this.init();
     banner('ACCOUNT CREATED','var(--success-green)');
     this.renderProfileSheet();
+    this._announceReady();
   },
   async signIn(btn){
     if(this._authing) return; this._authing = true; this._busyBtn(btn, true);
@@ -315,6 +327,7 @@ const ID = {
       await this.init();
       banner('WELCOME BACK','var(--success-green)');
       this.renderProfileSheet();
+      this._announceReady();
     }catch(e){
       this.lastError = 'sign in — could not reach Supabase';
       banner('NO CONNECTION','var(--danger-red)');

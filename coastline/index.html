@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.14.4
+  Version: 0.14.5
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -818,7 +818,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.14.4"></script>
+<script src="../shared/mdeal-rules.js?v=0.14.5"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -851,7 +851,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.14.4</span>
+    <span class="ver">v0.14.5</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -912,7 +912,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
     <div class="homelogo"><span style="color:var(--money-gold)">M</span> DEAL</div>
     <div class="hometag">The property scramble</div>
     <div id="homemain">
-      <button id="homeprimary" class="homebtn primary hero" onclick="closeHome()">Play Solo</button>
+      <button id="homeprimary" class="homebtn primary hero" onclick="playSolo()">Play Solo</button>
       <button id="homenew" class="textbtn" style="display:none" onclick="location.reload()">New Game</button>
       <button class="homebtn" onclick="toggleReveal('onlinepanel')">Play Online</button>
       <button id="rejoinbtn" class="homebtn" style="display:none"></button>
@@ -3305,9 +3305,9 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.14.4"></script>
-<script src="../shared/tablekit.js?v=0.14.4"></script>
-<script src="../shared/identity.js?v=0.14.4"></script>
+<script src="../shared/config.js?v=0.14.5"></script>
+<script src="../shared/tablekit.js?v=0.14.5"></script>
+<script src="../shared/identity.js?v=0.14.5"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -3766,9 +3766,25 @@ const NET = {
     } finally { this._reviving = false; }
   },
   _busyBtn(btn, on){ if(btn && btn.classList){ btn.classList.toggle('busy', !!on); btn.disabled = !!on; } },
+  /* A connect attempt that is abandoned rather than finished would latch
+     _connecting and quietly shut both doors until a reload. Treat a flag older
+     than the longest plausible connect as stale. */
+  _busy(){
+    if(!this._connecting) return false;
+    if(this._connectAt && (Date.now() - this._connectAt) > 20000){ this._connecting = false; return false; }
+    return true;
+  },
   async hostGame(btn){
-    if(this._connecting) return; this._connecting = true; this._busyBtn(btn, true);
-    try{ await this._hostGame(); } finally { this._connecting = false; this._busyBtn(btn, false); }
+    /* covers the button and the ?invite= deep link. The resume runs the body,
+       not this function: re-entering the door would meet the same gate, and
+       while auth is still settling that recurses without bound. */
+    if(!requireAccount(()=>this._enterHost(btn), 'SIGN IN TO HOST')) return;
+    return this._enterHost(btn);
+  },
+  async _enterHost(btn){
+    if(this._busy()) return;
+    this._connecting = true; this._connectAt = Date.now(); this._busyBtn(btn, true);
+    try{ await this._hostGame(); } finally { this._connecting = false; this._connectAt = 0; this._busyBtn(btn, false); }
   },
   async _hostGame(){
     this.myName = String(this.myName||'Host').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,12) || 'Host';   // bound at the source too; esc() still guards every sink
@@ -3784,8 +3800,14 @@ const NET = {
     this.renderLobby();
   },
   async joinGame(btn){
-    if(this._connecting) return; this._connecting = true; this._busyBtn(btn, true);
-    try{ await this._joinGame(); } finally { this._connecting = false; this._busyBtn(btn, false); }
+    /* covers the button and the ?join= deep link */
+    if(!requireAccount(()=>this._enterJoin(btn), 'SIGN IN TO JOIN')) return;
+    return this._enterJoin(btn);
+  },
+  async _enterJoin(btn){
+    if(this._busy()) return;
+    this._connecting = true; this._connectAt = Date.now(); this._busyBtn(btn, true);
+    try{ await this._joinGame(); } finally { this._connecting = false; this._connectAt = 0; this._busyBtn(btn, false); }
   },
   async _joinGame(){
     this.myName = (this.myName||'Guest').slice(0,12) || 'Guest';
@@ -4166,12 +4188,76 @@ function openHome(){
   const p=$('#homeprimary'); if(p) p.textContent = GAME_STARTED ? 'Resume' : 'Play Solo';
   const n=$('#homenew'); if(n&&n.style) n.style.display = GAME_STARTED ? '' : 'none';
 }
+/* ================= the account gate =================
+
+   M Deal is rated, and a rating needs somewhere to live: every game here now
+   requires an account, solo included. Guests get the sign-in sheet instead of
+   a table, with a line saying why.
+
+   Every way into a game asks this first — Play Solo, Host, Join, the ?join=
+   and ?invite= deep links, and rejoining a room. It gates entry, not newGame()
+   itself: newGame runs at boot to lay out the table behind the home screen,
+   and gating it would leave the page blank.
+
+   Auth arrives asynchronously. If a deep link fires before ID.init() has
+   answered, refusing immediately would lock out someone who is in fact signed
+   in, so gated entries wait briefly for the answer rather than assuming. */
+let PENDING_ENTRY = null;
+
+function signedIn(){
+  return (typeof ID !== 'undefined') && !!ID.user;
+}
+function authSettled(){
+  return (typeof ID === 'undefined') || !SUPABASE_URL || ID.ready === true;
+}
+
+/* Runs `go` if there is an account, otherwise opens sign-in and remembers the
+   intent, so signing in continues rather than dumping you back at the menu. */
+function requireAccount(go, why){
+  if(signedIn()){ go(); return true; }
+  if(!authSettled()){
+    /* the session may still be loading — wait for it, briefly */
+    let waited = 0;
+    const poll = setInterval(()=>{
+      waited += 100;
+      if(signedIn()){ clearInterval(poll); go(); return; }
+      if(authSettled() || waited >= 3000){ clearInterval(poll); promptAccount(go, why); }
+    }, 100);
+    return false;
+  }
+  promptAccount(go, why);
+  return false;
+}
+
+function promptAccount(go, why){
+  PENDING_ENTRY = typeof go === 'function' ? go : null;
+  const h = $('#home'); if(h && h.classList) h.classList.add('show');
+  try{ banner(why || 'SIGN IN TO PLAY', 'var(--money-gold)'); }catch(e){}
+  try{ ID.openProfile('M Deal games are rated, so playing needs an account. It takes a username and a password — no email.'); }
+  catch(e){ try{ ID.openProfile(); }catch(_){} }
+}
+
+/* Called by the identity module the moment a sign-in succeeds. */
+function accountReady(){
+  const go = PENDING_ENTRY; PENDING_ENTRY = null;
+  if(typeof go === 'function') setTimeout(go, 260);
+}
+
+function playSolo(){
+  requireAccount(()=>{
+    const h=$('#home'); if(h&&h.classList) h.classList.remove('show');
+    if(!GAME_STARTED && NET.mode==='off'){
+      GAME_STARTED = true;
+      startSolo();
+    }
+  }, 'SIGN IN TO PLAY');
+}
+
+/* Dismisses the home screen. Nothing more — the entry points start games, and
+   folding "start one if none is running" in here meant every dismissal went
+   through the account gate, including the ones that just close a panel. */
 function closeHome(){
   const h=$('#home'); if(h&&h.classList) h.classList.remove('show');
-  if(!GAME_STARTED && NET.mode==='off'){
-    GAME_STARTED = true;
-    startSolo();
-  }
 }
 function toggleReveal(id){
   const el = document.getElementById(id); if(!el || !el.classList) return;

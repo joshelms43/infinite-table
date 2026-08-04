@@ -257,6 +257,83 @@ const { htmlFor } = require('./_document');
     T('and hands the player straight to them', win.classList.contains('show'));
   }
 
+  /* ---------- 5. the account gate ----------
+     M Deal is rated, so every way into a game needs an account. A guest gets
+     the sign-in sheet and no table. */
+  {
+    const home = w.document.querySelector('#home');
+    const guest = () => w.eval('ID.user = null; ID.ready = true; ID.sheetOpen = false; ID.gateWhy = null; GAME_STARTED = false; NET.mode = "off"; PENDING_ENTRY = null; document.querySelector("#home").classList.add("show");');
+
+    guest();
+    w.eval('playSolo()');
+    await new Promise(r => setTimeout(r, 150));
+    T('a guest tapping Play Solo does not get a table', w.eval('GAME_STARTED') === false);
+    T('the home screen stays up', home.classList.contains('show'));
+    T('and the sign-in sheet opens', w.eval('ID.sheetOpen') === true);
+    T('saying why it opened', /rated/i.test(w.eval('ID.gateWhy || ""')), w.eval('ID.gateWhy || ""'));
+    T('and the intent is remembered', w.eval('typeof PENDING_ENTRY') === 'function');
+
+    /* signing in continues what was interrupted */
+    w.eval('ID.user = { id:"me" }; ID.profile = { id:"me", elo:1000, friend_code:"ABC123" }; accountReady();');
+    await new Promise(r => setTimeout(r, 500));
+    T('signing in starts the game that was asked for', w.eval('GAME_STARTED') === true);
+    T('and the intent is not left behind to fire twice', w.eval('PENDING_ENTRY') === null);
+
+    /* a signed-in player is never stopped */
+    w.eval('GAME_STARTED = false; NET.mode = "off"; document.querySelector("#home").classList.add("show");');
+    w.eval('playSolo()');
+    await new Promise(r => setTimeout(r, 150));
+    T('a signed-in player goes straight to the table', w.eval('GAME_STARTED') === true);
+    T('and the home screen gets out of the way', !home.classList.contains('show'));
+
+    /* the online doors */
+    guest();
+    w.eval('window.__hosted = false; NET._hostGame = async () => { window.__hosted = true; };');
+    w.eval('NET.hostGame()');
+    await new Promise(r => setTimeout(r, 150));
+    T('a guest cannot host', w.__hosted === false);
+    T('and is asked to sign in', w.eval('ID.sheetOpen') === true);
+
+    guest();
+    /* the host attempt above left the in-flight flag set; a fresh door must not
+       inherit it — see NET._busy() */
+    w.eval('window.__joined = false; NET._joinGame = async () => { window.__joined = true; };');
+    w.eval('NET.joinGame()');
+    await new Promise(r => setTimeout(r, 150));
+    T('a guest cannot join a room', w.__joined === false);
+    T('and signing in then joins it', await (async () => {
+      w.eval('ID.user = { id:"me" }; accountReady();');
+      const t0 = Date.now();                       // wait on the state, not a guess
+      while (Date.now() - t0 < 3000) {
+        if (w.__joined === true) return true;
+        await new Promise(r => setTimeout(r, 30));
+      }
+      console.log('  DIAG joined=' + w.__joined + ' pending=' + w.eval('typeof PENDING_ENTRY') + ' connecting=' + w.eval('NET._connecting'));
+      return false;
+    })());
+
+    /* The resume must not re-enter the gated door. It used to, and with auth
+       still settling that recursed until the stack blew — a hang on a slow
+       phone, which is exactly when it would happen. */
+    w.eval('ID.user = null; ID.ready = false; ID.sheetOpen = false; PENDING_ENTRY = null; window.__joined = false; NET._connecting = false;');
+    let blew = false;
+    try { w.eval('NET.joinGame()'); } catch (e) { blew = /stack|recursion/i.test(String(e && e.message)); }
+    await new Promise(r => setTimeout(r, 200));
+    T('a gated entry while auth is settling does not recurse', !blew);
+    w.eval('ID.ready = true; ID.user = null;');
+    await new Promise(r => setTimeout(r, 3400));
+    T('and it settles on the sign-in sheet rather than spinning', w.eval('ID.sheetOpen') === true);
+
+    /* auth that has not answered yet must not lock out someone who is signed in */
+    w.eval('ID.user = null; ID.ready = false; ID.sheetOpen = false; GAME_STARTED = false; NET.mode = "off"; PENDING_ENTRY = null;');
+    w.eval('playSolo()');
+    await new Promise(r => setTimeout(r, 120));
+    T('a slow session does not refuse immediately', w.eval('ID.sheetOpen') === false);
+    w.eval('ID.user = { id:"me" }; ID.ready = true;');
+    await new Promise(r => setTimeout(r, 400));
+    T('and once it lands the game starts', w.eval('GAME_STARTED') === true);
+  }
+
   dom.window.close();
   console.log(fails ? 'BOTSIM: ' + fails + ' FAILED' : 'BOTSIM: ALL PASS');
   process.exitCode = fails ? 1 : 0;

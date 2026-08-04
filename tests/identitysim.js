@@ -529,6 +529,21 @@ MAILERS.forEach(([label, re]) => {
         /if\(ELOCLOSED\)\{ revealWin\(\); return; \}/.test(mdeal));
       T('a slow settle still lets the player through', /why:'slow'/.test(mdeal) && /8000/.test(mdeal));
 
+      /* Every door into a game is gated. A new one that forgets is the whole
+         failure mode, so the doors are enumerated here. */
+      T('Play Solo is gated', /onclick="playSolo\(\)"/.test(mdeal) &&
+        /function playSolo\(\)\{\s*requireAccount\(/.test(mdeal));
+      T('hosting is gated', /requireAccount\(\(\)=>this\._enterHost\(btn\)/.test(mdeal));
+      T('joining is gated — and with it the ?join= and rejoin paths',
+        /requireAccount\(\(\)=>this\._enterJoin\(btn\)/.test(mdeal));
+      T('the gate does not block the boot deal that draws the table',
+        !/requireAccount[\s\S]{0,40}newGame\(\)/.test(mdeal));
+      T('a resumed entry skips the door rather than re-entering it',
+        /return this\._enterHost\(btn\)/.test(mdeal) && /return this\._enterJoin\(btn\)/.test(mdeal));
+      T('an abandoned connect cannot latch both doors shut', /_busy\(\)\{/.test(mdeal) && /_connectAt/.test(mdeal));
+      T('signing in resumes what was interrupted', /function accountReady\(\)/.test(mdeal) &&
+        /_announceReady/.test(fs.readFileSync(path.join(ROOT, 'shared', 'identity.js'), 'utf8')));
+
       T('an unmoved rating names the file that fixes it', /accounts\.sql/.test(mdeal) && /noaccounts/.test(mdeal));
       T('and does not call a win unrated just because nothing moved',
         /\(r && r\.won\) \? 'You win' : 'Unrated'/.test(mdeal));

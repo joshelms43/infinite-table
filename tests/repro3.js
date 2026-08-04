@@ -15,7 +15,10 @@ const T = (n,c)=>console.log((c?'PASS':'FAIL')+' — '+n) || (c?0:process.exitCo
 
 (async ()=>{
   await sleep(600);
-  win.closeHome && win.closeHome();
+  /* Playing needs an account now, so sit down as a signed-in player. closeHome
+     only dismisses the panel these days; playSolo is what deals. */
+  win.eval('if(typeof ID!=="undefined"){ ID.user={id:"test"}; ID.ready=true; ID.profile={id:"test",name:"Tester",elo:1000,friend_code:"TEST01"}; }');
+  win.playSolo ? win.playSolo() : (win.closeHome && win.closeHome());
   await sleep(1000);
   win.eval('window.__G=G; window.__MODE=MODE;');
   const G = win.__G, MODE = win.__MODE;

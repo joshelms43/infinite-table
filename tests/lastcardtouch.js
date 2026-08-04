@@ -150,9 +150,15 @@ const until = async (fn, ms = 1800) => {          // load-proof: wait for the ST
     await until(() => !doc.querySelector('.dragclone') && deadNow.classList.contains('denied'));
     T('it springs back with the denial shake', !doc.querySelector('.dragclone') &&
       deadNow.classList.contains('denied') && E.players[0].hand.length === handN);
-    await until(() => !deadNow.classList.contains('denied') && !deadNow.classList.contains('hidden-src'));
+    /* The shake runs its full animation before the class comes off, and the
+       default 1800ms budget is not always enough on a loaded box — this is the
+       one assertion here that waits on an animation rather than on state. The
+       hand length is deliberately not re-checked: the refusal was already shown
+       to leave it alone above, and by now the opponent has had a turn, so
+       asserting it again tests the bot's luck rather than the refusal. */
+    await until(() => !deadNow.classList.contains('denied') && !deadNow.classList.contains('hidden-src'), 6000);
     T('and settles clean', !deadNow.classList.contains('denied') &&
-      !deadNow.classList.contains('hidden-src') && E.players[0].hand.length === handN);
+      !deadNow.classList.contains('hidden-src'));
   }
 
   /* ---- a wild drop opens the colour picker; picking sends the play ---- */

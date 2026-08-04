@@ -1,5 +1,28 @@
 # Coastline — Changelog
 
+## v0.14.5 — 2026-07-26
+Playing M Deal needs an account now — solo included.
+
+Every way into a game asks first: Play Solo, Host a Room, Join a Room, the `?join=` and `?invite=` deep links, and the rejoin button. The last three come free, because the deep links and rejoin all route through `hostGame`/`joinGame`, so gating those two doors covers five of the six. A guest gets the sign-in sheet with a line saying why — "M Deal games are rated, so playing needs an account. It takes a username and a password — no email" — rather than a bare form.
+
+**Signing in continues what you were doing.** The interrupted entry is remembered and runs once the account exists, so you land in the game you asked for instead of back at the menu.
+
+**The gate sits on entry, not on `newGame()`.** `newGame` runs at boot to lay out the table behind the home screen; gating it would leave the page blank.
+
+**Auth is asynchronous, so a gated entry waits for it.** A deep link can fire before `ID.init()` has answered. Refusing immediately would turn away someone who is signed in, so the gate waits up to three seconds for a verdict before deciding.
+
+Three bugs fell out of building it, all found by the tests rather than by reading:
+
+**The retry recursed without bound.** The resume callback re-entered `joinGame`, which met the same gate; with auth still settling that branch waits and retries, so it recursed until the stack blew. On a phone that is a hang, and a slow connection is exactly when it would happen. A resumed entry has already passed the gate and now runs the body directly — `_enterHost`/`_enterJoin`.
+
+**An abandoned connect latched both doors shut.** `_connecting` is cleared in a `finally`, so a completed attempt always releases it — but an attempt abandoned partway leaves it set, and both Host and Join then refuse silently until a reload. A flag older than twenty seconds is now treated as stale.
+
+**`closeHome` was doing two jobs.** It dismissed the home screen and started a solo game if none was running. Routing the second through the gate gated the first as well, so merely dismissing a panel could silently refuse — which is what broke `repro3`. Dismissing and starting are separate now; `closeHome` closes, `playSolo` deals.
+
+Pins: sixteen DOM cases covering a guest at each of the three doors, the sheet opening with its reason, the intent being remembered and then consumed, a signed-in player never being stopped, the recursion, and a slow session neither refusing early nor spinning. Four mutations bite — ungating solo, host, or join, and breaking the resume.
+
+## Test infrastructure — 2026-07-26 (fourth pass)
+`and settles clean` waited on an animation with the default 1800ms budget, which is not always enough on a loaded box; it now gets 6000ms. It also re-checked a hand length that the opponent's turn can change by then — the refusal was already shown to leave the hand alone one assertion earlier, so checking it again tested the bot's luck rather than the refusal. Six runs under eight competing CPU hogs, all green.
 ## v0.14.4 — 2026-07-27
 The 50/50 band back to an even split, and rainbows can no longer be dropped where they cannot go.
 
