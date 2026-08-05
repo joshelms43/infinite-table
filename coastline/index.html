@@ -4650,6 +4650,17 @@ function aiMoveWild(p, card, fromCol, toCol){ // non-destructive: buildings swep
   p.props[toCol].push(card);
   return true;
 }
+function wildLegal(fixed, wilds, assign){ // a colour may never hold a rainbow (wildall) with no non-rainbow anchor
+  const nonRain = {}, rain = {};
+  for(const col in fixed) nonRain[col] = fixed[col];
+  for(let i=0;i<wilds.length;i++){
+    const col = assign[i];
+    if(wilds[i].card.t==='wildall') rain[col] = (rain[col]||0)+1;
+    else nonRain[col] = (nonRain[col]||0)+1;   // a real prop OR a dual wild is a valid anchor
+  }
+  for(const col in rain){ if(rain[col] && !nonRain[col]) return false; }
+  return true;
+}
 function wildBestAssignment(p, supply){ // pure: hill-climb the placement, mutate nothing
   const list = propList(p);
   const wilds = list.filter(x=>x.card.t==='wild' || x.card.t==='wildall');
@@ -4664,6 +4675,7 @@ function wildBestAssignment(p, supply){ // pure: hill-climb the placement, mutat
     for(let i=0;i<wilds.length;i++) for(const col of allowed[i]){
       if(col === assign[i]) continue;
       const trial = assign.slice(); trial[i] = col;
+      if(!wildLegal(fixed, wilds, trial)) continue;   // never strand a rainbow (rainbows can't sit alone)
       const s = wildPlacementScore(p, fixed, trial, supply);
       if(s > bs + 1e-9){ bs = s; bi = i; bc = col; }
     }
