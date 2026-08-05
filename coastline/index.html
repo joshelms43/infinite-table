@@ -3107,20 +3107,26 @@ function requestPayment(payerIdx, amount, receiverIdx, done, jsnCtx){
       }
       items.push({c:x.card, v:Math.max(1,x.card.v), pen, bank:false});
     });
-    const CAP = amount+11;
-    const dp = new Array(CAP+1).fill(Infinity), pick = new Array(CAP+1).fill(null);
-    dp[0]=0;
-    items.forEach((it,ii)=>{
-      for(let a=CAP; a>=0; a--){
+    const CAP = amount+11, NI = items.length;
+    // 0/1 knapsack with a PER-ITEM predecessor layer. A flat pick[] was unsound: a later item can
+    // improve dp[a] after pick[] was written, so the backtrack could revisit an item and the
+    // `chosen` Set silently dropped the duplicate — the payer handed over LESS than owed while still
+    // holding enough to pay (~0.9% of payments). Per-item `from` layers make reconstruction exact.
+    let dp = new Array(CAP+1).fill(Infinity); dp[0]=0;
+    const layers = [];
+    for(let i=0;i<NI;i++){
+      const it = items[i], nd = dp.slice(), fr = new Int16Array(CAP+1).fill(-1);
+      for(let a=0; a<=CAP; a++){
         if(dp[a]===Infinity) continue;
         const na=Math.min(CAP, a+it.v), cost=dp[a]+it.v+it.pen;
-        if(cost<dp[na]){ dp[na]=cost; pick[na]={ii, from:a}; }
+        if(cost<nd[na]){ nd[na]=cost; fr[na]=a; }
       }
-    });
+      layers.push(fr); dp = nd;
+    }
     let bestA=-1;
     for(let a=amount; a<=CAP; a++) if(dp[a]<Infinity && (bestA<0||dp[a]<dp[bestA])) bestA=a;
     const chosen=new Set();
-    for(let a=bestA; a>0 && pick[a]; ){ chosen.add(pick[a].ii); a=pick[a].from; }
+    if(bestA>=0){ let a=bestA; for(let i=NI-1; i>=0 && a>0; i--){ const fr=layers[i]; if(fr[a]>=0){ chosen.add(i); a=fr[a]; } } }
     if(bestA<0) items.forEach((it,ii)=>chosen.add(ii)); // shouldn't happen (short-pay handled earlier)
     [...chosen].map(ii=>items[ii]).sort((a,b)=>a.v-b.v).forEach(it=>{
       if(it.bank) transferBank(payer,receiver,it.c); else transferProp(payer,receiver,it.c);
