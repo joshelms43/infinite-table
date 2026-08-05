@@ -1554,7 +1554,7 @@ let HAND_MINE = null;
 function oppPanelHTML(idx, clickable){
   const p = G.players[idx];
   const away = (typeof NET!=='undefined') && NET.isGone && NET.isGone(idx);
-  const label = (idx===MYSEAT ? 'You' : esc(p.name)) + (p.out ? ' · out' : (away ? ' · away' : ''));   // name escaped here; the suffixes are literal and safe
+  const label = (idx===MYSEAT ? 'You' : esc(p.isAI ? botLabel(p.name) : p.name)) + (p.out ? ' · out' : (away ? ' · away' : ''));   // AI seats show the engine version (botLabel); name escaped here, suffixes are literal and safe
   const avs = ['var(--action-info)','var(--c-orange)','var(--c-purple)','var(--c-teal)'];
   const av = idx===MYSEAT ? 'var(--action-info)' : avs[idx%avs.length];
   const awayCls = (p.out ? ' isout' : '') + (away ? ' away' : '');
@@ -3986,7 +3986,7 @@ const NET = {
     return list.slice(0,5);
   },
   bots: [],
-  botNames: ['Bazza','Shazza','Davo'],
+  botNames: ['Bazza','Shazza','Davo','Azza'], // Azza added to the pool (v10 flagship, shown via botLabel). Order Bazza/Shazza/Davo is pinned by botsim.js + identitysim.js.
   addBot(){
     if(this.tableSeats().length>=5) return;
     const used = this.bots.map(b=>b.name);
@@ -4031,7 +4031,7 @@ const NET = {
     this._seatN = seats.length;
     el.innerHTML = seats.map((mm,i)=>{
       const mine = !mm.isAI && mm.key===this.pkey;
-      const nameCell = `<span style="flex:1;text-align:left"><span class="seatdot ${mm.isAI?'bot':''}"></span>${esc(mm.name)}${mine?' · you':''}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
+      const nameCell = `<span style="flex:1;text-align:left"><span class="seatdot ${mm.isAI?'bot':''}"></span>${esc(mm.isAI?botLabel(mm.name):mm.name)}${mine?' · you':''}${mm.host?' · host':''}${mm.isAI?' · bot':''}</span>`;
       return `<div class="lobbyseat"><span class="avatar" style="background:${mm.isAI?'var(--felt-highlight)':(i===0?'var(--money-gold)':'var(--felt-highlight)')}">${mm.isAI?'☺':esc((mm.name||'?')[0])}</span>${nameCell}${mm.isAI&&this.mode==='lobby-host'?`<button class="frremove" onclick="NET.removeBot('${mm.key}')">✕</button>`:''}</div>`;
     }).join('')
       + (seats.length<2 ? '<div class="sub" style="opacity:.5">Share the code</div>' : '');
@@ -4356,6 +4356,13 @@ function aiWildColor(p,c){
   }
   return best;
 }
+/* ================= AI bots: shared champion brain, versioned display label =================
+   All AI seats (Bazza, Shazza, Azza, ...) run the SAME brain below. BOT_VERSION is the only
+   thing to bump when the brain is re-certified — botLabel() tags AI display names with it so
+   players can see which engine they are facing. The label is DISPLAY-ONLY; the internal seat
+   `name` stays plain ('Bazza'/'Shazza'/'Azza') because the roster/rating/identity code keys on it. */
+const BOT_VERSION = 'v10'; // the certified engine these bots run (bump on re-certification)
+function botLabel(name){ return name ? name + ' ' + BOT_VERSION : name; }
 /* ================= AI BRAIN: card counting + EV decisions ================= */
 const AI_W = {
   pg_complete: 9, pg_near: 5, pg_base: 2.4,
@@ -4462,9 +4469,247 @@ function keepScore(c, p){
   return c.v*4.5; // money
 }
 
+/* ===== v0.10.0 CERTIFIED LEVERS — ported from infinite-ai v0.10.0 champion (engine/index.html @22c22d6) =====
+   Four levers, each gated by an MC flag so they can be A/B'd or reverted without code churn:
+     - aiTuneWilds / mcTuneWilds  (MC.wild, MC.wildsupply, MC.wildsim)  free wild reassignment + supply-aware placement
+     - bankMenu                    (MC.bankmenu)                         offer every distinct bankable card, not just two
+     - targetMenu / tgtPick        (MC.targets, MC.targetK)              offer every distinct (victim,object) for a targeted card
+   The lever LOGIC is the champion's; every coastline live hook (aiShowcase, attacksAllowed,
+   resolveBlock/doTakeover/requestPayment signatures) is preserved at the call sites below. */
+
+// coastline already has stealTargetsOf(pIdx) reading G.players; targetMenu must work over an
+// arbitrary players array (the SIM world too), so port the champion's (players, t) form.
+function tgtSteal(players, t){ const q = players[t]; return propList(q).filter(x=>!isComplete(q,x.color)); }
+
+// One option per (victim, object) for a targeted card. `inc` = the heuristic incumbent
+// (what the pre-lever AI would have picked) so targets=0 reproduces the old single choice exactly.
+function targetMenu(players, idx, card, turnCount, jadj){
+  const me = players[idx], W = wOf(me);
+  const enemies = []; for(let i=0;i<players.length;i++) if(i!==idx) enemies.push(i);
+  const liq = q => payAssetsTotal(q);
+  const opts = [], seen = new Set();
+  let inc = -1;
+  const push = o => { if(seen.has(o.tag)) return; seen.add(o.tag); opts.push(o); };
+  const argmax = key => { let bi=-1, bv=-Infinity; opts.forEach((o,i)=>{ if(o[key]>bv){ bv=o[key]; bi=i; } }); return bi; };
+
+  if(card.t==='rent'){
+    // one option per colour on the card; a rent card always charges EVERY opponent
+    card.colors.forEach(col=>{
+      const r = rentFor(me,col); if(r<=0) return;
+      const ev = enemies.reduce((s,t)=>s+jadj(Math.min(r, liq(players[t]))*W.rent_eff, t), 0);
+      push({ tag:'rt|'+col, base:r, ev, col, r, targets:enemies });
+    });
+    inc = argmax('base'); // original: the max-rent colour, first wins
+  } else if(card.t==='rentall'){
+    Object.keys(me.props).forEach(col=>{
+      const r = rentFor(me,col); if(r<=0) return;
+      enemies.forEach(t=>{
+        const take = Math.min(r, liq(players[t]));
+        push({ tag:'ra|'+col+'|'+t, base:take, ev:jadj(take*W.rent_eff, t), col, r, t, targets:[t] });
+      });
+    });
+    // original: max-rent colour x the single richest opponent
+    if(opts.length){
+      let bc = null, br = -1;
+      Object.keys(me.props).forEach(col=>{ const r = rentFor(me,col); if(r>0 && r>br){ br=r; bc=col; } });
+      const bt = enemies.slice().sort((a,b)=>liq(players[b])-liq(players[a]))[0];
+      inc = opts.findIndex(o=>o.col===bc && o.t===bt);
+    }
+  } else if(card.t==='action' && card.kind==='favour'){
+    enemies.forEach(t=>{ const base = Math.min(5, liq(players[t]))*0.85;
+      push({ tag:'fv|'+t, base, ev:jadj(base, t), t }); });
+    const bt = enemies.slice().sort((a,b)=>liq(players[b])-liq(players[a]))[0]; // original: the richest
+    inc = opts.findIndex(o=>o.t===bt);
+  } else if(card.t==='action' && card.kind==='takeover'){
+    const winNow = completeColors(me).length>=2;
+    enemies.forEach(t=>completeColors(players[t]).forEach(col=>{
+      const val = (players[t].props[col]||[]).reduce((s,c)=>s+c.v,0) + rentFor(players[t],col)*0.5;
+      const urgent = completeColors(players[t]).length>=2;
+      let ev = winNow ? 1000 : jadj(W.tk_base + val*W.tk_val, t);
+      if(!winNow && !urgent && turnCount<4) ev *= W.tk_hold; // hold it early
+      push({ tag:'tk|'+t+'|'+col, base:val, ev, t, col });
+    }));
+    inc = argmax('base'); // original: the most valuable set, first wins
+  } else if(card.t==='action' && card.kind==='swipe'){
+    enemies.forEach(t=>{
+      const tp = players[t];
+      tgtSteal(players, t).forEach(x=>{
+        const myGain = x.card.t==='prop' ? progressGain(me, x.color) : 3;
+        const theirLoss = (countIn(tp,x.color)===COLORS[x.color].size-1 ? 4 : 1.5) + countIn(tp,x.color)*0.6;
+        const base = myGain*W.sw_gain + theirLoss*W.sw_loss + x.card.v*W.sw_v;
+        push({ tag:'sw|'+t+'|'+x.color+'|'+keyOf(x.card), base, ev:jadj(base, t),
+               t, color:x.color, id:x.card.id, card:x.card });
+      });
+    });
+    inc = argmax('ev'); // original: the best jsn-adjusted steal, first wins
+  } else if(card.t==='action' && card.kind==='swap'){
+    const mine = propList(me).filter(x=>!isComplete(me,x.color) && x.card.t==='prop');
+    enemies.forEach(t=>{
+      const tp = players[t];
+      tgtSteal(players, t).forEach(x=>{
+        if(x.card.t!=='prop') return;
+        mine.forEach(mx=>{
+          const net = progressGain(me, x.color)
+                    - (countIn(me,mx.color)===COLORS[mx.color].size-1 ? 6 : 2)
+                    + (countIn(tp,x.color)===COLORS[x.color].size-1 ? 4 : 1.5)
+                    - (countIn(tp,mx.color)===COLORS[mx.color].size-1 ? 6 : 1.5);
+          if(net<=W.swap_min) return;
+          push({ tag:'sm|'+t+'|'+x.color+'|'+keyOf(x.card)+'|'+mx.color+'|'+keyOf(mx.card),
+                 base:net, ev:jadj(net, t),
+                 t, color:x.color, id:x.card.id, myColor:mx.color, myId:mx.card.id,
+                 card:x.card, myCard:mx.card });
+        });
+      });
+    });
+    inc = argmax('ev'); // original: the best jsn-adjusted trade, first wins
+  }
+  return { opts, inc };
+}
+// which options to actually offer: the incumbent alone, or the top MC.targetK ranked by the
+// jsn-free base score (stable — ties keep enumeration order, so both callers agree exactly).
+function tgtPick(m){
+  if(!m.opts.length) return [];
+  if(!MC.targets) return m.inc>=0 ? [m.opts[m.inc]] : [];
+  return m.opts.map((o,i)=>[o,i]).sort((a,b)=> (b[0].base-a[0].base) || (a[1]-b[1]))
+               .slice(0, MC.targetK).map(x=>x[0]);
+}
+
+/* ---------- the banking menu ----------
+   The AI could bank exactly two cards (largest money note, lowest-keepScore spare); a human may
+   bank ANY card. bankMenu offers every distinct bankable card. ONE menu serves both brainCandidates
+   (real play) and mcMoves (search) — they must agree card for card, since mctsChoose matches
+   candidates to search moves by cardId. MC.bankmenu = 0 reproduces the two incumbent candidates
+   exactly (same cards, evs, order). */
+function bankKeyOf(c){ // engine's interchangeability key; colour pairs stay distinct
+  return (c.t==='rent'||c.t==='wild') ? c.t+':'+c.colors.join(',') : keyOf(c);
+}
+function bankMenu(p, playsLeft){
+  const W = wOf(p), out = [];
+  const money  = [...p.hand].filter(c=>c.t==='money').sort((a,b)=>b.v-a.v);
+  const spares = [...p.hand].filter(c=>(c.t==='action'&&c.kind!=='nodeal')||c.t==='rent'||c.t==='rentall')
+                            .sort((a,b)=>keepScore(a,p)-keepScore(b,p));
+  const seen = new Set();
+  const take = (list, evOf)=>{
+    let rank = 0;
+    for(const c of list){
+      const k = bankKeyOf(c); if(seen.has(k)) continue; seen.add(k);
+      if(rank>0 && !MC.bankmenu) break; // champion: one option per group
+      out.push({ card:c, ev: evOf(c, rank) });
+      rank++;
+    }
+  };
+  // money keeps a real per-card prior: a bigger note banks more value, and the largest still leads.
+  take(money, c => 0.8 + c.v*W.bank_v);
+  // spares share rank 0's ev less 0.01/rank: greedy has no opinion past keepScore order, so this
+  // says "let the search decide" while keeping the incumbent on top.
+  const s0 = spares.length ? (playsLeft<3?0.7:0.45) + spares[0].v*0.08 : 0;
+  take(spares, (c,rank) => s0 - 0.01*rank);
+  return out;
+}
+
+/* ---------- free wild reassignment (aiTuneWilds) ----------
+   A played wild can move between sets for free, unlimited times. Before deciding what to spend a
+   play on, the brain hill-climbs the placement of its wilds to maximise complete sets / progress.
+   Supply-aware (MC.wildsupply): progress toward a colour whose remaining cards are all accounted
+   for is progress toward nothing. */
+function wildPlacementScore(p, fixed, assign, supply){
+  const cnt = {};
+  for(const col in fixed) cnt[col] = fixed[col];
+  for(let i=0;i<assign.length;i++) cnt[assign[i]] = (cnt[assign[i]]||0) + 1;
+  let complete = 0, prog = 0, bldg = 0;
+  for(const col in cnt){
+    const n = cnt[col], size = COLORS[col].size;
+    if(n >= size){
+      complete++;
+      const b = p.bldg[col];
+      if(b){ if(b.granny) bldg += 3; if(b.resort) bldg += 4; } // breaking a built set forfeits them
+    } else {
+      const need = size - n;
+      const dead = supply && supply[col] != null && supply[col] < need;
+      prog += ((n === size-1) ? 30 : n*3) * (dead ? 0.25 : 1);
+    }
+  }
+  return complete*1000 + prog + bldg*10;
+}
+function aiMoveWild(p, card, fromCol, toCol){ // non-destructive: buildings swept once, after all moves
+  const arr = p.props[fromCol];
+  const i = arr ? arr.findIndex(c=>c.id===card.id) : -1;
+  if(i < 0) return false;
+  arr.splice(i,1);
+  if(!arr.length) delete p.props[fromCol];
+  if(!p.props[toCol]) p.props[toCol] = [];
+  p.props[toCol].push(card);
+  return true;
+}
+function wildBestAssignment(p, supply){ // pure: hill-climb the placement, mutate nothing
+  const list = propList(p);
+  const wilds = list.filter(x=>x.card.t==='wild' || x.card.t==='wildall');
+  if(!wilds.length) return null;
+  const fixed = {};
+  list.forEach(x=>{ if(x.card.t!=='wild' && x.card.t!=='wildall') fixed[x.color] = (fixed[x.color]||0)+1; });
+  const allowed = wilds.map(x=> x.card.t==='wild' ? x.card.colors : Object.keys(COLORS));
+  const assign = wilds.map(x=>x.color);
+  let best = wildPlacementScore(p, fixed, assign, supply);
+  for(let pass=0; pass<12; pass++){ // single-move hill climb; wilds in play are few
+    let bi = -1, bc = null, bs = best;
+    for(let i=0;i<wilds.length;i++) for(const col of allowed[i]){
+      if(col === assign[i]) continue;
+      const trial = assign.slice(); trial[i] = col;
+      const s = wildPlacementScore(p, fixed, trial, supply);
+      if(s > bs + 1e-9){ bs = s; bi = i; bc = col; }
+    }
+    if(bi < 0) break;
+    assign[bi] = bc; best = bs;
+  }
+  return { wilds, assign };
+}
+function wildApply(p, r){ // move the cards; returns the set of colours whose completeness may have changed
+  const touched = new Set();
+  for(let i=0;i<r.wilds.length;i++){
+    if(r.assign[i] === r.wilds[i].color) continue;
+    if(aiMoveWild(p, r.wilds[i].card, r.wilds[i].color, r.assign[i])){
+      touched.add(r.wilds[i].color); touched.add(r.assign[i]);
+    }
+  }
+  return touched;
+}
+function aiTuneWilds(p){ // LIVE game: buildings fall into the real G.discard
+  // Supply census from this seat's own information state; MC.wildsupply gates it for A/B.
+  let supply = null;
+  if(MC.wildsupply){
+    const selfIdx = G.players.indexOf(p);
+    if(selfIdx >= 0){ supply = {}; for(const col in COLORS) supply[col] = colorSupply(p, col, selfIdx); }
+  }
+  const r = wildBestAssignment(p, supply);
+  if(!r) return 0;
+  const touched = wildApply(p, r);
+  touched.forEach(col=>loseBuildingsIfBroken(p, col));
+  return touched.size ? 1 : 0;
+}
+function mcTuneWilds(st, idx){
+  // SIM version. loseBuildingsIfBroken() pushes into the live G.discard — calling it from a
+  // rollout would leak sim cards into the real game and break 106-card conservation. Buildings
+  // broken inside a simulation must land in that world's own discard pile.
+  const p = st.players[idx];
+  const r = wildBestAssignment(p, null); // sim has no counting layer -> supply-blind by design
+  if(!r) return 0;
+  const touched = wildApply(p, r);
+  touched.forEach(col=>{
+    const b = p.bldg && p.bldg[col];
+    if(b && !isComplete(p, col)){
+      if(b.granny) st.discard.push(b.granny);
+      if(b.resort) st.discard.push(b.resort);
+      delete p.bldg[col];
+    }
+  });
+  return touched.size ? 1 : 0;
+}
+
 function brainCandidates(p, idx, next){
   const C = []; const add = (ev, run, meta)=>{ if(ev>0.4) C.push(Object.assign({ev, run}, meta||{})); };
   const enemies = othersOf(idx);
+  const jadj = (ev, t)=>jsnAdjusted(ev, t, idx);
+  const menuOf = c => tgtPick(targetMenu(G.players, idx, c, G.turnCount, jadj)); // v10 targeting lever
 
   // properties
   p.hand.filter(c=>c.t==='prop').forEach(c=>{
@@ -4491,45 +4736,33 @@ function brainCandidates(p, idx, next){
     }
   });
 
-  // hostile takeover
+  // hostile takeover — every complete set on every opponent (v10 targeting lever, see targetMenu)
   const tk = p.hand.find(c=>c.t==='action'&&c.kind==='takeover');
-  if(tk){
-    let best=null;
-    enemies.forEach(t=>completeColors(G.players[t]).forEach(col=>{
-      const val=(G.players[t].props[col]||[]).reduce((s,c)=>s+c.v,0) + rentFor(G.players[t],col)*0.5;
-      if(!best||val>best.val) best={t,col,val};
-    }));
-    if(best){
-      const winNow = completeColors(p).length>=2;
-      const urgent = completeColors(G.players[best.t]).length>=2;
-      let ev = winNow ? 1000 : jsnAdjusted(wOf(p).tk_base + best.val*wOf(p).tk_val, best.t, idx);
-      if(!winNow && !urgent && G.turnCount<4) ev *= wOf(p).tk_hold; // hold it early
-      attacksAllowed() && add(ev, ()=>{
-        spendAI(tk,p); renderAll();
-        log(p.name+' launched a Hostile Takeover on '+(best.t===0?'your':G.players[best.t].name+"'s")+' '+COLORS[best.col].label+' set!');
-        banner('HOSTILE TAKEOVER!','var(--coral)');
-        resolveBlock(best.t,idx,'Hostile Takeover',blocked=>{
-          if(!blocked){ doTakeover(best.t,idx,best.col); if(checkAllWin())return; }
-          else log('Takeover blocked.');
-          next();
-        });
-      }, {cardId:tk.id, mode:'play', label:'Hostile Takeover → '+(best.t===0?'you':G.players[best.t].name)});
-    }
-  }
+  if(tk) menuOf(tk).forEach(o=>{
+    attacksAllowed() && add(o.ev, ()=>{
+      spendAI(tk,p); renderAll();
+      log(p.name+' launched a Hostile Takeover on '+(o.t===0?'your':G.players[o.t].name+"'s")+' '+COLORS[o.col].label+' set!');
+      banner('HOSTILE TAKEOVER!','var(--coral)');
+      resolveBlock(o.t,idx,'Hostile Takeover',blocked=>{
+        if(!blocked){ doTakeover(o.t,idx,o.col); if(checkAllWin())return; }
+        else log('Takeover blocked.');
+        next();
+      });
+    }, {cardId:tk.id, mode:'play', tag:o.tag, label:'Hostile Takeover → '+(o.t===0?'you':G.players[o.t].name)});
+  });
 
-  // rent — expected collection vs each side's real liquidity, hike combo weighed
+  // rent — expected collection vs each side's real liquidity, hike combo weighed.
+  // v10 targeting lever: every chargeable colour (and, for rent-any, every opponent) is distinct.
   p.hand.filter(c=>c.t==='rent'||c.t==='rentall').forEach(c=>{
-    const cols = c.t==='rent' ? c.colors : Object.keys(p.props);
-    let bo=null;
-    cols.forEach(col=>{ const r=rentFor(p,col); if(r>0&&(!bo||r>bo.r)) bo={col,r}; });
-    if(!bo) return;
-    const targets = c.t==='rentall'
-      ? [enemies.slice().sort((a,b)=>liquidOf(G.players[b])-liquidOf(G.players[a]))[0]]
-      : enemies;
-    const collect = amt => targets.reduce((s,t)=>s+jsnAdjusted(Math.min(amt, liquidOf(G.players[t]))*wOf(p).rent_eff, t, idx), 0);
     const hike = p.hand.find(x=>x.t==='action'&&x.kind==='hike');
-    add(collect(bo.r), ()=>runRent(c,bo,targets,null), {cardId:c.id, mode:'play', label:'Charge '+COLORS[bo.col].label+' rent ($'+bo.r+'M)'});
-    if(hike && G.playsLeft>=2) attacksAllowed() && add(collect(bo.r*2)-wOf(p).hike_cost, ()=>runRent(c,bo,targets,hike), {cardId:c.id, mode:'play', label:'Charge '+COLORS[bo.col].label+' rent + Hike ($'+(bo.r*2)+'M)'});
+    menuOf(c).forEach(o=>{
+      const bo = {col:o.col, r:o.r};
+      add(o.ev, ()=>runRent(c,bo,o.targets,null), {cardId:c.id, mode:'play', tag:o.tag, label:'Charge '+COLORS[o.col].label+' rent ($'+o.r+'M)'});
+      if(hike && G.playsLeft>=2){
+        const evHike = o.targets.reduce((s,t)=>s+jsnAdjusted(Math.min(o.r*2, liquidOf(G.players[t]))*wOf(p).rent_eff, t, idx), 0) - wOf(p).hike_cost;
+        attacksAllowed() && add(evHike, ()=>runRent(c,bo,o.targets,hike), {cardId:c.id, mode:'play', tag:o.tag, label:'Charge '+COLORS[o.col].label+' rent + Hike ($'+(o.r*2)+'M)'});
+      }
+    });
   });
   function runRent(c,bo,targets,hike){
     let amount = bo.r;
@@ -4547,77 +4780,51 @@ function brainCandidates(p, idx, next){
     },()=>{ if(!checkAllWin()) next(); });
   }
 
-  // sneaky swipe — completion value both ways
+  // sneaky swipe — completion value both ways, every stealable property (v10 targeting lever)
   const sw = p.hand.find(c=>c.t==='action'&&c.kind==='swipe');
-  if(sw){
-    let best=null;
-    enemies.forEach(t=>stealTargetsOf(t).forEach(x=>{
-      const q=G.players[t];
-      const myGain = x.card.t==='prop' ? progressGain(p,x.color) : 3;
-      const theirLoss = (countIn(q,x.color)===COLORS[x.color].size-1 ? 4 : 1.5) + countIn(q,x.color)*0.6;
-      const ev = jsnAdjusted(myGain*wOf(p).sw_gain + theirLoss*wOf(p).sw_loss + x.card.v*wOf(p).sw_v, t, idx);
-      if(!best||ev>best.ev) best={t,x,ev};
-    }));
-    if(best) add(best.ev, ()=>{
+  if(sw) menuOf(sw).forEach(o=>{
+    add(o.ev, ()=>{
       spendAI(sw,p); renderAll();
-      log(p.name+' played Sneaky Swipe on '+(best.t===0?'you':G.players[best.t].name)+'!');
-      resolveBlock(best.t,idx,'Sneaky Swipe',blocked=>{
-        if(!blocked){ transferProp(G.players[best.t],p,best.x.card); log(p.name+' swiped '+cardName(best.x.card)+'.'); if(checkAllWin())return; }
+      log(p.name+' played Sneaky Swipe on '+(o.t===0?'you':G.players[o.t].name)+'!');
+      resolveBlock(o.t,idx,'Sneaky Swipe',blocked=>{
+        if(!blocked){ transferProp(G.players[o.t],p,o.card); log(p.name+' swiped '+cardName(o.card)+'.'); if(checkAllWin())return; }
         else log('Swipe blocked.');
         next();
       });
-    }, {cardId:sw.id, mode:'play', label:'Swipe '+cardName(best.x.card)});
-  }
+    }, {cardId:sw.id, mode:'play', tag:o.tag, label:'Swipe '+cardName(o.card)});
+  });
 
-  // swap meet — the old AI never played this; net-completion trades only
+  // swap meet — net-completion trades only, every (theirs, mine) pair (v10 targeting lever)
   const sm = p.hand.find(c=>c.t==='action'&&c.kind==='swap');
-  if(sm){
-    let best=null;
-    const mine = propList(p).filter(x=>!isComplete(p,x.color) && x.card.t==='prop');
-    enemies.forEach(t=>stealTargetsOf(t).forEach(x=>{
-      if(x.card.t!=='prop') return;
-      mine.forEach(mx=>{
-        const q=G.players[t];
-        const myGain = progressGain(p,x.color);
-        const myLoss = countIn(p,mx.color)===COLORS[mx.color].size-1 ? 6 : 2;
-        const theirGain = countIn(q,mx.color)===COLORS[mx.color].size-1 ? 6 : 1.5;
-        const theirLoss = countIn(q,x.color)===COLORS[x.color].size-1 ? 4 : 1.5;
-        const net = myGain - myLoss + theirLoss - theirGain;
-        if(net>wOf(p).swap_min){
-          const ev = jsnAdjusted(net, t, idx);
-          if(!best||ev>best.ev) best={t,x,mx,ev};
-        }
-      });
-    }));
-    if(best) add(best.ev, ()=>{
+  if(sm) menuOf(sm).forEach(o=>{
+    add(o.ev, ()=>{
       spendAI(sm,p); renderAll();
-      log(p.name+' proposed a Swap Meet with '+(best.t===0?'you':G.players[best.t].name)+'.');
-      resolveBlock(best.t,idx,'Swap Meet',blocked=>{
+      log(p.name+' proposed a Swap Meet with '+(o.t===0?'you':G.players[o.t].name)+'.');
+      resolveBlock(o.t,idx,'Swap Meet',blocked=>{
         if(!blocked){
-          transferProp(G.players[best.t],p,best.x.card);
-          transferProp(p,G.players[best.t],best.mx.card);
-          log(p.name+' traded '+cardName(best.mx.card)+' for '+cardName(best.x.card)+'.');
+          transferProp(G.players[o.t],p,o.card);
+          transferProp(p,G.players[o.t],o.myCard);
+          log(p.name+' traded '+cardName(o.myCard)+' for '+cardName(o.card)+'.');
           if(checkAllWin())return;
         } else log('Swap blocked.');
         next();
       });
-    }, {cardId:sm.id, mode:'play', label:'Swap for '+cardName(best.x.card)});
-  }
+    }, {cardId:sm.id, mode:'play', tag:o.tag, label:'Swap for '+cardName(o.card)});
+  });
 
-  // favour — richest target
+  // favour — every opponent, each valued on its own (v10 targeting lever)
   const fv = p.hand.find(c=>c.t==='action'&&c.kind==='favour');
-  if(fv){
-    const t = enemies.slice().sort((a,b)=>liquidOf(G.players[b])-liquidOf(G.players[a]))[0];
-    attacksAllowed() && add(jsnAdjusted(Math.min(5, liquidOf(G.players[t]))*0.85, t, idx), ()=>{
+  if(fv) menuOf(fv).forEach(o=>{
+    attacksAllowed() && add(o.ev, ()=>{
       spendAI(fv,p); renderAll();
-      log(p.name+' called in a favour from '+(t===0?'you':G.players[t].name)+' — $5M.');
-      resolveBlock(t,idx,'Call In a Favour',(blocked,x)=>{
+      log(p.name+' called in a favour from '+(o.t===0?'you':G.players[o.t].name)+' — $5M.');
+      resolveBlock(o.t,idx,'Call In a Favour',(blocked,x)=>{
         if(blocked){ log('Favour blocked.'); return next(); }
         const jc = x&&x.jsn ? {...x.jsn, onCancel:()=>{ log('Favour blocked.'); next(); }} : null;
-        requestPayment(t,5,idx,()=>{ if(!checkAllWin()) next(); }, jc);
+        requestPayment(o.t,5,idx,()=>{ if(!checkAllWin()) next(); }, jc);
       }, true);
-    }, {cardId:fv.id, mode:'play', label:'Call In a Favour → '+(t===0?'you':G.players[t].name)});
-  }
+    }, {cardId:fv.id, mode:'play', tag:o.tag, label:'Call In a Favour → '+(o.t===0?'you':G.players[o.t].name)});
+  });
 
   // shout
   const sh = p.hand.find(c=>c.t==='action'&&c.kind==='shout');
@@ -4655,11 +4862,12 @@ function brainCandidates(p, idx, next){
     if(col) add(4.2, ()=>{ playFromHandAI(rs,p); p.bldg[col].resort=rs; log(p.name+' built a Beach Resort on '+COLORS[col].label+'.'); aiShowcase(rs, idx); next(); }, {cardId:rs.id, mode:'play', label:'Beach Resort on '+COLORS[col].label});
   }
 
-  // banking — money, then spare cards
-  const mn = [...p.hand].filter(c=>c.t==='money').sort((a,b)=>b.v-a.v)[0];
-  if(mn) add(0.8 + mn.v*wOf(p).bank_v, ()=>{ playFromHandAI(mn,p); p.bank.push(mn); log(p.name+' banked some money.'); aiShowcase(mn, idx); next(); }, {cardId:mn.id, mode:'bank', label:'Bank $'+mn.v+'M'});
-  const spare = [...p.hand].filter(c=>(c.t==='action'&&c.kind!=='nodeal')||c.t==='rent'||c.t==='rentall').sort((a,b)=>keepScore(a,p)-keepScore(b,p))[0];
-  if(spare) add((G.playsLeft<3?0.7:0.45) + spare.v*0.08, ()=>{ playFromHandAI(spare,p); p.bank.push(spare); log(p.name+' banked a card.'); aiShowcase(spare, idx); next(); }, {cardId:spare.id, mode:'bank', label:'Bank '+cardName(spare)});
+  // banking — every distinct bankable card (v10 banking lever, see bankMenu)
+  bankMenu(p, G.playsLeft).forEach(o=>{
+    add(o.ev, ()=>{ playFromHandAI(o.card,p); p.bank.push(o.card);
+      log(p.name+(o.card.t==='money'?' banked some money.':' banked a card.')); aiShowcase(o.card, idx); next(); },
+      {cardId:o.card.id, mode:'bank', label:'Bank '+(o.card.t==='money'?'$'+o.card.v+'M':cardName(o.card))});
+  });
 
   return C;
 }
@@ -4674,7 +4882,7 @@ let UNSEEN_CACHE = null; // ported with the champion search block (unseenFor sta
    decisions skip all of this and stay greedy (and instant). Uses Math.random
    throughout, so seeded harness runs stay deterministic. Execution still goes
    through the interactive candidate closures — selection changes, rules never. */
-const MC = { det: 8, topK: 4, margin: 2.0, horizon: 16, netHorizon: 6, jsn: 1 }; // netHorizon applies only when a value net is loaded; jsn = search-based No Deal decisions
+const MC = { det: 8, topK: 4, margin: 2.0, horizon: 16, netHorizon: 6, jsn: 0, wild: 1, wildsim: 0, wildsupply: 1, bankmenu: 1, targets: 1, targetK: 3 }; // v0.10.0 CERTIFIED config. netHorizon applies only when a value net is loaded; jsn=0 = certified (jsn=1 jsnSearch was ladder-rejected 2026-08-04); wild = free wild reassignment (aiTuneWilds); wildsim = model it inside rollouts too (off = certified); wildsupply = supply-aware placement; bankmenu = offer every distinct bankable card; targets = offer every distinct (victim,object) for a targeted card; targetK = how many
 let MC_ON = true; // headless genome training rebinds this off — Monte Carlo costs ~500x per game and the genome is consumed by both layers either way
 
 function mcClone(o){ // structural clone (sim states are plain data)
@@ -4818,6 +5026,8 @@ function mcMoves(st, idx){
   const add = (ev, mv) => { if(ev > 0.4){ mv.ev = ev; moves.push(mv); } };
   const seen = new Set();
   const hikeCard = me.hand.find(x=>x.t==='action'&&x.kind==='hike');
+  // the SAME targeting menu brainCandidates offers — mctsChoose pairs the two by (cardId, tag)
+  const menuOf = c => tgtPick(targetMenu(st.players, idx, c, st.turnCount, jsnLite));
 
   me.hand.forEach(c=>{
     // rent/wild kinds keep their colour pairs distinct — keyOf collapses them
@@ -4838,118 +5048,77 @@ function mcMoves(st, idx){
     }
 
     if(c.t==='rent'||c.t==='rentall'){
-      const cols = c.t==='rent' ? c.colors : Object.keys(me.props);
-      let bo = null;
-      cols.forEach(col=>{ const r = rentFor(me,col); if(r>0 && (!bo||r>bo.r)) bo = {col, r}; });
-      if(bo){
-        const targets = c.t==='rentall'
-          ? [enemies.slice().sort((a,b)=>liq(st.players[b])-liq(st.players[a]))[0]]
-          : enemies;
-        const collect = amt => targets.reduce((s,t)=>s+jsnLite(Math.min(amt, liq(st.players[t]))*W.rent_eff, t), 0);
+      menuOf(c).forEach(o=>{
+        const targets = o.targets;
         const mkExec = mult => function(s){
           const q = s.players[idx];
           s.discard.push(mcTake(q,c.id)||c);
           if(mult>1 && hikeCard){ s.discard.push(mcTake(q,hikeCard.id)||hikeCard); }
-          const cs = c.t==='rent' ? c.colors : Object.keys(q.props);
-          let best = 0; cs.forEach(col=>{ best = Math.max(best, rentFor(q,col)); });
+          // targets=0 keeps the incumbent's exec verbatim (re-scan for the best colour at exec
+          // time); targets=1 charges the colour the candidate actually chose.
+          let best = 0;
+          if(MC.targets) best = rentFor(q, o.col);
+          else { const cs = c.t==='rent' ? c.colors : Object.keys(q.props); cs.forEach(col=>{ best = Math.max(best, rentFor(q,col)); }); }
           targets.forEach(t=>{
             if(mcBlocked(s, t, idx, Math.min(best*mult, liq(s.players[t])), false)) return;
             mcPay(s, t, idx, best*mult);
           });
         };
-        add(collect(bo.r), { cardId:c.id, mode:'play', plays:1, hike:false, exec: mkExec(1) });
-        if(hikeCard) add(collect(bo.r*2)-W.hike_cost, { cardId:c.id, mode:'play', plays:2, hike:true, exec: mkExec(2) });
-      }
+        const collect = amt => targets.reduce((s,t)=>s+jsnLite(Math.min(amt, liq(st.players[t]))*W.rent_eff, t), 0);
+        add(o.ev, { cardId:c.id, mode:'play', plays:1, hike:false, tag:o.tag, exec: mkExec(1) });
+        if(hikeCard) add(collect(o.r*2)-W.hike_cost, { cardId:c.id, mode:'play', plays:2, hike:true, tag:o.tag, exec: mkExec(2) });
+      });
     }
 
     if(c.t==='action'){
-      if(c.kind==='takeover'){
-        let best = null;
-        enemies.forEach(t=>completeColors(st.players[t]).forEach(col=>{
-          const val = (st.players[t].props[col]||[]).reduce((sm,x)=>sm+x.v,0) + rentFor(st.players[t],col)*0.5;
-          if(!best||val>best.val) best = {t,col,val};
-        }));
-        if(best){
-          const winNow = completeColors(me).length>=2;
-          const urgent = completeColors(st.players[best.t]).length>=2;
-          let ev = winNow ? 1000 : jsnLite(W.tk_base + best.val*W.tk_val, best.t);
-          if(!winNow && !urgent && st.turnCount<4) ev *= W.tk_hold;
-          add(ev, { cardId:c.id, mode:'play', plays:1,
-            exec(s){
-              const q = s.players[idx];
-              s.discard.push(mcTake(q,c.id)||c);
-              if(mcBlocked(s, best.t, idx, 14, true)) return;
-              const from = s.players[best.t];
-              const cards = (from.props[best.col]||[]).splice(0);
-              delete from.props[best.col];
-              if(!q.props[best.col]) q.props[best.col]=[];
-              cards.forEach(card=>q.props[best.col].push(card));
-              if(from.bldg && from.bldg[best.col]){ q.bldg[best.col] = from.bldg[best.col]; delete from.bldg[best.col]; }
-            } });
-        }
-      }
-      if(c.kind==='swipe'){
-        let best = null;
-        enemies.forEach(t=>{
-          const tp = st.players[t];
-          propList(tp).filter(x=>!isComplete(tp,x.color)).forEach(x=>{
-            const myGain = x.card.t==='prop' ? progressGain(me, x.color) : 3;
-            const theirLoss = (countIn(tp,x.color)===COLORS[x.color].size-1 ? 4 : 1.5) + countIn(tp,x.color)*0.6;
-            const ev = jsnLite(myGain*W.sw_gain + theirLoss*W.sw_loss + x.card.v*W.sw_v, t);
-            if(!best||ev>best.ev) best = {t, id:x.card.id, color:x.color, ev};
-          });
-        });
-        if(best) add(best.ev, { cardId:c.id, mode:'play', plays:1,
+      if(c.kind==='takeover') menuOf(c).forEach(o=>{
+        add(o.ev, { cardId:c.id, mode:'play', plays:1, tag:o.tag,
           exec(s){
             const q = s.players[idx];
             s.discard.push(mcTake(q,c.id)||c);
-            if(mcBlocked(s, best.t, idx, 6, false)) return;
-            const tp = s.players[best.t], arr = tp.props[best.color];
-            const i = arr ? arr.findIndex(cc=>cc.id===best.id) : -1;
-            if(i>-1){ const card = arr.splice(i,1)[0]; if(!arr.length) delete tp.props[best.color];
-              if(!q.props[best.color]) q.props[best.color]=[]; q.props[best.color].push(card); }
+            if(mcBlocked(s, o.t, idx, 14, true)) return;
+            const from = s.players[o.t];
+            const cards = (from.props[o.col]||[]).splice(0);
+            delete from.props[o.col];
+            if(!q.props[o.col]) q.props[o.col]=[];
+            cards.forEach(card=>q.props[o.col].push(card));
+            if(from.bldg && from.bldg[o.col]){ q.bldg[o.col] = from.bldg[o.col]; delete from.bldg[o.col]; }
           } });
-      }
-      if(c.kind==='swap'){
-        let best = null;
-        const mine = propList(me).filter(x=>!isComplete(me,x.color) && x.card.t==='prop');
-        enemies.forEach(t=>{
-          const tp = st.players[t];
-          propList(tp).filter(x=>!isComplete(tp,x.color) && x.card.t==='prop').forEach(x=>{
-            mine.forEach(mx=>{
-              const net = progressGain(me, x.color)
-                        - (countIn(me,mx.color)===COLORS[mx.color].size-1 ? 6 : 2)
-                        + (countIn(tp,x.color)===COLORS[x.color].size-1 ? 4 : 1.5)
-                        - (countIn(tp,mx.color)===COLORS[mx.color].size-1 ? 6 : 1.5);
-              if(net>W.swap_min){
-                const ev = jsnLite(net, t);
-                if(!best||ev>best.ev) best = {t, id:x.card.id, color:x.color, myId:mx.card.id, myColor:mx.color, ev};
-              }
-            });
-          });
-        });
-        if(best) add(best.ev, { cardId:c.id, mode:'play', plays:1,
+      });
+      if(c.kind==='swipe') menuOf(c).forEach(o=>{
+        add(o.ev, { cardId:c.id, mode:'play', plays:1, tag:o.tag,
           exec(s){
             const q = s.players[idx];
             s.discard.push(mcTake(q,c.id)||c);
-            if(mcBlocked(s, best.t, idx, 4, false)) return;
-            const tp = s.players[best.t];
-            const ta = tp.props[best.color]; const ti = ta?ta.findIndex(cc=>cc.id===best.id):-1;
-            const ma = q.props[best.myColor]; const mi = ma?ma.findIndex(cc=>cc.id===best.myId):-1;
+            if(mcBlocked(s, o.t, idx, 6, false)) return;
+            const tp = s.players[o.t], arr = tp.props[o.color];
+            const i = arr ? arr.findIndex(cc=>cc.id===o.id) : -1;
+            if(i>-1){ const card = arr.splice(i,1)[0]; if(!arr.length) delete tp.props[o.color];
+              if(!q.props[o.color]) q.props[o.color]=[]; q.props[o.color].push(card); }
+          } });
+      });
+      if(c.kind==='swap') menuOf(c).forEach(o=>{
+        add(o.ev, { cardId:c.id, mode:'play', plays:1, tag:o.tag,
+          exec(s){
+            const q = s.players[idx];
+            s.discard.push(mcTake(q,c.id)||c);
+            if(mcBlocked(s, o.t, idx, 4, false)) return;
+            const tp = s.players[o.t];
+            const ta = tp.props[o.color]; const ti = ta?ta.findIndex(cc=>cc.id===o.id):-1;
+            const ma = q.props[o.myColor]; const mi = ma?ma.findIndex(cc=>cc.id===o.myId):-1;
             if(ti>-1 && mi>-1){
-              const theirCard = ta.splice(ti,1)[0]; if(!ta.length) delete tp.props[best.color];
-              const myCard = ma.splice(mi,1)[0]; if(!ma.length) delete q.props[best.myColor];
-              if(!q.props[best.color]) q.props[best.color]=[]; q.props[best.color].push(theirCard);
-              if(!tp.props[best.myColor]) tp.props[best.myColor]=[]; tp.props[best.myColor].push(myCard);
+              const theirCard = ta.splice(ti,1)[0]; if(!ta.length) delete tp.props[o.color];
+              const myCard = ma.splice(mi,1)[0]; if(!ma.length) delete q.props[o.myColor];
+              if(!q.props[o.color]) q.props[o.color]=[]; q.props[o.color].push(theirCard);
+              if(!tp.props[o.myColor]) tp.props[o.myColor]=[]; tp.props[o.myColor].push(myCard);
             }
           } });
-      }
-      if(c.kind==='favour'){
-        const t = enemies.slice().sort((a,b)=>liq(st.players[b])-liq(st.players[a]))[0];
-        add(jsnLite(Math.min(5, liq(st.players[t]))*0.85, t), { cardId:c.id, mode:'play', plays:1,
+      });
+      if(c.kind==='favour') menuOf(c).forEach(o=>{
+        add(o.ev, { cardId:c.id, mode:'play', plays:1, tag:o.tag,
           exec(s){ const q=s.players[idx]; s.discard.push(mcTake(q,c.id)||c);
-            if(!mcBlocked(s, t, idx, 5, false)) mcPay(s, t, idx, 5); } });
-      }
+            if(!mcBlocked(s, o.t, idx, 5, false)) mcPay(s, o.t, idx, 5); } });
+      });
       if(c.kind==='shout'){
         const ev = enemies.reduce((s,t)=>s+jsnLite(Math.min(2, liq(st.players[t]))*0.85, t), 0);
         add(ev, { cardId:c.id, mode:'play', plays:1,
@@ -4975,13 +5144,11 @@ function mcMoves(st, idx){
     }
   });
 
-  const mn = [...me.hand].filter(c=>c.t==='money').sort((a,b)=>b.v-a.v)[0];
-  if(mn) add(0.8 + mn.v*W.bank_v, { cardId:mn.id, mode:'bank', plays:1,
-    exec(s){ const q=s.players[idx]; mcTake(q,mn.id); q.bank.push(mn); } });
-  const spare = [...me.hand].filter(c=>(c.t==='action'&&c.kind!=='nodeal')||c.t==='rent'||c.t==='rentall')
-    .sort((a,b)=>keepScore(a,me)-keepScore(b,me))[0];
-  if(spare) add((st.playsLeft<3?0.7:0.45) + spare.v*0.08, { cardId:spare.id, mode:'bank', plays:1,
-    exec(s){ const q=s.players[idx]; mcTake(q,spare.id); q.bank.push(spare); } });
+  // the SAME menu brainCandidates offers — mctsChoose pairs the two by cardId
+  bankMenu(me, st.playsLeft).forEach(o=>{
+    add(o.ev, { cardId:o.card.id, mode:'bank', plays:1,
+      exec(s){ const q=s.players[idx]; const cc = mcTake(q,o.card.id)||o.card; q.bank.push(cc); } });
+  });
 
   return moves;
 }
@@ -5107,6 +5274,13 @@ function rolloutValue(st, persp){ // P(persp wins): play forward, then real resu
 function rollout(st, cap){ // synchronous fast game from a determinized state; resumes the current turn
   for(let half=0; half<(cap||MC.horizon); half++){
     const idx = st.turn, p = st.players[idx];
+    // Model the free wild reassignment the real brain performs, so the search stops simulating
+    // futures in which nobody re-optimises wilds. MC.wildsim gates it (off = certified config).
+    if(MC.wild && MC.wildsim){
+      mcTuneWilds(st, idx);
+      const ww = mcWinner(st);
+      if(ww>=0) return ww;
+    }
     // one move-gen per turn, executed greedily — regenerating after every play costs
     // ~2x the whole rollout and rollouts are approximations by design. A card can
     // only be spent once (mcTake no-ops if it's gone), and plays are re-checked.
@@ -5148,7 +5322,9 @@ function mctsChoose(idx, C){
     for(let a=0; a<K; a++){
       const cand = C[a];
       const wantHike = /\+ Hike/.test(cand.label||'');
-      const mv = rootMoves.find(m=>m.cardId===cand.cardId && m.mode===cand.mode && !m.hike===!wantHike);
+      // `tag` disambiguates the v10 targeting menu (one card -> several victim/object candidates).
+      const mv = rootMoves.find(m=>m.cardId===cand.cardId && m.mode===cand.mode && !m.hike===!wantHike
+                                   && (!MC.targets || cand.tag==null || m.tag===cand.tag));
       if(!mv || mv.plays>world.playsLeft) continue;
       const st = mcWorld(world);
       mv.exec(st); // clone-safe: execs re-fetch their cards from the target state
@@ -5170,6 +5346,11 @@ function mctsChoose(idx, C){
 function aiStep(p){
   if(G.over) return;
   const idx = G.turn;
+  if(MC.wild && aiTuneWilds(p) > 0){ // v10 wild lever: re-optimise wilds (free action) before deciding what to spend a play on
+    log(p.name+' shuffled a wild between sets.');
+    renderAll();
+    if(checkAllWin()) return;
+  }
   const next = ()=>{ if(G.over) return; renderAll(); setTimeout(()=>aiStep(p), Math.max(aiDelay(), visWait()+150)); };
   if(G.playsLeft<=0) return endTurn();
   const C = brainCandidates(p, idx, next);
