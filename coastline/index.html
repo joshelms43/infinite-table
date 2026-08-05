@@ -4663,10 +4663,11 @@ function wildLegal(fixed, wilds, assign){ // a colour may never hold a rainbow (
 }
 function wildBestAssignment(p, supply){ // pure: hill-climb the placement, mutate nothing
   const list = propList(p);
-  const wilds = list.filter(x=>x.card.t==='wild' || x.card.t==='wildall');
+  const canMove = x => (x.card.t==='wild' || x.card.t==='wildall') && canMoveWildFrom(p, x.color); // buildings lock wilds in a built set
+  const wilds = list.filter(canMove);
   if(!wilds.length) return null;
   const fixed = {};
-  list.forEach(x=>{ if(x.card.t!=='wild' && x.card.t!=='wildall') fixed[x.color] = (fixed[x.color]||0)+1; });
+  list.forEach(x=>{ if(!canMove(x)) fixed[x.color] = (fixed[x.color]||0)+1; }); // reals + building-locked wilds are immovable anchors
   const allowed = wilds.map(x=> x.card.t==='wild' ? x.card.colors : Object.keys(COLORS));
   const assign = wilds.map(x=>x.color);
   let best = wildPlacementScore(p, fixed, assign, supply);
