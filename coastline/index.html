@@ -1827,13 +1827,16 @@ function payToggle(id){
   renderAll(); updatePayHUD();
 }
 function updatePayHUD(){
-  const tot=paySelTotal(), r=G.players[MODE.receiverIdx];
-  const amount = Math.min(MODE.amount, payAssetsTotal(me()));
-  const enough = tot>=amount;
+  const p=me(), tot=paySelTotal(), r=G.players[MODE.receiverIdx];
+  const owed=MODE.amount, worth=payAssetsTotal(p);
+  const short = worth < owed;                 // can't cover in money -> must hand over EVERY card (incl $0 wilds)
+  const allSel = p.bank.every(c=>MODE.sel.has(c.id)) && propList(p).every(x=>MODE.sel.has(x.card.id));
+  const enough = short ? allSel : tot>=owed;
   if(enough && !MODE.wasEnough){ sfx('good'); haptic(8); }
   MODE.wasEnough = enough;
-  hudShow(`Pay ${r.name} — $${tot}M of $${amount}M`,
-    { meter:{val:tot,max:amount}, auto:true, go:{label:'Pay', disabled:!enough} });
+  const target = short ? Math.max(1,worth) : owed;
+  hudShow(short ? `Pay ${r.name} everything you have — $${tot}M` : `Pay ${r.name} — $${tot}M of $${owed}M`,
+    { meter:{val:tot,max:target}, auto:true, go:{label:'Pay', disabled:!enough} });
 }
 function payAutoM(){
   if(MODE.type!=='pay') return;
@@ -3079,7 +3082,7 @@ function requestPayment(payerIdx, amount, receiverIdx, done, jsnCtx){
   const payer=G.players[payerIdx], receiver=G.players[receiverIdx];
   if(amount<=0) return done();
   const worth = payAssetsTotal(payer);
-  if(worth===0){ log(payer.name+' has nothing to pay with.'); return done(); }
+  if(payer.bank.length + propList(payer).length === 0){ log(payer.name+' has nothing to pay with.'); return done(); }
   if(worth<=amount && payer.isAI){
     // AI hands over everything; humans always get the pay screen (and their block chance)
     payer.bank.splice(0).forEach(c=>receiver.bank.push(c));
