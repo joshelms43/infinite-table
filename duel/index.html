@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Duel — Infinite Table. Version: 0.12.0
+<!-- Duel — Infinite Table. Version: 0.13.0
      1v1 first-person duel. Every round ends in a draft: both players pick one
      powerup from three, first to four rounds takes the match.
      Favor-the-shooter netcode over TableKit broadcast; each player is the
@@ -76,6 +76,12 @@ body.fighting #hud{display:block}
 /* ---- forced landscape (Safari has no orientation lock — we rotate the world instead) ---- */
 body.rot90{position:fixed;top:0;left:0;width:100vh;height:100vw;
   transform:rotate(90deg) translateY(-100%);transform-origin:top left}
+
+#flatcvs{position:fixed;inset:0;display:none;z-index:1}
+body.flat #xh{display:none}
+body.flat #clickcatch{display:none}
+body.flat #flatcvs{display:block}
+body.flat #xh{display:none}
 
 /* ---- touch controls ---- */
 #touchui{display:none}
@@ -201,6 +207,7 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
 <body>
 
 <canvas id="gl"></canvas>
+<canvas id="flatcvs"></canvas>
 
 <div id="hurt"></div>
 <div id="blind"></div>
@@ -308,9 +315,11 @@ body.touch #ammowrap{bottom:calc(20px + env(safe-area-inset-bottom));right:22px}
   </div>
 </div>
 
-<script src="../shared/config.js?v=0.12.0"></script>
-<script src="../shared/tablekit.js?v=0.12.0"></script>
-<script src="../shared/duel-powerups.js?v=0.12.0"></script>
+<script src="../shared/config.js?v=0.13.0"></script>
+<script src="../shared/tablekit.js?v=0.13.0"></script>
+<script src="../shared/duel-powerups.js?v=0.13.0"></script>
+<script src="../shared/duel-flat.js?v=0.13.0"></script>
+<script src="../shared/duel-flat-render.js?v=0.13.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ================= Duel — engine ================= */
@@ -338,6 +347,7 @@ var CAT = {};
  'faststart','zoomies','hiccups','crab','clownshoes']
   .forEach(function(id){ CAT[id]='#E0AB52'; });
 ['mag','quickhands','beltfeed','sugarrush','scavenger','panichands'].forEach(function(id){ CAT[id]='#BE8F41'; });
+CAT.flatland = '#F2EEE2';                       /* the one that bends the world */
 
 /* ---- renderer / scene ---- */
 var canvas = document.getElementById('gl');
@@ -696,6 +706,10 @@ var touch = { moveId: null, lookId: null, ax: 0, ay: 0, mx: 0, my: 0, lx: 0, ly:
 function setStickVec(x, y) { touch.mx = x; touch.my = y; touch.active = true; }
 function clearStick() { touch.mx = 0; touch.my = 0; touch.active = false; }
 function applyLook(dx, dy) {
+  if (FLAT.active) {
+    FLAT.elev = Math.max(-1.25, Math.min(1.25, (FLAT.elev || 0) - dy * 0.006));
+    return;
+  }
   me.yaw   -= dx * 0.006;
   me.pitch -= dy * 0.006;
   me.pitch = Math.max(-1.45, Math.min(1.45, me.pitch));
@@ -731,7 +745,7 @@ document.addEventListener('mousemove', function(e){
   me.pitch -= e.movementY * 0.0026;
   me.pitch = Math.max(-1.45, Math.min(1.45, me.pitch));
 });
-function grabPointer(){ if (TOUCH) return; if (!locked) { try { canvas.requestPointerLock(); } catch(e){} } }
+function grabPointer(){ if (TOUCH || FLAT.active) return; if (!locked) { try { canvas.requestPointerLock(); } catch(e){} } }
 canvas.addEventListener('pointerdown', function(e){ audio();
   if (e && e.pointerType === 'touch') return;              /* thumbs are handled below */
   if (e && e.pointerType === 'mouse') setTouchMode(false);
@@ -1009,6 +1023,7 @@ function fi_kick(f, dir, mag) {
   f.onGround = false; f.vel.y = Math.max(f.vel.y, 1.5);
 }
 function fire() {
+  if (FLAT.active) return;                    /* flat rounds fire through the sim */
   var dir = new THREE.Vector3(0,0,-1).applyEuler(camera.rotation);
   if (fireFighter(me, 'me', dir)) me.pitch += 0.006; /* tiny kick */
 }
@@ -1266,7 +1281,7 @@ function computeHitDamage(shooter, victim, b, scale, headshot) {
 function landHit(b, at, scale, headshot, victimRef) {
   scale = scale || 1;
   var hostedBot = G.mode === 'net' && G.host && peers[b.owner] && peers[b.owner].bot;
-  if (b.owner !== 'me' && G.mode === 'net' && !hostedBot) { sparkFx(at, false); return; }  /* their client judges */
+  if (b.owner !== 'me' && G.mode === 'net' && !hostedBot) { if (!FLAT.active) sparkFx(at, false); return; }  /* their client judges */
   var shooter = b.owner === 'me' ? me : (hostedBot ? peers[b.owner].f : foe);
   var isPeer = victimRef && victimRef.f !== undefined;
   var victim = isPeer ? victimRef.f : (victimRef || (b.owner === 'me' ? foe : me));
@@ -1291,18 +1306,24 @@ function landHit(b, at, scale, headshot, victimRef) {
     if (s.lifesteal > 0) healFighter(me, roll.dmg * s.lifesteal);
     if (s.refundOnHit && !s.noReload) { me.mag = Math.min(s.magSize, me.mag + 1); updateAmmoHud(); }
     if (s.pickpocket && !s.noReload) { me.mag = Math.min(s.magSize, me.mag + 1); updateAmmoHud(); }
-    sparkFx(at, true);
-    sHit(fx.crit);
-    $('xh').classList.remove('mark'); void $('xh').offsetWidth; $('xh').classList.add('mark');
-    dmgPop(at, roll.dmg, fx.crit);
+    if (FLAT.active) {
+      FlatRender.feed(FLAT.view, [{ t: 'hit', x: at.x, y: at.y, dmg: roll.dmg, crit: fx.crit }], FLAT.w);
+      sHit(fx.crit);
+    } else {
+      sparkFx(at, true);
+      sHit(fx.crit);
+      $('xh').classList.remove('mark'); void $('xh').offsetWidth; $('xh').classList.add('mark');
+      dmgPop(at, roll.dmg, fx.crit);
+    }
   } else {
     /* a bot judged here — practice foe or a hosted team bot: same delivery, same rules */
-    sparkFx(at, false);
+    if (!FLAT.active) sparkFx(at, false);
     if (s.lifesteal > 0) healFighter(shooter, roll.dmg * s.lifesteal);
     if ((s.refundOnHit || s.pickpocket) && !s.noReload) shooter.mag = Math.min(s.magSize, shooter.mag + 1);
     if (hostedBot) routeHit(isPeer ? victimRef.key : G.myKey, b.owner, fx, false);
     else applyHit(victim, fx, false);
   }
+  return roll;
 }
 
 function healFighter(f, n) {
@@ -1351,6 +1372,7 @@ function applyHit(f, fx, silentThorns) {
   }
   if (f === me) {
     sHurt();
+    if (FLAT.active) flatOnHitToMe(fx);
     $('hurt').style.opacity = 1;
     setTimeout(function(){ $('hurt').style.opacity = 0; }, 120);
   }
@@ -1461,6 +1483,7 @@ function startCountdown() {
   $('dashBtn').style.display = me.stats.dashCharges > 0 ? 'flex' : 'none';
   $('reloadBtn').style.display = me.stats.noReload ? 'none' : 'flex';
   $('reloadtag').classList.remove('show');
+  if (flatRoundIsOn()) flatBegin(); else flatEnd();
   G.countdownT = 3;
   grabPointer();
 }
@@ -1477,6 +1500,7 @@ function roundOver(iWon) {           /* practice mode; net rounds end via the ho
 }
 function matchOver() {
   G.phase = 'over';
+  flatEnd();
   document.body.classList.remove('fighting');
   document.exitPointerLock && document.exitPointerLock();
   var won = G.myScore >= ROUNDS_TO_WIN;
@@ -1590,11 +1614,23 @@ function onWire(ev, p) {
   var P;
   if (ev === 'state') {
     P = peers[p.k]; if (!P) return;
+    if (FLAT.active && FLAT.w) {
+      FlatDuel.setPuppet(FLAT.w, p.k, p.p[0], p.p[1], p.y, P.f.alive);
+      P.f.hp = p.hp;
+      P.net.pos.set(p.p[0], p.p[1], p.p[2]); P.net.yaw = p.y; P.net.has = true;
+      return;
+    }
     P.net.pos.set(p.p[0], p.p[1], p.p[2]);
     P.net.yaw = p.y; P.net.has = true;
     P.f.hp = p.hp;
   } else if (ev === 'shoot') {
     P = peers[p.k]; if (!P) return;
+    if (FLAT.active && FLAT.w) {
+      var angs = (p.d || []).map(function (d) { return Math.atan2(d[1], d[0]); });
+      FlatDuel.spawnShot(FLAT.w, p.k, p.o[0], p.o[1], angs, {});
+      if (P.f.stats.bulletStyle==='chicken') sCluck(); else sNoise(0.07, 1000, 0.12);
+      return;
+    }
     var o = new THREE.Vector3(p.o[0], p.o[1], p.o[2]);
     p.d.forEach(function (d) {
       spawnBullet(p.k, o, new THREE.Vector3(d[0], d[1], d[2]), P.f.stats, { dmgScale: p.ds, boom: p.bm });
@@ -1778,6 +1814,7 @@ function leaveToMenu(msg) {
   document.exitPointerLock && document.exitPointerLock();
   hide('draft'); hide('teamroom'); hide('matchover');
   G.phase = 'menu'; foeMesh.visible = false;
+  flatEnd();
   eachPeer(function (P, k) { dropPeer(k); });
   if (G.tx) { try { G.tx.close(); } catch (e) {} G.tx = null; }
   G.mode = null; G.myTeam = null; G.roster = {};
@@ -2352,6 +2389,244 @@ function stepFoeVisual(dt) {
 
 /* ---- main loop ---- */
 var clock3 = new THREE.Clock();
+/* ================= Flatland — the game inside the game =================
+   When any fighter in the round owns the Flatland powerup, the whole round is
+   played flat: a complete 2D side-view duel. The flat sim (shared/duel-flat.js)
+   owns my movement, my bullets' flight and contact detection; damage keeps
+   flowing through the exact same landHit -> routeHit -> applyHit machinery the
+   3D game trusts, so every powerup behaves identically in either world. The
+   `me` object stays the body of record — the sim is its physics proxy. */
+var FLAT = { active: false, w: null, view: null, cvs: null, ctx: null,
+  aim: 0, mouseFire: false, mx: 0, my: 0, haveMouse: false, botSt: {}, wasFlat: false };
+
+function flatRoundIsOn() {
+  if (me.stats.flat) return true;
+  if (G.mode === 'bot') return !!foe.stats.flat;
+  var on = false;
+  eachPeer(function (P) { if (P.f.stats && P.f.stats.flat) on = true; });
+  return on;
+}
+function flatKeyMine() { return G.mode === 'net' ? G.myKey : 'me'; }
+
+function flatBegin() {
+  var seed = ((G.seed || 1) ^ (G.round * 7919)) >>> 0;
+  FLAT.w = FlatDuel.newWorld(G_MAP, seed);
+  FLAT.w.detectOnly = true;                    /* the page owns damage */
+  FLAT.view = FlatRender.newView();
+  FLAT.botSt = {};
+  var west = G.mode === 'bot' ? true : G.myTeam !== 'teal';
+  var mine = FlatDuel.addFighter(FLAT.w, flatKeyMine(), me.stats,
+    { x: FLAT.w.arena.spawns[west ? 0 : 1], y: 2, team: G.myTeam || 'coral' });
+  FLAT.aim = west ? 0 : Math.PI;
+  if (G.mode === 'bot') {
+    FlatDuel.addFighter(FLAT.w, 'foe', foe.stats,
+      { x: FLAT.w.arena.spawns[1], y: 2, team: 'teal' });
+  } else {
+    eachPeer(function (P, k) {
+      FlatDuel.addFighter(FLAT.w, k, P.f.stats,
+        { x: FLAT.w.arena.spawns[P.team === 'teal' ? 1 : 0], y: 2,
+          team: P.team, puppet: !P.bot || !G.host });
+    });
+  }
+  /* mirror the sim into the body of record */
+  me.pos.set(mine.x, mine.y, 0); me.vel.set(0, 0, 0);
+  FLAT.active = true;
+  document.body.classList.add('flat');
+  if (!FLAT.cvs) {
+    FLAT.cvs = $('flatcvs');
+    FLAT.ctx = FLAT.cvs.getContext('2d');
+    flatBindInput();
+  }
+  flatSize();
+  banner('FLATLAND', FLAT.w.arena.name + ', But Flat', 1600);
+}
+function flatEnd() {
+  if (!FLAT.active) return;
+  FLAT.active = false; FLAT.w = null;
+  document.body.classList.remove('flat');
+}
+function flatSize() {
+  if (!FLAT.cvs) return;
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  FLAT.cvs.width = vw() * dpr; FLAT.cvs.height = vh() * dpr;
+  FLAT.cvs.style.width = '100%'; FLAT.cvs.style.height = '100%';
+}
+window.addEventListener('resize', flatSize);
+
+/* ---- input: keys + mouse aim; on touch, the stick moves you, a right-half
+   drag steers the aim, and the same Fire/Jump/Dash thumbs do their jobs ---- */
+function flatBindInput() {
+  FLAT.cvs.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'mouse') { FLAT.mx = e.clientX; FLAT.my = e.clientY; FLAT.haveMouse = true; }
+  });
+  FLAT.cvs.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'mouse' && e.button === 0) FLAT.mouseFire = true;
+  });
+  window.addEventListener('pointerup', function (e) {
+    if (e.pointerType === 'mouse') FLAT.mouseFire = false;
+  });
+}
+function flatMyScreen() {
+  var f = FLAT.w && FLAT.w.fighters[flatKeyMine()];
+  if (!f) return { x: vw() / 2, y: vh() / 2 };
+  var cam = FLAT.view.cam, scale = vw() / cam.z;
+  return { x: (f.x - cam.x) * scale + vw() / 2, y: vh() / 2 - (f.y - cam.y) * scale };
+}
+function flatReadInput() {
+  var mx = 0;
+  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
+  if (keys.KeyD || keys.ArrowRight) mx += 1;
+  if (TOUCH && touch.active) mx = touch.mx;
+  if (FLAT.haveMouse && !TOUCH) {
+    var m = flatMyScreen();
+    var p = ROT ? { x: FLAT.my, y: window.innerWidth - FLAT.mx } : { x: FLAT.mx, y: FLAT.my };
+    FLAT.aim = Math.atan2(m.y - p.y, p.x - m.x);
+  }
+  return {
+    mx: mx,
+    jump: !!(keys.Space || keys.KeyW || keys.ArrowUp),
+    dash: !!(keys.ShiftLeft || keys.ShiftRight),
+    aim: FLAT.aim,
+    fire: !!(FLAT.mouseFire || (TOUCH && touch.firing))
+  };
+}
+
+/* damage scale the pipeline can't see from a pseudo-bullet: per-shot bonuses
+   judged at contact from the shooter's sheet */
+function flatDmgScale(stats, c, shooter3d) {
+  var k = 1;
+  if (c.first) k *= 1 + stats.firstShotBonus;
+  if (c.last) k *= 1 + stats.lastShotBonus;
+  if (c.air && stats.airShot) k *= 1.4;
+  if (shooter3d && shooter3d.payback) { k *= 1.8; shooter3d.payback = false; }
+  return k;
+}
+
+function flatTick(dt) {
+  var w = FLAT.w;
+  var myKey = flatKeyMine();
+  var mine = w.fighters[myKey];
+  if (!mine) return;
+
+  /* the body of record leads; the sim follows */
+  mine.hp = me.hp; mine.shield = me.shield; mine.alive = me.alive;
+  if (G.mode === 'bot') {
+    var ff = w.fighters.foe;
+    if (ff) { ff.hp = foe.hp; ff.shield = foe.shield; ff.alive = foe.alive; }
+  } else {
+    eachPeer(function (P, k) {
+      var f2 = w.fighters[k];
+      if (f2) { f2.hp = P.f.hp; f2.alive = P.f.alive; }
+    });
+  }
+
+  if (me.alive && (G.phase === 'fight' || G.phase === 'countdown')) {
+    FlatDuel.input(w, myKey, G.phase === 'fight' ? flatReadInput()
+      : { mx: 0, jump: false, dash: false, aim: FLAT.aim, fire: false });
+  }
+  if (G.mode === 'bot' && foe.alive && G.phase === 'fight') {
+    FlatDuel.input(w, 'foe', FlatDuel.botThink(w, 'foe', G.botLevel, FLAT.botSt));
+  }
+  if (G.mode === 'net' && G.host && G.phase === 'fight') {
+    eachPeer(function (P, k) {
+      if (!P.bot || !P.f.alive) return;
+      var bf = w.fighters[k];
+      if (!bf || bf.puppet) return;
+      FLAT.botSt[k] = FLAT.botSt[k] || {};
+      FlatDuel.input(w, k, FlatDuel.botThink(w, k, P.level || 5, FLAT.botSt[k]));
+    });
+  }
+
+  var evts = FlatDuel.step(w, dt);
+  FlatRender.feed(FLAT.view, evts, w);
+  FlatRender.stepView(FLAT.view, w, dt, null);
+
+  /* the sim writes my position and gun into the body of record */
+  me.pos.x = mine.x; me.pos.y = mine.y; me.pos.z = 0;
+  me.yaw = mine.aim;
+  if (G.mode === 'net' && G.host) eachPeer(function (P, k) {
+    var bf = w.fighters[k];
+    if (bf && !bf.puppet) { P.f.pos.x = bf.x; P.f.pos.y = bf.y; P.f.pos.z = 0; P.f.yaw = bf.aim; }
+  });
+  if (me.mag !== mine.mag) { me.mag = mine.mag; updateAmmoHud(); }
+  me.reloading = mine.reloading > 0;
+
+  evts.forEach(function (e) {
+    if (e.t === 'shot' && e.k === myKey) {
+      sShot();
+      if (G.mode === 'net' && G.tx) {
+        G.tx.send('shoot', { k: myKey, o: [mine.x, mine.y, 0],
+          d: [[Math.cos(e.aim), Math.sin(e.aim), 0]], ds: 1, bm: false, flat: 1 });
+      }
+    } else if (e.t === 'shot' && G.mode === 'net' && G.host && peers[e.k] && peers[e.k].bot && G.tx) {
+      var bsrc = w.fighters[e.k];
+      if (bsrc) G.tx.send('shoot', { k: e.k, o: [bsrc.x, bsrc.y, 0],
+        d: [[Math.cos(e.aim), Math.sin(e.aim), 0]], ds: 1, bm: false, flat: 1 });
+    }
+    if (e.t === 'echoshot' && e.k === myKey) sNoise(0.06, 900, 0.1);
+    if (e.t === 'fx' && e.kind === 'jump' && e.k === myKey && e.honk) sTone(310, 0.18, 0.25, 'square');
+    if (e.t === 'fx' && e.kind === 'boom') sNoise(0.2, 400, 0.3);
+    if (e.t === 'fx' && e.kind === 'catch' && e.k === myKey) { sTone(880, 0.1, 0.15); updateAmmoHud(); }
+    if (e.t === 'fx' && e.kind === 'sneeze' && e.k === myKey) sTone(520, 0.2, 0.2, 'sawtooth');
+    if (e.t === 'fx' && e.kind === 'horn') sTone(196, 0.35, 0.3, 'sawtooth');
+
+    /* contacts become real hits through the exact 3D pipeline */
+    if (e.t === 'contact' && G.phase === 'fight') {
+      var shooterStats = e.by === myKey ? me.stats
+        : (e.by === 'foe' ? foe.stats : (peers[e.by] ? peers[e.by].f.stats : null));
+      var shooter3d = e.by === myKey ? me : (e.by === 'foe' ? foe : (peers[e.by] ? peers[e.by].f : null));
+      if (!shooterStats) return;
+      var pseudo = { owner: e.by === myKey ? 'me' : e.by,
+        dmgScale: flatDmgScale(shooterStats, e, shooter3d), bouncedN: e.bounced || 0 };
+      var at = new THREE.Vector3(e.x, e.y, 0);
+      var scale = e.blast ? 0.8 : 1;
+      var roll = null;
+      if (e.by === myKey) {
+        if (G.mode === 'bot') roll = landHit(pseudo, at, scale, false, foe);
+        else if (peers[e.k]) roll = landHit(pseudo, at, scale, false, peers[e.k]);
+      } else if (G.mode === 'bot' && e.by === 'foe' && e.k === myKey) {
+        roll = landHit(pseudo, at, scale, false);
+      } else if (G.mode === 'net' && G.host && peers[e.by] && peers[e.by].bot) {
+        if (e.k === myKey) roll = landHit(pseudo, at, scale, false);
+        else if (peers[e.k]) roll = landHit(pseudo, at, scale, false, peers[e.k]);
+      }
+      if (roll) FlatRender.feed(FLAT.view,
+        [{ t: 'hit', k: e.k, dmg: roll.dmg, crit: roll.crit, x: e.x, y: e.y }], w);
+    }
+  });
+
+  /* death by dots or anything else still ends things the usual way */
+  flatDraw();
+}
+
+function flatDraw() {
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  var ctx = FLAT.ctx;
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  FlatRender.draw(ctx, vw(), vh(), FLAT.w, FLAT.view, {});
+  ctx.restore();
+}
+
+/* incoming knockback, launches and spins land on the flat body */
+function flatOnHitToMe(fx) {
+  var f = FLAT.w && FLAT.w.fighters[flatKeyMine()];
+  if (!f) return;
+  if (fx.slow) { f.slowK = Math.max(f.slowK, fx.slow[0]); f.slowT = Math.max(f.slowT, fx.slow[1]); }
+  if (fx.dmg) FlatRender.feed(FLAT.view,
+    [{ t: 'hit', k: flatKeyMine(), dmg: fx.dmg, crit: !!fx.crit, x: f.x, y: f.y }], FLAT.w);
+  if (fx.from && !me.stats.kbImmune) {
+    var dir = f.x >= fx.from[0] ? 1 : -1;
+    if (fx.pull) dir = -dir;
+    f.vx += dir * (fx.kb || 0) * 0.55;
+    f.vy += (fx.kb || 0) * 0.12;
+  }
+  if (fx.up && !me.stats.kbImmune) { f.vy = Math.max(f.vy, fx.up * 1.5); f.onGround = false; }
+  if (fx.spin) f.spinT = 0.6;
+  f.hurtT = 0.18;
+  FLAT.w.shake = Math.min(1, FLAT.w.shake + 0.35);
+}
+
 function tick() {
   requestAnimationFrame(tick);
   var dt = Math.min(clock3.getDelta(), 0.05);
@@ -2361,14 +2636,19 @@ function tick() {
     G.countdownT -= dt;
     var n = Math.ceil(G.countdownT);
     if (n !== tick._lastN && n > 0) { banner(String(n), null, 700); sTone(440, 0.1, 0.15); tick._lastN = n; }
-    moveSelf(dt);
+    if (!FLAT.active) moveSelf(dt);
     if (G.countdownT <= 0) { G.phase = 'fight'; G.fightT = 0; banner('Fight', null, 700); sTone(880, 0.2, 0.2); }
   }
   if (G.phase === 'fight') {
     G.fightT += dt;
-    if (me.alive) { moveSelf(dt); stepSelfStatus(dt); }
-    if (G.mode === 'bot') { stepBot(dt); stepFighterStatus(foe, dt); }
-    if (G.mode === 'net') stepHostBots(dt);
+    if (FLAT.active) {
+      if (me.alive) stepSelfStatus(dt);
+      if (G.mode === 'bot') stepFighterStatus(foe, dt);
+    } else {
+      if (me.alive) { moveSelf(dt); stepSelfStatus(dt); }
+      if (G.mode === 'bot') { stepBot(dt); stepFighterStatus(foe, dt); }
+      if (G.mode === 'net') stepHostBots(dt);
+    }
     stateAcc += dt;
     if (G.tx && stateAcc > STATE_HZ) {
       stateAcc = 0;
@@ -2379,11 +2659,18 @@ function tick() {
       });
     }
   }
+  if (FLAT.active && (G.phase === 'fight' || G.phase === 'intermission' || G.phase === 'countdown')) {
+    flatTick(dt);
+  }
   if (G.phase === 'fight' || G.phase === 'intermission' || G.phase === 'countdown') {
-    for (i = bullets.length-1; i >= 0; i--) {
-      if (!stepBullet(bullets[i], dt)) { scene.remove(bullets[i].mesh); bullets.splice(i, 1); }
+    if (FLAT.active) {
+      flatTick(dt);
+    } else {
+      for (i = bullets.length-1; i >= 0; i--) {
+        if (!stepBullet(bullets[i], dt)) { scene.remove(bullets[i].mesh); bullets.splice(i, 1); }
+      }
+      stepFoeVisual(dt);
     }
-    stepFoeVisual(dt);
   }
   for (i = fx.length-1; i >= 0; i--) {
     var e = fx[i];
@@ -2392,7 +2679,7 @@ function tick() {
     else { e.vel.y -= 9.8*dt; e.obj.position.addScaledVector(e.vel, dt); }
     if (e.life <= 0) { scene.remove(e.obj); fx.splice(i, 1); }
   }
-  renderer.render(scene, camera);
+  if (!FLAT.active) renderer.render(scene, camera);
 }
 tick();
 
@@ -2424,7 +2711,10 @@ window.DuelDebug = {
   PU: PU,
   touch: touch, setStickVec: setStickVec, clearStick: clearStick, applyLook: applyLook,
   setRot: setRot, tp: tp, vw: vw, vh: vh, isRot: function(){ return ROT; },
-  stepSelfStatus: stepSelfStatus, fire: fire
+  stepSelfStatus: stepSelfStatus, fire: fire,
+  FLAT: FLAT, flatRoundIsOn: flatRoundIsOn, flatBegin: flatBegin, flatEnd: flatEnd,
+  flatTick: flatTick, flatReadInput: flatReadInput, flatKeyMine: flatKeyMine,
+  FlatDuel: window.FlatDuel, FlatRender: window.FlatRender
 };
 </script>
 </body>

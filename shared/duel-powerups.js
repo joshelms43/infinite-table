@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  var CATALOG_VERSION = '2026-07-21-duel-r4';
+  var CATALOG_VERSION = '2026-08-20-duel-r5';
 
   function baseStats() {
     return {
@@ -33,7 +33,7 @@
       bounceBonus: false, homingAfterBounce: false, lastShotBoom: false,
       kbImmune: false, execute: false, fastStart: false, momentum: false,
       refundOnHit: false, stillGuard: false, airShot: false, payback: false,
-      emptyReload: false, zoomies: false,
+      emptyReload: false, zoomies: false, flat: false,
       /* on-hit effects */
       lifesteal: 0, poison: 0, poisonDur: 0, burn: 0, burnDur: 0,
       slowOnHit: 0, slowDur: 0, blindDur: 0
@@ -219,6 +219,10 @@
       apply: function (s) { s.emptyReload = true; } },
     { id: 'zoomies', name: 'Zoomies', text: 'Every few seconds you just go faster',
       apply: function (s) { s.zoomies = true; } },
+
+    /* ---- the game in the game ---- */
+    { id: 'flatland', name: 'Flatland', text: 'Every round from now on is played flat: a whole 2D duel inside the duel',
+      apply: function (s) { s.flat = true; } },
 
     /* ---- the silly batch ---- */
     { id: 'balloon', name: 'Balloon Rounds', text: 'Bullets inflate as they fly',

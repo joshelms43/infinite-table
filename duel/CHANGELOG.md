@@ -1,5 +1,40 @@
 # Duel — Changelog
 
+## 0.13.0
+Flatland: the game inside the game.
+- One new powerup — Flatland (catalog `2026-08-20-duel-r5`). Own it and every
+  round from then on is played flat: a complete 2D side-view duel on a 2D cut
+  of the current arena, in the spirit of the arena shooters it tips its hat
+  to. Springy movement with coyote time and jump buffering, squash and
+  stretch, hitstop, screenshake, a camera that leans in when the fight gets
+  close.
+- Every powerup translated. Not eighty special cases: the flat sim
+  (`shared/duel-flat.js`) reads the exact same stats sheet the 3D game reads,
+  so homing homes, mortars arc, chickens bounce, boomerangs come home through
+  terrain on the return leg, Second Wind saves you on 1 HP, Crab Mode is +30%
+  because in Flatland everything is sideways.
+- One combat rulebook. The sim owns movement, bullet flight and contact
+  detection only (`detectOnly`); damage still flows through the page's own
+  landHit → routeHit → applyHit pipeline, so 2D and 3D can never disagree on
+  what a hit is worth. Per-shot bonuses (first/last shot, airborne, payback)
+  are judged at contact from the shooter's sheet.
+- Net-ready on the same wire: state packets carry the flat position in the
+  same fields, peer shots replay as cosmetic sim bullets, favor-the-shooter
+  preserved, host bots fight flat through the same bot brain.
+- Shared renderer (`shared/duel-flat-render.js`) draws the page and the
+  headless render tool from one code path — what gets evaluated is what
+  ships. Chickens have combs. Beach balls have stripes.
+- Gates: `flatsim` (58 assertions — every powerup observably working flat,
+  60/60 soaked bot fights decisive on both arenas, frame-exact determinism,
+  detect-only purity) and `flatpage` (the real page, booted headless in
+  document order: the powerup flips a live round, contacts wound through the
+  real pipeline, the round ends, clean rounds stay 3D).
+- Root causes fixed along the way: popcorn burst children could burst again
+  (geometric chain reaction — children now carry the burst flag), boomerangs
+  orbited their owner forever at fixed turn rate (snap-home steering inside
+  4u), boomerangs ground to zero speed trapped on slab tops (the return leg
+  now phases), 240-bullet hard cap as a floor under beachball stacks.
+
 ## 0.1.0
 - 1v1 first-person duel over the platform wire: host a code, join a code, or Practice against a bot.
 - Every round ends in a draft: both players pick one powerup from three. First to four rounds wins the match.
