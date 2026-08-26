@@ -60,7 +60,7 @@
     favour:  {n:'Call In a Favour', d:'One player pays you $5M', v:3, c:3},
     shout:   {n:'Shout a Round',    d:'Every player pays you $2M', v:2, c:3},
     payday:  {n:'Payday',           d:'Draw 2 extra cards', v:1, c:10},
-    granny:  {n:'Granny Flat',      d:'+$3M rent on a complete set (not Transport)', v:3, c:3},
+    granny:  {n:'Granny Flat',      d:'+$3M rent on a complete set (not Transport or Teal)', v:3, c:3},
     resort:  {n:'Beach Resort',     d:'+$4M rent on a set with a Granny Flat', v:4, c:2},
     hike:    {n:'Rent Hike',        d:'Play with a Rent card to double it', v:1, c:2},
   };
@@ -91,10 +91,10 @@
     return d;
   }
 
-  function buildable(color){ return color!=='black'; }   // the card says 'not Transport' — Black only.
-  // Root cause of the old bug: 'green' (the set LABELLED Teal) was excluded as a
-  // 'utility', but the deck has no utility theming and the Granny Flat's printed
-  // text promises only 'not Transport'. The text is the contract.
+  // No buildings on Black (Transport) or the Teal-labelled set (key 'green', the
+  // utilities of this deck). The card text below names both, so what the card
+  // promises and what the rule does can never drift apart again.
+  function buildable(color){ return color!=='black' && color!=='green'; }
 
   var api = {
     RULEBOOK: RULEBOOK,

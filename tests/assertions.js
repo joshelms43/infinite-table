@@ -255,10 +255,10 @@ T('the band keeps a shadow so white survives the light sets',
   T('all ten sets are present and distinct',
     new Set(Object.values(COLORS).map(c=>c.label)).size===10);
 })();
-T('buildings are banned on Transport only — the card text is the contract',
-  !buildable('black') && buildable('green') && buildable('teal') && buildable('gold'));
-T('a granny flat goes on the set labelled Teal (key green) — the reported bug',
-  buildable('green') === true);
+T('buildings are banned on Transport and the Teal-labelled set, as designed',
+  !buildable('black') && !buildable('green') && buildable('teal') && buildable('gold'));
+T('the Granny Flat text names both excluded sets, so the card cannot lie',
+  ACTIONS.granny.d.includes('Transport') && ACTIONS.granny.d.includes('Teal'));
 T('every set name is a plain colour word, short enough to render whole',
   Object.values(COLORS).every(c=>/^[A-Z][a-z]+$/.test(c.label) && c.label.length<=6));
 
@@ -725,8 +725,8 @@ T('rent cards carry the official five set-pairs, two apiece',
   rents.length===10 && Object.keys(rset).length===5
   && rset['gold+teal']===2 && rset['black+green']===2 && rset['brown+sky']===2
   && rset['orange+purple']===2 && rset['coral+sage']===2);
-T('buildings are banned on Transport only',
-  buildable('coral')===true && buildable('teal')===true && buildable('black')===false && buildable('green')===true);
+T('buildings are banned on Transport and Teal',
+  buildable('coral')===true && buildable('teal')===true && buildable('black')===false && buildable('green')===false);
 // the wild move is free and unlimited (Hasbro FAQ) — no play is spent
 newGame();
 G.turn=0; G.playsLeft=3; G.turnCount=5; G.over=false; MYSEAT=0; NET.mode='off';

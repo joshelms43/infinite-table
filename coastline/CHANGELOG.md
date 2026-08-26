@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.14.7 — 2026-08-26
+v0.14.6 reverted: no buildings on the Teal-labelled set was the design all
+along (it plays as this deck's utilities) — the report was withdrawn. What
+was actually broken was the card: its text promised only "not Transport"
+while the rule excluded two sets. The Granny Flat now reads "not Transport
+or Teal", and a pin asserts the text names both excluded sets so the card
+can never lie again.
+
 ## v0.14.6 — 2026-08-26
 A Granny Flat can now be placed on the set labelled Teal. Root cause: that set
 is internally the 'green' colour key, and `buildable()` excluded it as a
