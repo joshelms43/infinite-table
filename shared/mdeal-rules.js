@@ -91,7 +91,10 @@
     return d;
   }
 
-  function buildable(color){ return color!=='black' && color!=='green'; }   // no houses on Stations or Utilities
+  function buildable(color){ return color!=='black'; }   // the card says 'not Transport' — Black only.
+  // Root cause of the old bug: 'green' (the set LABELLED Teal) was excluded as a
+  // 'utility', but the deck has no utility theming and the Granny Flat's printed
+  // text promises only 'not Transport'. The text is the contract.
 
   var api = {
     RULEBOOK: RULEBOOK,

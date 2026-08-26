@@ -40,7 +40,7 @@ function renderScene(name, spec) {
   const stA = {}, stB = {};
   const dt = 1 / 60;
   const frames = Math.round(spec.t * 60);
-  const keyAt = [Math.round(frames * 0.15), Math.round(frames * 0.45), Math.round(frames * 0.8)];
+  const keyAt = [Math.round(frames * 0.08), Math.round(frames * 0.3), Math.round(frames * 0.6)];
   let keyN = 0;
 
   for (let i = 0; i < frames; i++) {

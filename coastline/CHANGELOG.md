@@ -1,5 +1,13 @@
 # Coastline — Changelog
 
+## v0.14.6 — 2026-08-26
+A Granny Flat can now be placed on the set labelled Teal. Root cause: that set
+is internally the 'green' colour key, and `buildable()` excluded it as a
+"utility" alongside Black — but the deck carries no utility theming and the
+card's printed text promises only "not Transport". The text is the contract:
+buildings are refused on Black (Transport) alone. Regression pins flipped and
+mutation-proved (reverting the rule fails 4 assertions).
+
 ## v0.14.5 — 2026-07-26
 Playing M Deal needs an account now — solo included.
 
