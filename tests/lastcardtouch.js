@@ -130,6 +130,14 @@ const until = async (fn, ms = 1800) => {          // load-proof: wait for the ST
 
   /* ---- the bot answers; wait for my turn back ---- */
   for (let i = 0; i < 60 && E.turn !== 0; i++) await sleep(60);
+  /* Taking the turn by force means taking the clock too. The bot's timer does
+     not re-check whose turn it is when it fires — it plays for ENGINE.turn —
+     so a move still in flight would land on MY seat a moment later and change
+     the hand the refusal check below is counting. Root cause of the ~25% flake
+     in 'it springs back with the denial shake': the spring-back was always
+     right; the hand-length clause was measuring whether the bot got there
+     first. No real path forces a turn like this, so this is the rig's job. */
+  vm.runInContext('clearTimeout(botT)', ctx);
   E.turn = 0; E.phase = 'play';                     // make certain, then repaint
   E.discard.push(N('teal', 5)); E.activeColour = 'teal';
   vm.runInContext('syncFromEngine([])', ctx);
