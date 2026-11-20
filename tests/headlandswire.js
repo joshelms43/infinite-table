@@ -112,7 +112,6 @@ function goodsTotal(g) {
   const s = G.turn, t1 = (s + 1) % 3, t2 = (s + 2) % 3;
   G.players[s].hand.push(G.goods.splice(G.goods.indexOf('clay'), 1)[0]);
   G.players[t2].hand.push(G.goods.splice(G.goods.indexOf('stone'), 1)[0]);
-  G.players[t1].hand = G.players[t1].hand.filter(x => x !== 'stone');
   while (G.players[t1].hand.length) G.goodsDiscard.push(G.players[t1].hand.pop());
   ctxs[0].hostPush([]);
   ctxs[s].sendMove({ t: 'trade', give: ['clay'], want: ['stone'] });
@@ -121,11 +120,17 @@ function goodsTotal(g) {
   ctxs[t1].sendMove({ t: 'tradeResp', accept: false });
   T('one pass leaves the offer standing for the rest', G.pendingTrade !== null &&
     ctxs.every(c => c.V.pendingTrade && c.V.pendingTrade.resp &&
-      c.V.pendingTrade.resp[t1] === true));
+      c.V.pendingTrade.resp[t1] === 'no'));
+  const stoneBefore = H.held(G.players[s]).stone;
   ctxs[t2].sendMove({ t: 'tradeResp', accept: true });
-  T('the taker gets the swap and the sweetener over the wire',
+  T('all answers in: the offer is ready for the pick, nothing swapped yet',
+    G.pendingTrade !== null && G.pendingTrade.ready === true &&
+    H.held(G.players[s]).stone === stoneBefore &&
+    ctxs.every(c => c.V.pendingTrade && c.V.pendingTrade.ready));
+  ctxs[s].sendMove({ t: 'tradePick', taker: t2 });
+  T('the chosen taker gets the swap and the sweetener over the wire',
     G.pendingTrade === null && G.tradeUsed === true &&
-    H.held(G.players[s]).stone >= 1 && H.held(G.players[t2]).clay >= 1);
+    H.held(G.players[s]).stone === stoneBefore + 1 && H.held(G.players[t2]).clay >= 1);
   T('goods stayed at 61 through the trade', goodsTotal(G) === 61, String(goodsTotal(G)));
 }
 
@@ -133,9 +138,11 @@ function goodsTotal(g) {
 let mismatches = 0, handDrift = 0, guard = 6000, offTurnBounces = 0, conserved = true;
 function nextActor() {
   const tr = G.pendingTrade;
-  if (tr) {
+  if (tr && !tr.ready) {
     for (let s2 = 0; s2 < 3; s2++) if (s2 !== tr.from && !tr.resp[s2]) return s2;
+    return tr.from;
   }
+  if (tr && tr.ready) return tr.from;
   return G.turn;
 }
 while (!G.over && guard-- > 0) {
@@ -193,13 +200,12 @@ T('finished-game intents bounce', (() => {
   while (!solo.ENGINE.over && g2-- > 0) {
     const E = solo.ENGINE;
     let actor = E.turn;
-    if (E.pendingTrade) {
-      actor = -1;
+    if (E.pendingTrade && !E.pendingTrade.ready) {
+      actor = E.pendingTrade.from;
       for (let s2 = 0; s2 < E.players.length; s2++) {
         if (s2 !== E.pendingTrade.from && !E.pendingTrade.resp[s2]) { actor = s2; break; }
       }
-      if (actor < 0) actor = E.turn;
-    }
+    } else if (E.pendingTrade && E.pendingTrade.ready) actor = E.pendingTrade.from;
     if (actor === 0) {
       const mv = H.botMove(E, 0);
       if (!mv) break;

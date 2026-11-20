@@ -1,5 +1,21 @@
 # Headlands — Changelog
 
+## v0.4.0 — 2026-11-20
+Trades are an auction now, not a race.
+- The offer still goes to the whole table, but nobody wins by answering
+  fastest: everyone says I'm In or Pass, and only when every answer is
+  in does the offerer choose who gets the deal — or Walk Away, which
+  keeps the trade for the turn. The chosen taker draws the sweetener.
+- A bid you can't cover still counts as a pass, and a bid whose hand
+  changed before the pick (Raiders, say) degrades to a pass at
+  execution rather than minting goods.
+- Bot offerers pick the bidder furthest behind on points — the deal
+  that least helps the leader. Bots still bid and float offers as in
+  v0.3.0.
+- Healed and rejoined clients reopen whichever sheet truth demands:
+  the bid sheet if their answer is missing, the pick sheet if their
+  bids are in.
+
 ## v0.3.0 — 2026-11-20
 Trading goes to the whole table, and the bots join the haggling.
 - An offer no longer names one target: it stands before everyone, first

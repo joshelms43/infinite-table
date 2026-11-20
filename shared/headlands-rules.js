@@ -121,7 +121,7 @@
       turn: Math.floor(rng() * names.length),
       phase: 'action',
       subUsed: false, tradeUsed: false, offered: false,
-      pendingTrade: null,                 /* {from,give:[],want:[],resp:{seat:true=declined}} */
+      pendingTrade: null,                 /* {from,give:[],want:[],resp:{seat:'yes'|'no'},ready} */
       over: false, winner: -1,
       turnCount: 0
     };
@@ -337,33 +337,62 @@
     var p = g.players[seat];
     if (!p) return { ok: false, evts: evts };
 
-    /* a trade answer is the one move that isn't the turn-holder's. The offer
-       stands before the whole table: anyone may take it, first answer wins. */
+    /* trade answers are the moves that aren't the turn-holder's. The offer
+       stands before the whole table; everyone says in or out, and only then
+       does the offerer choose who gets the deal. */
+    function takersOf(tr) {
+      return Object.keys(tr.resp).filter(function (k) { return tr.resp[k] === 'yes'; })
+        .map(Number);
+    }
     if (intent.t === 'tradeResp') {
       var tr = g.pendingTrade;
-      if (!tr || tr.from === seat || tr.resp[seat]) return { ok: false, evts: evts };
+      if (!tr || tr.ready || tr.from === seat || tr.resp[seat]) return { ok: false, evts: evts };
+      var yes = false;
       if (intent.accept) {
-        var A = g.players[tr.from], B = g.players[seat];
-        var okA = tr.give.every(function (good) { return held(A)[good] >= tr.give.filter(function (x) { return x === good; }).length; });
-        var okB = tr.want.every(function (good) { return held(B)[good] >= tr.want.filter(function (x) { return x === good; }).length; });
-        if (okA && okB) {
-          g.pendingTrade = null;
-          tr.give.forEach(function (good) { A.hand.splice(A.hand.indexOf(good), 1); B.hand.push(good); });
-          tr.want.forEach(function (good) { B.hand.splice(B.hand.indexOf(good), 1); A.hand.push(good); });
-          g.tradeUsed = true;
-          drawGoods(g, B, 1, evts);       /* the agreeing partner's sweetener */
-          evts.push({ e: 'tradeout', from: tr.from, by: seat, accept: true });
-          return { ok: true, evts: evts };
-        }
-        /* can't actually cover it — counts as passing */
+        var B = g.players[seat];
+        yes = tr.want.every(function (good) { return held(B)[good] >= tr.want.filter(function (x) { return x === good; }).length; });
+        /* wanting in without the goods counts as staying out */
       }
-      tr.resp[seat] = true;
+      tr.resp[seat] = yes ? 'yes' : 'no';
+      evts.push({ e: yes ? 'tradein' : 'tradepass', seat: seat });
       if (Object.keys(tr.resp).length >= g.players.length - 1) {
-        g.pendingTrade = null;
-        evts.push({ e: 'tradeout', from: tr.from, accept: false });
-      } else {
-        evts.push({ e: 'tradepass', seat: seat });
+        var takers = takersOf(tr);
+        if (!takers.length) {
+          g.pendingTrade = null;
+          evts.push({ e: 'tradeout', from: tr.from, accept: false });
+        } else {
+          tr.ready = true;
+          evts.push({ e: 'tradebids', from: tr.from, takers: takers });
+        }
       }
+      return { ok: true, evts: evts };
+    }
+    if (intent.t === 'tradePick') {
+      var trP = g.pendingTrade;
+      if (!trP || seat !== trP.from || !trP.ready) return { ok: false, evts: evts };
+      if (intent.taker == null || intent.taker < 0) {     /* walking away */
+        g.pendingTrade = null;
+        evts.push({ e: 'tradeout', from: trP.from, accept: false, walked: true });
+        return { ok: true, evts: evts };
+      }
+      if (trP.resp[intent.taker] !== 'yes') return { ok: false, evts: evts };
+      var A2 = g.players[trP.from], B2 = g.players[intent.taker];
+      var okA2 = trP.give.every(function (good) { return held(A2)[good] >= trP.give.filter(function (x) { return x === good; }).length; });
+      var okB2 = trP.want.every(function (good) { return held(B2)[good] >= trP.want.filter(function (x) { return x === good; }).length; });
+      if (!okA2 || !okB2) {                               /* hands moved since the bid */
+        trP.resp[intent.taker] = 'no';
+        if (!takersOf(trP).length) {
+          g.pendingTrade = null;
+          evts.push({ e: 'tradeout', from: trP.from, accept: false });
+        } else evts.push({ e: 'tradepass', seat: intent.taker });
+        return { ok: true, evts: evts };
+      }
+      g.pendingTrade = null;
+      trP.give.forEach(function (good) { A2.hand.splice(A2.hand.indexOf(good), 1); B2.hand.push(good); });
+      trP.want.forEach(function (good) { B2.hand.splice(B2.hand.indexOf(good), 1); A2.hand.push(good); });
+      g.tradeUsed = true;
+      drawGoods(g, B2, 1, evts);          /* the chosen partner's sweetener */
+      evts.push({ e: 'tradeout', from: trP.from, by: intent.taker, accept: true });
       return { ok: true, evts: evts };
     }
 
@@ -473,11 +502,17 @@
     if (g.over) return null;
     var p = g.players[seat];
     var tr = g.pendingTrade;
-    if (tr && tr.from !== seat && !tr.resp[seat]) {
-      /* take a trade when it hands over more than it takes, or sheds a double */
+    if (tr && !tr.ready && tr.from !== seat && !tr.resp[seat]) {
+      /* bid when it hands over more than it takes, or sheds a double */
       var good = tr.give.length > tr.want.length ||
         (tr.give.length === tr.want.length && tr.want.every(function (x) { return held(p)[x] >= 2; }));
       return { t: 'tradeResp', accept: !!good };
+    }
+    if (tr && tr.ready && tr.from === seat) {
+      /* our offer came back with bids: deal with whoever is furthest behind */
+      var takers = Object.keys(tr.resp).filter(function (k) { return tr.resp[k] === 'yes'; }).map(Number);
+      takers.sort(function (a, b) { return vpOf(g, a) - vpOf(g, b) || a - b; });
+      return { t: 'tradePick', taker: takers[0] };
     }
     if (seat !== g.turn || g.phase !== 'action' || tr) return null;
     /* build the biggest thing we can, resorts first */

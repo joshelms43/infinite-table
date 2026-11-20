@@ -225,27 +225,56 @@ T('Council Grant: 1 per open Shack', (() => {
     const b = H.apply(g, 0, { t: 'trade', give: [], want: ['stone'] });
     return !a.ok && !b.ok;
   })());
-  T('an accepted trade swaps goods and sweetens the taker', (() => {
+  T('a bid, then the pick, swaps goods and sweetens the taker', (() => {
     H.apply(g, 0, { t: 'trade', give: ['clay'], want: ['stone'] });
-    const r = H.apply(g, 1, { t: 'tradeResp', accept: true });
-    return r.ok && H.held(g.players[0]).stone === 1 && H.held(g.players[1]).clay === 1 &&
+    const bid = H.apply(g, 1, { t: 'tradeResp', accept: true });
+    const ready = g.pendingTrade && g.pendingTrade.ready === true &&
+      bid.evts.some(e => e.e === 'tradebids');
+    const noSwapYet = H.held(g.players[0]).stone === 0;
+    const r = H.apply(g, 0, { t: 'tradePick', taker: 1 });
+    return ready && noSwapYet && r.ok &&
+      H.held(g.players[0]).stone === 1 && H.held(g.players[1]).clay === 1 &&
       g.players[1].hand.length === 2 && g.tradeUsed;
   })());
   T('one completed trade per turn', (() => {
     const r = H.apply(g, 0, { t: 'trade', give: ['clay'], want: ['stone'] });
     return !r.ok;
   })());
-  T('first to take the broadcast offer wins; late answers bounce', (() => {
+  T('every bid is heard, and the offerer chooses between them', (() => {
     const g2 = rig(53, ['A', 'B', 'C']);
     g2.turn = 0;
     give(g2.players[0], ['clay']);
     give(g2.players[1], ['stone']);
     give(g2.players[2], ['stone']);
     H.apply(g2, 0, { t: 'trade', give: ['clay'], want: ['stone'] });
-    const r2 = H.apply(g2, 2, { t: 'tradeResp', accept: true });
-    const late = H.apply(g2, 1, { t: 'tradeResp', accept: true });
-    return r2.ok && !late.ok && H.held(g2.players[2]).clay === 1 &&
-      H.held(g2.players[1]).stone === 1 && g2.pendingTrade === null;
+    const b1 = H.apply(g2, 1, { t: 'tradeResp', accept: true });
+    const openStill = g2.pendingTrade && !g2.pendingTrade.ready;
+    const b2 = H.apply(g2, 2, { t: 'tradeResp', accept: true });
+    const bids = b2.evts.find(e => e.e === 'tradebids');
+    const early = H.apply(g2, 0, { t: 'tradePick', taker: 1 });
+    return b1.ok && openStill && b2.ok && bids && bids.takers.join(',') === '1,2' &&
+      early.ok && H.held(g2.players[1]).clay === 1 && H.held(g2.players[2]).stone === 1;
+  })());
+  T('the pick waits for every answer', (() => {
+    const g2 = rig(53, ['A', 'B', 'C']);
+    g2.turn = 0;
+    give(g2.players[0], ['clay']);
+    give(g2.players[1], ['stone']);
+    H.apply(g2, 0, { t: 'trade', give: ['clay'], want: ['stone'] });
+    H.apply(g2, 1, { t: 'tradeResp', accept: true });
+    return !H.apply(g2, 0, { t: 'tradePick', taker: 1 }).ok;
+  })());
+  T('walking away keeps the trade for this turn', (() => {
+    const g2 = rig(55);
+    g2.turn = 0;
+    give(g2.players[0], ['clay']);
+    give(g2.players[1], ['stone']);
+    H.apply(g2, 0, { t: 'trade', give: ['clay'], want: ['stone'] });
+    H.apply(g2, 1, { t: 'tradeResp', accept: true });
+    const r = H.apply(g2, 0, { t: 'tradePick', taker: -1 });
+    return r.ok && r.evts.some(e => e.e === 'tradeout' && !e.accept && e.walked) &&
+      g2.pendingTrade === null && !g2.tradeUsed &&
+      H.apply(g2, 0, { t: 'trade', give: ['clay'], want: ['stone'] }).ok;
   })());
   T('the offerer cannot answer their own offer', (() => {
     const g2 = rig(57);
@@ -267,7 +296,7 @@ T('Council Grant: 1 per open Shack', (() => {
     return p1.ok && still && p2.ok && cleared && again.ok &&
       p2.evts.some(e => e.e === 'tradeout' && e.accept === false);
   })());
-  T('an acceptance without the goods counts as a pass', (() => {
+  T('a bid without the goods counts as a pass', (() => {
     const g2 = rig(59);
     g2.turn = 0;
     give(g2.players[0], ['clay']);
@@ -275,6 +304,19 @@ T('Council Grant: 1 per open Shack', (() => {
     const r = H.apply(g2, 1, { t: 'tradeResp', accept: true });   /* seat 1 holds no stone */
     return r.ok && g2.pendingTrade === null && !g2.tradeUsed &&
       H.held(g2.players[0]).clay === 1;
+  })());
+  T('a bot offerer picks the taker furthest behind', (() => {
+    const g2 = rig(63, ['A', 'B', 'C']);
+    g2.turn = 0;
+    give(g2.players[0], ['clay']);
+    give(g2.players[1], ['stone']);
+    give(g2.players[2], ['stone']);
+    g2.players[1].stacks = [['shack'], ['shack']];   /* seat 1 leads */
+    H.apply(g2, 0, { t: 'trade', give: ['clay'], want: ['stone'] });
+    H.apply(g2, 1, { t: 'tradeResp', accept: true });
+    H.apply(g2, 2, { t: 'tradeResp', accept: true });
+    const mv = H.botMove(g2, 0);
+    return mv && mv.t === 'tradePick' && mv.taker === 2;
   })());
   T('bots craft an offer when one good short with surplus to spare', (() => {
     const g2 = rig(61);
@@ -290,7 +332,7 @@ T('Council Grant: 1 per open Shack', (() => {
     g2.turn = 0; g2.market = ['town', 'town', 'town', 'town', 'town'];
     give(g2.players[0], ['clay', 'timber', 'wool', 'wool', 'wool', 'wool']);
     H.apply(g2, 0, H.botMove(g2, 0));                 /* the offer */
-    H.apply(g2, 1, { t: 'tradeResp', accept: false }); /* 2p: clears */
+    H.apply(g2, 1, { t: 'tradeResp', accept: false }); /* 2p: all passed, clears */
     const next = H.botMove(g2, 0);
     return next && next.t === 'end';
   })());
