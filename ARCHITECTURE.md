@@ -5,10 +5,13 @@ Chess.com for card games. One platform, many games, no build step.
 ## Layout
 ```
 index.html            the platform lobby (game cards; a game gets a card when it's ready)
-coastline/index.html  M Deal — the flagship. Single file. URL path kept for history.
+coastline/index.html  Deal (was M Deal) — the flagship. Single file. URL path kept for history.
 mafia/index.html      Mafia — PARKED (no lobby card; the URL still works). Kept green in the gate.
 penalty/index.html    Penalty Shootout — Josh's alpha, live on the door. Offline for now; its
                       deterministic resolve(shot, dive, seed) is already online-shaped.
+home/index.html       The home screen (preview): one lobby for Deal and Settlers, friends, ratings, the pass.
+shared/pass.js        the pass catalog, XP and Elo maths, bot ratings — pure; mirrored by supabase/home.sql
+shared/account.js     ratings, pass progress, loadouts, reporting a result — no screen
 settlers/index.html   Settlers — real-time island building vs bots. Canvas board + DOM HUD, one rAF loop.
 shared/settlers-rules.js  its engine: one state, one validated dispatcher, time enters only as a clock
                       action — same seed + same action log = same game. Bots live here too.

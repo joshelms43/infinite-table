@@ -8,6 +8,14 @@
 - **Mafia** — no setup. No SQL, no functions, no tables. It uses the same channels M Deal already uses.
 - **Anything ending in .js from the tests folder** (netsim, mafiasim, etc.) — these run on Claude's machine before every push. They are not for Supabase, not for anywhere.
 
+## 0. The home screen — run `supabase/home.sql` once
+
+The home screen (`/home/`) keeps a rating per game, the monthly pass and what
+you have equipped. Supabase Dashboard → **SQL Editor** → New query → paste the
+whole of **`supabase/home.sql`** → Run. It is safe to run again. Run it after
+`schema.sql` and `accounts.sql`, and again if either of those is ever re-run.
+Until it is run, the home screen shows the Deal rating only and hides the pass.
+
 ## 1. Accounts — run ONE SQL file
 
 **Accounts are M Deal only.** The lobby is guest-first and asks nothing. Sign-in

@@ -9,6 +9,7 @@
            npm run bump -- mafia 0.3.0
            npm run bump -- pool 0.1.1
            npm run bump -- settlers 0.1.1
+           npm run bump -- home 0.1.1
            npm run bump -- lobby 1.2.0
 */
 const fs = require('fs');
@@ -19,6 +20,7 @@ const TARGETS = {
   mafia: 'mafia/index.html',
   pool: 'pool/index.html',
   settlers: 'settlers/index.html',
+  home: 'home/index.html',
   lobby: 'index.html',
 };
 

@@ -31,7 +31,8 @@ const PAGES = [
   { name: 'Pool', key: 'pool', wants: ['NET', 'G', 'TableKit', 'PoolRules', 'PoolPhysics'] },
   { name: 'Last Card', key: 'lastcard', wants: ['TableKit', 'LastCard', 'sendMove', 'renderAll', 'startBot'] },
   { name: 'Headlands', key: 'headlands', wants: ['TableKit', 'Headlands', 'sendMove', 'renderAll', 'startBot'] },
-  { name: 'Settlers', key: 'settlers', wants: ['TableKit', 'Settlers', 'sendMove', 'renderAll', 'startBot', 'frame'] },
+  { name: 'Settlers', key: 'settlers', wants: ['TableKit', 'Settlers', 'Pass', 'Account', 'sendMove', 'renderAll', 'startBot', 'frame'] },
+  { name: 'Home', key: 'home', wants: ['TableKit', 'Pass', 'ID', 'Account', 'render', 'NAV', 'accountReady'] },
 ];
 
 const { partsFor } = require('./_document');

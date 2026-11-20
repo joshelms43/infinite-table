@@ -1,5 +1,22 @@
 # Coastline — Changelog
 
+## v0.15.0 — 2026-11-21
+M Deal is now Deal, and it answers to the home screen.
+- Renamed: the title, the logo, the share sheet and the sign-in prompt all
+  say Deal. The path stays `/coastline/` so old links keep working.
+- Launched from the new home screen (`&from=home` on the links it already
+  took: `?solo=1`, `?host=1`, `?join=CODE`, `?invite=FRIEND`), its own menu
+  is hidden — the choices were made in the one lobby — and its way back is
+  the home screen. The room's waiting list still lives here; see the home
+  changelog for why.
+- Ratings are per game now. Deal's client is unchanged: `record_match`
+  still gets called, and the database (supabase/home.sql) routes it into
+  the Deal rating and the pass. `profiles.elo` stays the Deal rating, so
+  the rating screen reads what it always read. Bazza and Shazza no longer
+  move: they are fixed at 1100.
+- Cosmetics from the pass: the table felt and the card back are read from
+  what this device has equipped.
+
 ## v0.14.7 — 2026-08-26
 v0.14.6 reverted: no buildings on the Teal-labelled set was the design all
 along (it plays as this deck's utilities) — the report was withdrawn. What

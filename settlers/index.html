@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Settlers — Infinite Table. Version: 0.3.0
+<!-- Settlers — Infinite Table. Version: 0.4.0
      The island in real time. No turns: a shared roll lands on the clock and
      every matching hex pays everyone at once; between rolls the whole table
      builds and trades whenever it likes. First to 10.
@@ -194,6 +194,12 @@ input{font-family:inherit;font-size:16px;color:var(--text);background:rgba(255,2
   padding:20px 18px 18px;box-shadow:0 20px 60px rgba(0,0,0,.5);transform:translateY(10px) scale(.98);transition:transform .35s}
 #victory.show #vcard{transform:none}
 #vtitle{font-size:28px;font-weight:800;text-align:center;margin:2px 0 14px}
+#vrated{display:flex;align-items:baseline;justify-content:center;gap:8px;margin:-6px 0 14px;font-size:14px;font-weight:800;color:var(--dim)}
+#vrated b{font-size:20px;color:var(--text)}
+#vrated i{font-style:normal}
+#vrated i.up{color:var(--ok)}
+#vrated i.down{color:var(--coral)}
+#vrated .xp{color:var(--gold);margin-left:8px}
 .vrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
 .vrow .nm{font-weight:800;font-size:15px;min-width:64px}
 .vrow .parts{display:flex;flex-wrap:wrap;gap:4px;flex:1}
@@ -280,12 +286,14 @@ table.coll td:first-child{text-align:left}
 <div id="sheetwrap"><div id="sheet"></div></div>
 <div id="victory" class="hidden"><div id="vcard"></div></div>
 
-<script src="../shared/config.js?v=0.3.0"></script>
-<script src="../shared/tablekit.js?v=0.3.0"></script>
-<script src="../shared/settlers-rules.js?v=0.3.0"></script>
+<script src="../shared/config.js?v=0.4.0"></script>
+<script src="../shared/pass.js?v=0.4.0"></script>
+<script src="../shared/account.js?v=0.4.0"></script>
+<script src="../shared/tablekit.js?v=0.4.0"></script>
+<script src="../shared/settlers-rules.js?v=0.4.0"></script>
 <script>
 'use strict';
-var VERSION = '0.3.0';
+var VERSION = '0.4.0';
 TableKit.watchErrors({ game: 'settlers', version: VERSION, onError: function (m) { toast(m, 'warn'); } });
 
 var S = Settlers, TOPO = S.TOPO;
@@ -299,6 +307,10 @@ function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 /* ================= the look ================= */
 var PCOL = ['#E2483D', '#2F6FE0', '#F3EEE3', '#8B5CF6'];
 var PEDGE = ['#7E1E16', '#14336F', '#5B5246', '#3F2386'];
+/* what the pass lets you change: your colour, the dice, the island, the robber */
+var SKIN = { ocean: ['#2F86AE', '#21698F', '#123E58'], sand: '#E8D7AA', token: '#F7F1E1',
+  dice: { a: { bg: '#F7F1E1', pip: '#1C2A35' }, b: { bg: '#E2483D', pip: '#FFF6EE' } }, robber: 'pawn' };
+var BASE_SKIN = JSON.parse(JSON.stringify(SKIN)), BASE_ME = [PCOL[0], PEDGE[0]], BASE_TERR = null;
 var TERR = {
   timber: { fill: '#3F7D53', hi: '#4E9264', ink: '#2A5A3A' },
   clay:   { fill: '#C9693E', hi: '#D87D52', ink: '#97472A' },
@@ -388,20 +400,35 @@ function advanceClock(p) {
 }
 document.addEventListener('visibilitychange', function () { LASTPERF = performance.now(); });
 
+/* wear whatever this device has equipped; anything not equipped is the default */
+function applyLoadout() {
+  if (!BASE_TERR) BASE_TERR = JSON.parse(JSON.stringify(TERR));
+  var col = Pass.equipped('s_color'), dice = Pass.equipped('s_dice'), isl = Pass.equipped('s_island'), rob = Pass.equipped('s_robber');
+  PCOL[0] = col ? col.fill : BASE_ME[0]; PEDGE[0] = col ? col.edge : BASE_ME[1];
+  SKIN.dice = dice ? { a: dice.a, b: dice.b } : BASE_SKIN.dice;
+  Object.keys(BASE_TERR).forEach(function (k) { TERR[k] = isl ? isl.terr[k] : BASE_TERR[k]; });
+  SKIN.ocean = isl ? isl.ocean : BASE_SKIN.ocean;
+  SKIN.sand = isl ? isl.sand : BASE_SKIN.sand;
+  SKIN.token = isl ? isl.token : BASE_SKIN.token;
+  SKIN.robber = rob ? rob.kind : 'pawn';
+  $('hand').innerHTML = '';      /* the hand cards are painted in the island's colours */
+  LASTROLL_SIG = '';
+}
 function startBot(nBots, interval) {
   SETTINGS.bots = nBots; SETTINGS.interval = interval;
   MODE = 'bot';
   MYSEAT = 0;
-  var order = BOTKINDS.slice();
+  applyLoadout();
   var seed = (Math.random() * 1e9) | 0;
-  var rot = seed % 3;
+  /* strongest first — the seats the home screen's lobby shows, and the bots'
+     ratings are per personality, so who you face must not be a lottery */
   KINDS = [null];
   NAMES = [myName()];
   for (var i = 0; i < nBots; i++) {
-    var k = order[(rot + i) % 3];
-    KINDS.push(k);
-    NAMES.push(BOTNAMES[BOTKINDS.indexOf(k)]);
+    KINDS.push(BOTKINDS[i]);
+    NAMES.push(BOTNAMES[i]);
   }
+  RESULT = null;
   GAMEMS = 0; LASTPERF = performance.now(); RUNNING = true;
   G = S.newGame(NAMES, seed, { interval: interval, now: 0 });
   OFFER_SEEN = {}; OFFER_SHOWN = 0; $('offercard').dataset.sig = '';
@@ -577,6 +604,7 @@ function afterState(evts) {
         break;
       case 'win':
         OVERAT = performance.now();
+        reportResult();
         setMode('none');
         if (SHEET) closeSheet();
         clearToasts();
@@ -1158,12 +1186,41 @@ function myName() {
   return v || 'You';
 }
 
+/* ---- a rated result ----
+   Signed in, a finished game goes to the database, which answers with what
+   actually changed: the new Settlers rating and the pass XP. A guest plays
+   unrated and nothing is sent. */
+var FROMHOME = false, RESULT = null;
+function seatIds() {
+  var ids = [Account.user.id];
+  for (var s = 1; s < KINDS.length; s++) ids.push(Pass.botByKind(KINDS[s]).id);
+  return ids;
+}
+function reportResult() {
+  RESULT = null;
+  if (MODE !== 'bot' || !G || !G.over || !Account.user) return;
+  var ids = seatIds(), game = G;
+  Account.record('settlers', ids, ids[G.winner], G.rollN).then(function (r) {
+    if (G !== game) return;              /* a new game has started: not this one's news */
+    RESULT = r; drawRated();
+  });
+}
+function drawRated() {
+  var el = $('vrated');
+  if (!el) return;
+  if (!RESULT || !RESULT.ok) { el.classList.add('hidden'); return; }
+  var d = RESULT.delta | 0;
+  el.innerHTML = '<span>Rating</span><b>' + RESULT.after + '</b><i class="' + (d >= 0 ? 'up' : 'down') + '">' + (d >= 0 ? '+' : '\u2212') + Math.abs(d) + '</i>' +
+    '<span class="xp">+' + ((RESULT.xp | 0) + (RESULT.bonus | 0)) + ' XP</span>';
+  el.classList.remove('hidden');
+}
+
 /* ---- victory ---- */
 function showVictory() {
   VICTORY_SHOWN = true;
   var w = G.winner;
   var seats = G.players.map(function (_, s) { return s; }).sort(function (a, b) { return S.vp(G, b) - S.vp(G, a); });
-  var html = '<div id="vtitle">' + (w === MYSEAT ? 'You Win' : esc(NAMES[w]) + ' Wins') + '</div>';
+  var html = '<div id="vtitle">' + (w === MYSEAT ? 'You Win' : esc(NAMES[w]) + ' Wins') + '</div><div id="vrated" class="hidden"></div>';
   seats.forEach(function (s) {
     var v = S.vpParts(G, s), parts = [];
     if (v.settlements) parts.push('<span class="pt"><b>' + v.settlements + '</b> Settlement' + (v.settlements > 1 ? 's' : '') + '</span>');
@@ -1192,12 +1249,13 @@ function showVictory() {
       '<span class="exp" style="bottom:' + (epc + 19) + 'px"></span><span class="lb">' + s2 + '</span></div>';
   }
   html += '</div><div id="vlegend"><span><i></i>Rolled</span><span><i class="e"></i>Expected</span></div>';
-  html += '<div id="vbtns"><button id="vmenu">Menu</button><button class="primary" id="vagain">Play Again</button></div>';
+  html += '<div id="vbtns"><button id="vmenu">' + (FROMHOME ? 'Home' : 'Menu') + '</button><button class="primary" id="vagain">Play Again</button></div>';
   $('vcard').innerHTML = html;
   show('victory');
   requestAnimationFrame(function () { $('victory').classList.add('show'); });
   $('vagain').onclick = function () { sfx('tap'); startBot(SETTINGS.bots, SETTINGS.interval); };
-  $('vmenu').onclick = function () { location.reload(); };
+  $('vmenu').onclick = function () { if (FROMHOME) location.href = '../home/?game=settlers'; else location.reload(); };
+  drawRated();
   sfx('win');
   haptic(w === MYSEAT ? [30, 60, 30, 60, 60] : 40);
 }
@@ -1381,9 +1439,9 @@ function makeOceanCache() {
   var o = OCEAN.getContext('2d');
   if (!o) { OCEAN = null; return; }
   var gr = o.createRadialGradient(OCEAN.width / 2, OCEAN.height * 0.45, 10, OCEAN.width / 2, OCEAN.height * 0.45, Math.max(OCEAN.width, OCEAN.height) * 0.75);
-  gr.addColorStop(0, '#2F86AE');
-  gr.addColorStop(0.55, '#21698F');
-  gr.addColorStop(1, '#123E58');
+  gr.addColorStop(0, SKIN.ocean[0]);
+  gr.addColorStop(0.55, SKIN.ocean[1]);
+  gr.addColorStop(1, SKIN.ocean[2]);
   o.fillStyle = gr;
   o.fillRect(0, 0, OCEAN.width, OCEAN.height);
 }
@@ -1403,10 +1461,10 @@ function buildCache() {
   /* the sand rim under the whole island, with a soft drop shadow */
   c.save();
   c.shadowColor = 'rgba(4,22,34,.45)'; c.shadowBlur = R * 0.45; c.shadowOffsetY = R * 0.12;
-  c.fillStyle = '#E8D7AA';
+  c.fillStyle = SKIN.sand;
   TOPO.hexes.forEach(function (hx) { hexPath(c, X(hx.x), Y(hx.y), R * 1.13); c.fill(); });
   c.restore();
-  c.fillStyle = '#E8D7AA';
+  c.fillStyle = SKIN.sand;
   TOPO.hexes.forEach(function (hx) { hexPath(c, X(hx.x), Y(hx.y), R * 1.13); c.fill(); });
 
   /* ports: a little pier from each corner to a badge out in the water */
@@ -1455,7 +1513,7 @@ function buildCache() {
     if (h.num) {
       c.save();
       c.shadowColor = 'rgba(0,0,0,.28)'; c.shadowBlur = R * 0.1; c.shadowOffsetY = R * 0.04;
-      c.fillStyle = '#F7F1E1';
+      c.fillStyle = SKIN.token;
       c.beginPath(); c.arc(x, y + R * 0.1, R * 0.33, 0, Math.PI * 2); c.fill();
       c.restore();
       var red = h.num === 6 || h.num === 8;
@@ -1745,6 +1803,39 @@ function drawRobber(c, x, y, R, lift) {
   c.fillStyle = 'rgba(8,20,28,' + (0.35 - Math.min(0.25, lift / (R * 4))).toFixed(3) + ')';
   c.beginPath(); c.ellipse(x, y + lift + s * 1.25, s * 1.1, s * 0.35, 0, 0, Math.PI * 2); c.fill();
   c.translate(x, y);
+  if (SKIN.robber === 'gull') {
+    /* a gull, wings up */
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    var wings = function () {
+      c.beginPath(); c.moveTo(-s * 1.55, -s * 0.1);
+      c.quadraticCurveTo(-s * 0.8, -s * 1.5, 0, -s * 0.05);
+      c.quadraticCurveTo(s * 0.8, -s * 1.5, s * 1.55, -s * 0.1);
+      c.stroke();
+    };
+    c.strokeStyle = '#11151B'; c.lineWidth = s * 0.8; wings();
+    c.strokeStyle = '#F4F7FA'; c.lineWidth = s * 0.48; wings();
+    c.beginPath(); c.ellipse(0, s * 0.3, s * 0.5, s * 0.42, 0, 0, Math.PI * 2);
+    c.fillStyle = '#F4F7FA'; c.fill(); c.lineWidth = Math.max(1.2, R * 0.03); c.strokeStyle = '#11151B'; c.stroke();
+    c.beginPath(); c.moveTo(s * 0.42, s * 0.2); c.lineTo(s * 0.95, s * 0.36); c.lineTo(s * 0.42, s * 0.5); c.closePath();
+    c.fillStyle = '#F2A33A'; c.fill();
+    c.restore();
+    return;
+  }
+  if (SKIN.robber === 'storm') {
+    /* a storm cloud with its bolt */
+    c.beginPath();
+    c.arc(-s * 0.65, -s * 0.25, s * 0.6, 0, Math.PI * 2);
+    c.arc(0, -s * 0.7, s * 0.78, 0, Math.PI * 2);
+    c.arc(s * 0.7, -s * 0.2, s * 0.56, 0, Math.PI * 2);
+    c.rect(-s * 0.7, -s * 0.3, s * 1.45, s * 0.66);
+    c.fillStyle = '#4A5466'; c.fill();
+    c.beginPath();
+    c.moveTo(s * 0.12, s * 0.36); c.lineTo(-s * 0.4, s * 1.0); c.lineTo(-s * 0.02, s * 1.0); c.lineTo(-s * 0.26, s * 1.7);
+    c.lineTo(s * 0.5, s * 0.78); c.lineTo(s * 0.1, s * 0.78); c.lineTo(s * 0.42, s * 0.36); c.closePath();
+    c.fillStyle = '#F2C14E'; c.fill(); c.lineWidth = Math.max(1, R * 0.02); c.strokeStyle = '#7A5A14'; c.lineJoin = 'round'; c.stroke();
+    c.restore();
+    return;
+  }
   c.beginPath();
   c.moveTo(-s * 0.95, s * 1.2);
   c.quadraticCurveTo(-s * 0.95, s * 0.1, -s * 0.45, -s * 0.15);
@@ -1795,10 +1886,11 @@ function die(c, x, y, s, n, rot, red) {
   c.save();
   c.translate(x, y); c.rotate(rot);
   c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = s * 0.25; c.shadowOffsetY = s * 0.08;
-  c.fillStyle = red ? '#E2483D' : '#F7F1E1';
+  var skin = SKIN.dice[red ? 'b' : 'a'];
+  c.fillStyle = skin.bg;
   roundRect(c, -s / 2, -s / 2, s, s, s * 0.2); c.fill();
   c.shadowColor = 'transparent';
-  c.fillStyle = red ? '#FFF6EE' : '#1C2A35';
+  c.fillStyle = skin.pip;
   var pp = PIPS[n] || PIPS[1];
   for (var i = 0; i < pp.length; i++) {
     c.beginPath(); c.arc(pp[i][0] * s * 0.25, pp[i][1] * s * 0.25, s * 0.085, 0, Math.PI * 2); c.fill();
@@ -1831,9 +1923,9 @@ function drawDice(c, now) {
 }
 /* after the tumble, the last roll rests small under the ring */
 function dieSvg(n, red) {
-  var pp = PIPS[n] || [], dots = '';
-  for (var i = 0; i < pp.length; i++) dots += '<circle cx="' + (10 + pp[i][0] * 5) + '" cy="' + (10 + pp[i][1] * 5) + '" r="1.75" fill="' + (red ? '#FFF6EE' : '#1C2A35') + '"/>';
-  return '<svg viewBox="0 0 20 20"><rect x="0.5" y="0.5" width="19" height="19" rx="4" fill="' + (red ? '#E2483D' : '#F7F1E1') + '"/>' + dots + '</svg>';
+  var pp = PIPS[n] || [], dots = '', skin = SKIN.dice[red ? 'b' : 'a'];
+  for (var i = 0; i < pp.length; i++) dots += '<circle cx="' + (10 + pp[i][0] * 5) + '" cy="' + (10 + pp[i][1] * 5) + '" r="1.75" fill="' + skin.pip + '"/>';
+  return '<svg viewBox="0 0 20 20"><rect x="0.5" y="0.5" width="19" height="19" rx="4" fill="' + skin.bg + '"/>' + dots + '</svg>';
 }
 var LASTROLL_SIG = '';
 function renderLastRoll() {
@@ -1855,6 +1947,16 @@ function renderLastRoll() {
     if (st && S.validInterval(st.custom * 1000)) SETTINGS.custom = st.custom;
   } catch (e) {}
   requestAnimationFrame(frame);
+  /* who is signed in, for rated results; a guest simply plays unrated */
+  try { if (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) Account.session(); } catch (e) {}
+  /* launched from the home screen: the choices were made there, so there is
+     no menu — straight to the table */
+  try {
+    var q = new URLSearchParams(location.search || '');
+    FROMHOME = q.get('from') === 'home';
+    var nb = +q.get('bots'), iv = +q.get('interval');
+    if (FROMHOME && [1, 2, 3].indexOf(nb) >= 0) startBot(nb, S.validInterval(iv) ? iv : S.DEFAULT_INTERVAL);
+  } catch (e) {}
 })();
 </script>
 </body>

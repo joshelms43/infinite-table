@@ -23,6 +23,7 @@ const PAGES = {
   lastcard: 'lastcard/index.html',
   headlands: 'headlands/index.html',
   settlers: 'settlers/index.html',
+  home: 'home/index.html',
   lobby: 'index.html',
 };
 

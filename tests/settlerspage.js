@@ -34,7 +34,7 @@ const dom = new JSDOM(htmlFor('settlers'), {
   beforeParse(w) {
     /* the page's own randomness (seed, bot jitter, flyer arcs) seeded too, so
        this game is the same game every run */
-    let a = 0x5e771e5;
+    let a = 22;   /* a game where your seat builds, trades, and meets a 7 */
     w.Math.random = () => {
       a = (a + 0x6D2B79F5) | 0;
       let t = Math.imul(a ^ (a >>> 15), 1 | a);

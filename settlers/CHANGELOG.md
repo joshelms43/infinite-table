@@ -1,5 +1,29 @@
 # Settlers — Changelog
 
+## v0.4.0 — 2026-11-21
+Settlers joins the home screen: rated games, pass cosmetics, no menu.
+- Launched from the new home screen (`/home/`) with `?bots=N&interval=MS&from=home`,
+  it deals the table that was chosen there and never shows its own menu. A
+  nonsense link starts nothing. Opened directly it still shows the practice
+  menu, until the home screen becomes the front door.
+- Rated: signed in, a finished game is reported once to the database
+  (`record_result`), which answers with the new Settlers rating and the pass
+  XP; the victory screen shows both. The bots hold fixed ratings — Bazza the
+  Builder 1200, Shazza the Trader 1100, Davo the Expander 1050 — so beating
+  them places you instead of dragging them down. A guest plays unrated and
+  nothing is sent.
+- The bots now sit strongest first (Bazza, then Shazza, then Davo) instead
+  of in a random rotation. Root cause: ratings are per personality, so which
+  bot you faced with one or two seats filled could not stay a lottery, and
+  the lobby has to be able to show the table before you sit down.
+- Cosmetics from the pass: your colour, the dice, the island (terrain,
+  ocean, sand and tokens) and the robber (a gull, a storm) are read from
+  what this device has equipped. Nothing equipped is the game as it was.
+- The victory screen's Menu button is Home when you came from home.
+- Gates: `homesim` plays a whole game launched from home, signed in and as
+  a guest — the launch, the seating, the cosmetics, exactly one report with
+  the right seats and winner, and nothing sent for a guest. Mutation-proven.
+
 ## v0.3.0 — 2026-11-20
 Trading, cleaned up: bots deal freely, and you only see what you can take.
 - Bots post an offer whenever they want a deal. The once-per-roll cap is

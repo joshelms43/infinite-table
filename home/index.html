@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- Home — Infinite Table. Version: 0.1.0
+     One front door. Pick a game, pick how to play, and land on the table:
+     the games' own menus are never seen from here. Your rating in each game,
+     the month's pass and what you have equipped, your friends and a challenge
+     button — all on one screen.
+
+     Accounts are shared/identity.js (the same sign-in Deal uses). Ratings,
+     pass progress and loadouts come through shared/account.js; what a tier
+     unlocks and what a bot is rated live in shared/pass.js. This page only
+     draws them. A guest can look around and play Settlers unrated. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0D2230">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<title>Infinite Table</title>
+<style>
+:root{
+  --navy:#0D2230; --panel:#122C3D; --panel-2:#17364A; --deep:#0A1B27; --line:rgba(255,255,255,.08);
+  --text:#F2F5F7; --dim:#8DA4B3; --gold:#F2C14E; --ink:#1B1606; --coral:#E8604C; --ok:#5CC48A;
+  --card-ivory:#F7F2E6;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--navy)}
+body{color:var(--text);font-family:'Nunito Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  font-variant-numeric:tabular-nums;-webkit-user-select:none;user-select:none;display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;color:var(--text);cursor:pointer;border:none;background:none;padding:0}
+input{font-family:inherit;font-size:16px;font-weight:700;color:var(--text);background:rgba(255,255,255,.06);
+  border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:46px;width:100%;-webkit-user-select:text;user-select:text}
+input::placeholder{color:#5F7889}
+.hidden{display:none!important}
+
+#view{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(env(safe-area-inset-top) + 16px) 16px 18px}
+#wrap{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+#tabs{display:flex;background:var(--deep);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+#tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0 12px;min-height:56px;
+  font-size:11px;font-weight:800;color:var(--dim);transition:color .15s}
+#tabs button.on{color:var(--gold)}
+#tabs svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+.lbl{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin:0;display:flex;align-items:center;gap:8px}
+.lbl .pill{margin-left:auto}
+.pill{font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:none;border-radius:999px;padding:2px 9px;background:rgba(255,255,255,.08);color:var(--dim)}
+.pill.gold{background:rgba(242,193,78,.16);color:var(--gold)}
+.sec{display:flex;flex-direction:column;gap:8px}
+.rt{font-weight:800;color:var(--gold);margin-left:6px}
+.rt.dim{color:var(--dim)}
+
+.av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;position:relative}
+.btn{min-height:46px;padding:0 16px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--line);
+  font-size:15px;font-weight:800;transition:transform .1s,opacity .2s}
+.btn:active,.big:active,.gcard:active,.tile:active{transform:scale(.97)}
+.btn.gold{background:rgba(242,193,78,.14);border-color:rgba(242,193,78,.5);color:var(--gold)}
+.btn.off,.big.off{opacity:.38;pointer-events:none}
+.btn.busy{opacity:.6;pointer-events:none}
+.btn.small{min-height:44px;padding:0 13px;font-size:14px}
+.big{height:58px;border-radius:16px;background:var(--gold);color:var(--ink);font-size:20px;font-weight:800;letter-spacing:.4px;
+  box-shadow:0 4px 0 rgba(0,0,0,.25);width:100%;transition:transform .1s}
+
+/* ---- me ---- */
+#me{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px}
+#me .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+#me .nm{font-size:18px;font-weight:800;line-height:1.1;display:flex;align-items:baseline;gap:8px;white-space:nowrap;overflow:hidden}
+#me .ttl{font-size:12px;font-weight:800;color:var(--gold)}
+.passbar{display:flex;align-items:center;gap:8px;width:100%;text-align:left}
+.passbar .bar{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden}
+.passbar .bar i{display:block;height:100%;background:var(--gold);border-radius:3px;transition:width .4s}
+.passbar span{font-size:12px;font-weight:800;color:var(--dim);white-space:nowrap}
+
+/* ---- game cards ---- */
+#games{display:flex;gap:10px}
+.gcard{flex:1;border-radius:16px;border:2px solid var(--line);padding:14px 8px 12px;display:flex;flex-direction:column;align-items:center;gap:10px;
+  transition:transform .12s,border-color .2s;position:relative;overflow:hidden}
+.gcard.settlers{background:radial-gradient(120% 90% at 50% 0%,#2A7FA6 0%,#1B5878 55%,#123E58 100%)}
+.gcard.deal{background:radial-gradient(120% 90% at 50% 0%,#2C4A3C 0%,#1D2B25 60%,#121A16 100%)}
+.gcard.on{border-color:var(--gold)}
+.gcard .art{width:112px;height:66px;position:relative;filter:drop-shadow(0 5px 9px rgba(4,12,18,.4));margin:8px 0 6px}
+.gcard.settlers .art{transform:scale(1.34)}
+.gcard.deal .art{transform:scale(1.08)}
+.gcard .gn{font-size:17px;font-weight:800;display:flex;align-items:baseline;justify-content:center}
+/* Deal's fan — the art its lobby card has always worn */
+.fcard{position:absolute;left:var(--fx);top:var(--fy,0px);width:40px;height:58px;border-radius:5px;background:var(--card-ivory);
+  transform:rotate(var(--fr));transform-origin:50% 145%;transition:transform .35s cubic-bezier(.2,.9,.3,1);
+  box-shadow:inset 0 0 0 1px rgba(36,36,29,.22)}
+.fcard::before{content:'';position:absolute;top:0;left:0;right:0;height:17px;border-radius:5px 5px 0 0;background:var(--fc);box-shadow:inset 0 -1px 0 rgba(36,36,29,.15)}
+.fcard::after{content:'';position:absolute;left:6px;right:12px;top:24px;height:4px;border-radius:2px;background:rgba(36,36,29,.28);box-shadow:0 9px 0 -1px rgba(36,36,29,.16)}
+.fcard.fmoney{background:linear-gradient(172deg,#EDCB6B 0%,#D9A03F 60%,#C08A2E 100%)}
+.fcard.fmoney::before{content:'';position:absolute;inset:3.5px;height:auto;border-radius:3px;background:none;border:1.2px solid rgba(244,239,229,.75);box-shadow:none}
+.fcard.fmoney::after{content:'';position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--card-ivory);box-shadow:inset 0 -2px 3px rgba(36,36,29,.28)}
+.fcard.frainbow::before{background:linear-gradient(90deg,#E84A4A,#F0912E,#EFD22F,#3FBF5E,#2FBBD6,#4A6CE8,#A44AE0,#E84A8F,#E84A4A);background-size:400% 100%;animation:rainbowflow 7s linear infinite}
+@keyframes rainbowflow{to{background-position:400% 0}}
+.gcard:active .fcard{transform:rotate(calc(var(--fr)*1.45)) translateY(-5px)}
+/* Settlers' island — hexes that drift apart under your thumb the way the fan splays */
+.hexart{width:112px;height:66px;display:block;overflow:visible}
+.hexart .hx{transition:transform .35s cubic-bezier(.2,.9,.3,1)}
+.gcard:active .hexart .hx{transform:translate(var(--dx),var(--dy))}
+.hexart .pc{transition:transform .35s cubic-bezier(.2,.9,.3,1);transform-origin:var(--ox) var(--oy)}
+.gcard:active .hexart .pc{transform:translateY(-3px) scale(1.12)}
+@media (prefers-reduced-motion: reduce){.fcard.frainbow::before{animation:none}.fcard,.hexart .hx,.hexart .pc{transition:none}}
+
+/* ---- rows ---- */
+.rows{display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:12px;padding:9px 12px;min-height:56px}
+.row + .row{border-top:1px solid var(--line)}
+.row .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.row .n1{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .n2{font-size:12px;font-weight:700;color:var(--dim)}
+.row .x{width:44px;height:44px;border-radius:12px;color:var(--dim);font-size:18px;font-weight:800}
+.empty{width:36px;height:36px;border-radius:50%;border:2px dashed #4B6272;flex:0 0 36px}
+
+.seg{display:flex;gap:6px}
+.seg button{flex:1;min-height:46px;border-radius:12px;font-size:14px;font-weight:800;background:rgba(255,255,255,.06);border:1px solid var(--line);transition:transform .1s}
+.seg button.on{background:var(--gold);color:var(--ink);border-color:transparent}
+.seg button:active{transform:scale(.96)}
+.inline{display:flex;gap:8px;align-items:center}
+.inline input{flex:1;min-width:0}
+.inline .unit{font-size:15px;font-weight:800;color:var(--dim)}
+input.bad{border-color:var(--coral)}
+input.code{text-transform:uppercase;letter-spacing:3px;text-align:center}
+h1{margin:0;font-size:26px;font-weight:800}
+.soon{padding:22px 12px;text-align:center;font-size:15px;font-weight:800;color:var(--dim)}
+.codebox{display:flex;align-items:center;gap:12px;padding:12px 14px}
+.codebox b{font-size:22px;letter-spacing:4px;font-weight:800;flex:1}
+
+/* ---- profile ---- */
+.hero{display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 14px 16px;border-radius:16px}
+.hero .nm{font-size:22px;font-weight:800}
+.hero .ttl{font-size:13px;font-weight:800;color:var(--gold);margin-top:-6px}
+.hero input{max-width:240px;text-align:center}
+.stat{display:flex;align-items:center;padding:12px 14px;gap:10px}
+.stat + .stat{border-top:1px solid var(--line)}
+.stat .g{font-size:16px;font-weight:800;flex:1}
+.stat .wl{font-size:13px;font-weight:700;color:var(--dim)}
+.passhead{padding:14px;display:flex;flex-direction:column;gap:10px}
+.passhead .t{font-size:18px;font-weight:800;display:flex;align-items:baseline;gap:8px}
+.passhead .t small{font-size:13px;color:var(--dim);font-weight:800}
+.track{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{position:relative;border-radius:14px;background:var(--panel);border:2px solid var(--line);padding:10px 6px 9px;display:flex;flex-direction:column;
+  align-items:center;gap:7px;min-height:112px;transition:transform .1s,border-color .2s}
+.tile .tn{position:absolute;top:6px;left:8px;font-size:11px;font-weight:800;color:var(--dim)}
+.tile .sw{height:44px;display:flex;align-items:center;justify-content:center;margin-top:8px}
+.tile .in{font-size:13px;font-weight:800;line-height:1.1;text-align:center}
+.tile .is{font-size:11px;font-weight:700;color:var(--dim);margin-top:-4px}
+.tile.locked{opacity:.5}
+.tile.locked .sw{filter:saturate(.35)}
+.tile.worn{border-color:var(--gold)}
+.tile .tick{position:absolute;top:5px;right:6px;width:18px;height:18px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center}
+.tile .tick svg{width:11px;height:11px;stroke:var(--ink);stroke-width:3.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.tile .lock{position:absolute;top:6px;right:7px;width:14px;height:14px;fill:var(--dim)}
+.sw .chip{height:26px;border-radius:999px;padding:0 12px;display:flex;align-items:center;font-size:12px;font-weight:800;color:#fff}
+.sw .word{font-size:12px;font-weight:800;color:var(--gold);border:1.5px solid rgba(242,193,78,.5);border-radius:8px;padding:4px 8px;text-align:center;line-height:1.1}
+.sw .felt{width:58px;height:38px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2)}
+.sw .back{width:30px;height:42px;border-radius:5px;border:1.5px solid rgba(255,255,255,.4);box-shadow:inset 0 0 0 2px rgba(8,12,10,.25)}
+.sw svg{display:block}
+
+/* ---- sheet + toasts ---- */
+#sheetwrap{position:fixed;inset:0;z-index:40;background:rgba(5,14,20,.55);display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .2s}
+#sheetwrap.show{opacity:1;pointer-events:auto}
+#sheet{width:100%;max-width:460px;margin:0 auto;background:#13303F;border-top:1px solid var(--line);border-radius:20px 20px 0 0;
+  padding:20px 16px calc(env(safe-area-inset-bottom) + 18px);transform:translateY(24px);transition:transform .22s;display:flex;flex-direction:column;gap:10px}
+#sheetwrap.show #sheet{transform:none}
+#sheet h3{margin:0 0 4px;font-size:20px;font-weight:800}
+#sheet .err{font-size:13px;font-weight:800;color:var(--coral)}
+#sheet .two{display:flex;gap:8px}
+#sheet .two .btn{flex:1}
+#toasts{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 10px);z-index:60;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+.toast{background:#13303F;border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:13px;font-weight:800;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:tin .22s ease-out}
+@keyframes tin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.invitetoast{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top) + 12px);z-index:70;max-width:436px;margin:0 auto;display:flex;align-items:center;gap:10px;
+  background:#13303F;border:1px solid rgba(242,193,78,.5);border-radius:14px;padding:10px 10px 10px 14px;font-size:14px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.45);animation:tin .22s ease-out}
+.invitetoast span{flex:1}
+.invitetoast button{min-height:44px;padding:0 16px;border-radius:12px;background:var(--gold);color:var(--ink);font-size:14px;font-weight:800}
+</style>
+</head>
+<body>
+
+<div id="view"><div id="wrap"></div></div>
+<nav id="tabs">
+  <button data-tab="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+  <button data-tab="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>Play</button>
+  <button data-tab="friends"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><path d="M16 5a3.5 3.5 0 0 1 0 6.5M18 14.5c2 .8 3.5 2.8 3.5 5.5"/></svg>Friends</button>
+  <button data-tab="profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Profile</button>
+</nav>
+<div id="sheetwrap"><div id="sheet"></div></div>
+<div id="toasts"></div>
+
+<script src="../shared/config.js?v=0.1.0"></script>
+<script src="../shared/tablekit.js?v=0.1.0"></script>
+<script src="../shared/pass.js?v=0.1.0"></script>
+<script src="../shared/identity.js?v=0.1.0"></script>
+<script src="../shared/account.js?v=0.1.0"></script>
+<script>
+'use strict';
+var VERSION = '0.1.0';
+TableKit.watchErrors({ game: 'home', version: VERSION, onError: function (m) { banner(m); } });
+
+/* ---- what identity.js expects of its host page ---- */
+function $(sel) { return document.querySelector(sel); }
+function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function haptic(v) { try { if (navigator.vibrate) navigator.vibrate(v); } catch (e) {} }
+function sfx() {}
+function toggleReveal() {}
+function banner(text) {
+  var d = document.createElement('div');
+  d.className = 'toast';
+  d.textContent = String(text || '').toLowerCase().replace(/(^|[\s—-])([a-z])/g, function (m, a, b) { return a + b.toUpperCase(); });
+  var box = $('#toasts');
+  while (box.children.length > 1) box.removeChild(box.firstChild);
+  box.appendChild(d);
+  setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 2400);
+}
+/* leaving for a table: one place, so the gate can watch where we go */
+var NAV = function (url) { location.href = url; };
+
+/* ================= state ================= */
+var H = {
+  tab: 'home', game: 'settlers', mode: 'bots',
+  bots: 2, interval: 60000, custom: 45, customOn: false,
+  ratings: {}, progress: {}, loadout: {}, loadouts: {}, loaded: false
+};
+try {
+  var st = JSON.parse(localStorage.getItem('it_home') || 'null');
+  if (st) {
+    if (Pass.GAMES[st.game]) H.game = st.game;
+    if ([1, 2, 3].indexOf(st.bots) >= 0) H.bots = st.bots;
+    if (typeof st.interval === 'number') H.interval = st.interval;
+    if (typeof st.custom === 'number') H.custom = st.custom;
+    H.customOn = !!st.customOn;
+  }
+} catch (e) {}
+H.loadout = Pass.saved();
+function remember() {
+  try { localStorage.setItem('it_home', JSON.stringify({ game: H.game, bots: H.bots, interval: H.interval, custom: H.custom, customOn: H.customOn })); } catch (e) {}
+}
+var PRESETS = [20000, 30000, 60000], MIN_S = 5, MAX_S = 300;
+function customOk() { return H.custom === Math.round(H.custom) && H.custom >= MIN_S && H.custom <= MAX_S; }
+
+function signedIn() { return !!(ID.user && ID.profile); }
+function myId() { return ID.user ? ID.user.id : null; }
+function myName() {
+  if (ID.profile && ID.profile.name) return ID.profile.name;
+  try { return localStorage.getItem('it_name') || 'Guest'; } catch (e) { return 'Guest'; }
+}
+/* a rating, or null when there is nothing honest to show (a guest) */
+function rating(id, game) {
+  var bot = Pass.botById(id);
+  if (bot) return bot.rating[game];
+  if (!id) return null;
+  var r = H.ratings[id] && H.ratings[id][game];
+  if (r) return r.elo;
+  if (id === myId() && game === 'deal' && ID.profile && !H.loaded) return ID.profile.elo;
+  var f = (ID.friends || []).filter(function (x) { return x.id === id; })[0];
+  if (f && game === 'deal' && !H.loaded) return f.elo;
+  return Pass.ELO.start;
+}
+function record(id, game) { return (H.ratings[id] && H.ratings[id][game]) || { elo: Pass.ELO.start, games: 0, wins: 0 }; }
+function rt(id, game, cls) {
+  var r = rating(id, game);
+  return r == null ? '' : '<span class="rt' + (cls ? ' ' + cls : '') + '">' + r + '</span>';
+}
+/* a guest wears the defaults: cosmetics belong to an account */
+function worn() { return signedIn() ? H.loadout : {}; }
+function av(id, name, size) {
+  var lo = id && id === myId() ? worn() : (H.loadouts[id] || {});
+  return Pass.avatarHtml(lo, name, size);
+}
+
+/* everything the screen shows about people, in one round trip each */
+async function refresh() {
+  if (!signedIn()) { H.ratings = {}; H.progress = {}; H.loadouts = {}; H.loaded = false; render(); return; }
+  var ids = [myId()].concat((ID.friends || []).map(function (f) { return f.id; }));
+  var got = await Promise.all([Account.ratings(ids), Account.progress(myId()), Account.loadouts(ids)]);
+  if (!signedIn()) return;
+  H.ratings = got[0]; H.progress = got[1]; H.loadouts = got[2];
+  H.loaded = !Account.missing;
+  try { localStorage.setItem('it_name', ID.profile.name); } catch (e) {}   /* the games greet you by it */
+  if (H.loaded) { H.loadout = H.loadouts[myId()] || {}; Pass.save(H.loadout); }
+  render();
+}
+
+/* ================= art ================= */
+function dealArt() {
+  return '<div class="art" aria-hidden="true">' +
+    '<span class="fcard" style="--fr:-14deg;--fx:0px;--fc:#2E5EAA;--fy:7px"></span>' +
+    '<span class="fcard" style="--fr:-5deg;--fx:24px;--fc:#C8433A;--fy:1px"></span>' +
+    '<span class="fcard fmoney" style="--fr:4deg;--fx:48px;--fy:1px"></span>' +
+    '<span class="fcard frainbow" style="--fr:13deg;--fx:72px;--fy:7px"></span></div>';
+}
+function hexPts(cx, cy, r) {
+  var p = [];
+  for (var i = 0; i < 6; i++) { var a = Math.PI / 180 * (60 * i - 90); p.push((cx + Math.cos(a) * r).toFixed(1) + ',' + (cy + Math.sin(a) * r).toFixed(1)); }
+  return p.join(' ');
+}
+function settlersArt() {
+  var HX = [
+    { x: 26.6, y: 20,   t: 'timber', n: 5,  dx: -3, dy: -2 },
+    { x: 56,   y: 20,   t: 'grain',  n: 8,  dx: 0,  dy: -3 },
+    { x: 85.4, y: 20,   t: 'clay',   n: 0,  dx: 3,  dy: -2 },
+    { x: 41.3, y: 45.5, t: 'wool',   n: 10, dx: -2, dy: 3 },
+    { x: 70.7, y: 45.5, t: 'ore',    n: 6,  dx: 2,  dy: 3 }
+  ];
+  var C = { timber: ['#4E9264', '#3F7D53'], grain: ['#EFCF68', '#E5BF4F'], clay: ['#D87D52', '#C9693E'], wool: ['#AED47C', '#9BC567'], ore: ['#A0AAB7', '#8D97A5'] };
+  var s = '<svg class="hexart" viewBox="0 0 112 66" aria-hidden="true"><defs>';
+  Object.keys(C).forEach(function (k) {
+    s += '<linearGradient id="hg-' + k + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + C[k][0] + '"/><stop offset=".6" stop-color="' + C[k][1] + '"/></linearGradient>';
+  });
+  s += '</defs>';
+  HX.forEach(function (h) {
+    s += '<g class="hx" style="--dx:' + h.dx + 'px;--dy:' + h.dy + 'px">' +
+      '<polygon points="' + hexPts(h.x, h.y, 18.4) + '" fill="#E8D7AA"/>' +
+      '<polygon points="' + hexPts(h.x, h.y, 16.2) + '" fill="url(#hg-' + h.t + ')"/>' +
+      '<polygon points="' + hexPts(h.x, h.y, 15.4) + '" fill="none" stroke="rgba(255,255,255,.2)" stroke-width=".8"/>';
+    if (h.n) {
+      var red = h.n === 6 || h.n === 8, pips = 6 - Math.abs(7 - h.n), ink = red ? '#C8352B' : '#1C2A35';
+      s += '<circle cx="' + h.x + '" cy="' + (h.y + 1) + '" r="6.4" fill="#F7F1E1"/>' +
+        '<text x="' + h.x + '" y="' + (h.y + 2.6) + '" font-size="7.4" font-weight="800" text-anchor="middle" fill="' + ink + '" font-family="Nunito Sans,sans-serif">' + h.n + '</text>';
+      for (var i = 0; i < pips; i++) s += '<circle cx="' + (h.x + (i - (pips - 1) / 2) * 1.7).toFixed(2) + '" cy="' + (h.y + 5.1) + '" r=".6" fill="' + ink + '"/>';
+    }
+    s += '</g>';
+  });
+  /* a red road and settlement, a blue city: the pieces lift under your thumb */
+  s += '<g class="pc" style="--ox:48.6px;--oy:32.8px"><path d="M43.6 29.9L53.7 35.7" stroke="#7E1E16" stroke-width="5" stroke-linecap="round"/><path d="M43.6 29.9L53.7 35.7" stroke="#E2483D" stroke-width="3" stroke-linecap="round"/></g>' +
+    '<g class="pc" style="--ox:41.3px;--oy:28.5px"><path d="M36.5 32.6v-5.4l4.8-4.3 4.8 4.3v5.4z" fill="#E2483D" stroke="#7E1E16" stroke-width="1.3" stroke-linejoin="round"/></g>' +
+    '<g class="pc" style="--ox:70.7px;--oy:28.5px"><path d="M64.6 32.8v-5.6l2.9-2.9 2.9 2.9v-1.5l3-3.2 3.2 3.2v7.1z" fill="#2F6FE0" stroke="#14336F" stroke-width="1.3" stroke-linejoin="round"/></g>';
+  return '<div class="art">' + s + '</svg></div>';
+}
+var ARTS = { settlers: settlersArt, deal: dealArt };
+
+/* a small picture of an item, for the pass track */
+function swatch(it) {
+  if (it.slot === 'avatar') return Pass.avatarHtml({ avatar: it.id }, '', 40);
+  if (it.slot === 'frame') return '<span style="display:inline-flex;padding:6px">' + Pass.avatarHtml({ frame: it.id }, myName(), 30) + '</span>';
+  if (it.slot === 'banner') return '<span class="chip" style="background:' + it.css + '">' + esc(myName()) + '</span>';
+  if (it.slot === 'title') return '<span class="word">' + esc(it.text) + '</span>';
+  if (it.slot === 's_color') return '<svg width="44" height="40" viewBox="0 0 44 40"><path d="M6 33L20 25" stroke="' + it.edge + '" stroke-width="7" stroke-linecap="round"/><path d="M6 33L20 25" stroke="' + it.fill + '" stroke-width="4.2" stroke-linecap="round"/>' +
+    '<path d="M18 30V15.5L28 7l10 8.5V30z" fill="' + it.fill + '" stroke="' + it.edge + '" stroke-width="2" stroke-linejoin="round"/></svg>';
+  if (it.slot === 's_dice') {
+    var die = function (x, c, n) {
+      var dots = n === 3 ? [[-5, -5], [0, 0], [5, 5]] : [[-5, -5], [5, -5], [0, 0], [-5, 5], [5, 5]];
+      return '<rect x="' + x + '" y="9" width="22" height="22" rx="5" fill="' + c.bg + '"/>' + dots.map(function (d) {
+        return '<circle cx="' + (x + 11 + d[0]) + '" cy="' + (20 + d[1]) + '" r="2" fill="' + c.pip + '"/>';
+      }).join('');
+    };
+    return '<svg width="54" height="40" viewBox="0 0 54 40">' + die(2, it.a, 5) + die(30, it.b, 3) + '</svg>';
+  }
+  if (it.slot === 's_island') return '<svg width="62" height="44" viewBox="0 0 62 44"><rect width="62" height="44" rx="9" fill="' + it.ocean[1] + '"/>' +
+    [[19, 16, 'timber'], [43, 16, 'grain'], [31, 30, 'clay']].map(function (h) {
+      return '<polygon points="' + hexPts(h[0], h[1], 12.6) + '" fill="' + it.sand + '"/><polygon points="' + hexPts(h[0], h[1], 11) + '" fill="' + it.terr[h[2]].fill + '"/>';
+    }).join('') + '</svg>';
+  if (it.slot === 's_robber') return it.kind === 'gull'
+    ? '<svg width="44" height="40" viewBox="0 0 44 40"><path d="M4 22c6-9 12-9 18 0 6-9 12-9 18 0" fill="none" stroke="#F2F5F7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="22" cy="24" r="3.4" fill="#F2F5F7"/></svg>'
+    : '<svg width="44" height="40" viewBox="0 0 44 40"><path d="M11 24a7 7 0 0 1 1.8-13.7 9 9 0 0 1 17.2 1.9A6 6 0 0 1 32 24z" fill="#5B6577"/><path d="M23 22l-5 8h5l-3 7 9-10h-5l3-5z" fill="#F2C14E"/></svg>';
+  if (it.slot === 'd_felt') return '<span class="felt" style="background:radial-gradient(90% 90% at 50% 10%,' + it.hi + ',' + it.felt + ' 70%)"></span>';
+  if (it.slot === 'd_back') return '<span class="back" style="background:' + it.css + '"></span>';
+  return '';
+}
+
+/* ================= views ================= */
+function vMe() {
+  var title = Pass.wearing(worn(), 'title'), ban = Pass.wearing(worn(), 'banner');
+  var season = Pass.seasonOf(), xp = H.progress[season] || 0;
+  var right = signedIn()
+    ? (H.loaded
+        ? '<button class="passbar" data-act="pass" aria-label="Open the pass"><span class="bar"><i style="width:' + Math.round(Pass.tierProgress(xp) * 100) + '%"></i></span>' +
+          '<span>' + Pass.seasonName(season) + ' Pass · Tier ' + Pass.tierOf(xp) + '</span></button>'
+        : '')
+    : '<button class="btn gold small" data-act="signin" style="align-self:flex-start">Sign In</button>';
+  return '<header id="me" class="panel"' + (ban ? ' style="background:' + ban.css + '"' : '') + '>' + av(myId(), myName(), 48) +
+    '<div class="who"><div class="nm">' + esc(myName()) + (title ? '<span class="ttl">' + esc(title.text) + '</span>' : '') + '</div>' + right + '</div></header>';
+}
+function vGames() {
+  return '<div id="games">' + Pass.GAME_ORDER.map(function (g) {
+    return '<button class="gcard ' + g + (H.game === g ? ' on' : '') + '" data-act="game" data-game="' + g + '">' + ARTS[g]() +
+      '<span class="gn">' + Pass.GAMES[g].name + (signedIn() ? rt(myId(), g) : '') + '</span></button>';
+  }).join('') + '</div>';
+}
+/* a table you can walk back to: only ever real ones */
+function yourGames() {
+  var out = [], FRESH = 30 * 60 * 1000;
+  try {
+    var host = JSON.parse(localStorage.getItem('it_host') || 'null');
+    if (host && host.code && Date.now() - host.ts < FRESH && host.G && !host.G.over) out.push({ game: 'deal', label: 'Your Table ' + host.code, url: '../coastline/?from=home' });
+    var room = JSON.parse(localStorage.getItem('it_room') || 'null');
+    if (!out.length && room && room.code && Date.now() - room.ts < FRESH) out.push({ game: 'deal', label: 'Room ' + room.code, url: '../coastline/?join=' + encodeURIComponent(room.code) + '&from=home' });
+  } catch (e) {}
+  return out;
+}
+function vYourGames() {
+  var list = yourGames();
+  if (!list.length) return '';
+  return '<section class="sec"><h2 class="lbl">Your Games</h2><div class="panel rows">' + list.map(function (g) {
+    return '<div class="row"><span class="mid"><span class="n1">' + Pass.GAMES[g.game].name + ' · ' + esc(g.label) + '</span></span>' +
+      '<button class="btn gold small" data-act="nav" data-url="' + esc(g.url) + '">Rejoin</button></div>';
+  }).join('') + '</div></section>';
+}
+function friendRow(f, withRemove) {
+  return '<div class="row">' + av(f.id, f.name, 36) + '<span class="mid"><span class="n1">' + esc(f.name) + rt(f.id, H.game) + '</span></span>' +
+    '<button class="btn gold small" data-act="challenge" data-id="' + f.id + '">Challenge</button>' +
+    (withRemove ? '<button class="x" data-act="unfriend" data-id="' + f.id + '" aria-label="Remove ' + esc(f.name) + '">✕</button>' : '') + '</div>';
+}
+function vFriendsPreview() {
+  if (!signedIn()) return '';
+  var fs = ID.friends || [];
+  return '<section class="sec"><h2 class="lbl">Friends</h2>' + (fs.length
+    ? '<div class="panel rows">' + fs.slice(0, 4).map(function (f) { return friendRow(f, false); }).join('') + '</div>'
+    : '<button class="btn" data-act="tab" data-tab="friends">Add A Friend</button>') + '</section>';
+}
+function vHome() {
+  return vMe() + vGames() + '<button class="big" data-act="tab" data-tab="play">Play ' + Pass.GAMES[H.game].name + '</button>' + vYourGames() + vFriendsPreview();
+}
+
+function seat(avatar, name, ratingHtml, sub, right) {
+  return '<div class="row">' + avatar + '<span class="mid"><span class="n1">' + esc(name) + ratingHtml + '</span>' +
+    (sub ? '<span class="n2">' + sub + '</span>' : '') + '</span>' + (right || '') + '</div>';
+}
+function seg(cls, items, sel) {
+  return '<div class="seg">' + items.map(function (it) {
+    return '<button class="' + cls + (it[0] === sel ? ' on' : '') + '" data-act="' + cls + '" data-v="' + it[0] + '">' + it[1] + '</button>';
+  }).join('') + '</div>';
+}
+function launchUrl() {
+  if (H.game === 'settlers') return '../settlers/?bots=' + H.bots + '&interval=' + (H.customOn ? H.custom * 1000 : H.interval) + '&from=home';
+  return '../coastline/?solo=1&from=home';
+}
+function vPlay() {
+  var g = H.game, out = '<h1>' + Pass.GAMES[g].name + '</h1>';
+  out += '<section class="sec"><h2 class="lbl">Game</h2>' + seg('pickgame', Pass.GAME_ORDER.map(function (k) { return [k, Pass.GAMES[k].name]; }), g) + '</section>';
+  out += '<section class="sec"><h2 class="lbl">Mode</h2>' + seg('pickmode', [['bots', 'Bots'], ['friends', 'Friends']], H.mode) + '</section>';
+  var me = seat(av(myId(), myName(), 36), myName(), signedIn() ? rt(myId(), g) : '', '', '');
+  if (H.mode === 'bots') {
+    var bots = g === 'settlers' ? Pass.SETTLERS_BOTS.slice(0, H.bots) : ['bazza', 'shazza'];
+    out += '<section class="sec"><h2 class="lbl">Table<span class="pill' + (signedIn() ? ' gold' : '') + '">' + (signedIn() ? 'Rated' : 'Unrated') + '</span></h2><div class="panel rows">' + me +
+      bots.map(function (k) {
+        var b = Pass.BOTS[k];
+        return seat(Pass.avatarHtml({}, b.name, 36).replace('#F2C14E', '#B9A2F2'), b.name, '<span class="rt dim">' + b.rating[g] + '</span>', g === 'settlers' ? b.style : '', '');
+      }).join('') + '</div></section>';
+    if (g === 'settlers') {
+      out += '<section class="sec"><h2 class="lbl">Bots</h2>' + seg('pickbots', [[1, '1'], [2, '2'], [3, '3']], H.bots) + '</section>';
+      out += '<section class="sec"><h2 class="lbl">Roll Every</h2>' + seg('pickroll', PRESETS.map(function (ms) { return [ms, (ms / 1000) + 's']; }).concat([['custom', 'Custom']]), H.customOn ? 'custom' : H.interval) +
+        (H.customOn ? '<div class="inline"><input id="customin" type="number" inputmode="numeric" min="' + MIN_S + '" max="' + MAX_S + '" step="1" value="' + (isNaN(H.custom) ? '' : H.custom) + '"' + (customOk() ? '' : ' class="bad"') + ' aria-label="Seconds between rolls"><span class="unit">Seconds</span></div>' : '') + '</section>';
+    }
+    out += '<button class="big' + (g === 'settlers' && H.customOn && !customOk() ? ' off' : '') + '" id="startbtn" data-act="start">Start Game</button>';
+  } else if (g === 'deal') {
+    out += '<section class="sec"><h2 class="lbl">Room</h2><button class="big" data-act="host">Host A Room</button>' +
+      '<div class="inline"><input id="joinin" class="code" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters" aria-label="Room code"><button class="btn gold" data-act="join">Join</button></div></section>';
+    if (signedIn() && (ID.friends || []).length) {
+      out += '<section class="sec"><h2 class="lbl">Friends</h2><div class="panel rows">' + ID.friends.map(function (f) { return friendRow(f, false); }).join('') + '</div></section>';
+    }
+  } else {
+    out += '<div class="panel soon">Coming Soon</div>';
+  }
+  return out;
+}
+function vFriends() {
+  if (!signedIn()) return '<h1>Friends</h1><button class="big" data-act="signin">Sign In</button>';
+  var fs = ID.friends || [];
+  return '<h1>Friends</h1>' +
+    '<section class="sec"><h2 class="lbl">Your Code</h2><div class="panel codebox"><b>' + esc(ID.profile.friend_code || '') + '</b><button class="btn small" data-act="copycode">Copy</button></div></section>' +
+    '<section class="sec"><h2 class="lbl">Add A Friend</h2><div class="inline"><input id="friendcode" class="code" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" aria-label="Friend code"><button class="btn gold" data-act="addfriend">Add</button></div></section>' +
+    (fs.length ? '<section class="sec"><h2 class="lbl">Friends<span class="pill">' + Pass.GAMES[H.game].name + '</span></h2><div class="panel rows">' + fs.map(function (f) { return friendRow(f, true); }).join('') + '</div></section>' : '');
+}
+function vPass() {
+  var season = Pass.seasonOf(), tr = Pass.track(season), xp = H.progress[season] || 0, tier = Pass.tierOf(xp);
+  if (!tr) return '';
+  var into = tier >= Pass.XP.tiers ? Pass.XP.perTier : xp % Pass.XP.perTier;
+  var out = '<section class="sec" id="passsec"><h2 class="lbl">' + Pass.seasonName(season) + ' Pass</h2><div class="panel passhead"><div class="t">' + esc(tr.name) +
+    '<small>Tier ' + tier + ' of ' + Pass.XP.tiers + '</small><small style="margin-left:auto">' + into + ' / ' + Pass.XP.perTier + ' XP</small></div>' +
+    '<div class="passbar"><span class="bar"><i style="width:' + Math.round(Pass.tierProgress(xp) * 100) + '%"></i></span></div></div><div class="track">';
+  tr.items.forEach(function (it) {
+    var have = Pass.owns(H.progress, it.id), worn = H.loadout[it.slot] === it.id;
+    out += '<button class="tile' + (have ? '' : ' locked') + (worn ? ' worn' : '') + '" data-act="equip" data-id="' + it.id + '" aria-label="' + esc(it.name) + ', ' + Pass.SLOTS[it.slot].n +
+      (have ? (worn ? ', equipped' : '') : ', locked') + '"><span class="tn">' + it.tier + '</span>' +
+      (worn ? '<span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>' : '') +
+      (have ? '' : '<svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7.5a5 5 0 0 1 10 0V10h1.5v11h-13V10zm2.5 0h5V7.5a2.5 2.5 0 0 0-5 0z"/></svg>') +
+      '<span class="sw">' + swatch(it) + '</span><span class="in">' + esc(it.name) + '</span><span class="is">' + Pass.SLOTS[it.slot].n + '</span></button>';
+  });
+  return out + '</div></section>';
+}
+function vProfile() {
+  var title = Pass.wearing(worn(), 'title'), ban = Pass.wearing(worn(), 'banner');
+  var out = '<div class="hero panel"' + (ban ? ' style="background:' + ban.css + '"' : '') + '>' + av(myId(), myName(), 84) +
+    (title ? '<div class="ttl" style="margin-top:0">' + esc(title.text) + '</div>' : '') +
+    '<input id="namein" maxlength="12" value="' + esc(myName() === 'Guest' ? '' : myName()) + '" placeholder="Your Name" aria-label="Your name"></div>';
+  if (!signedIn()) return out + '<button class="big" data-act="signin">Sign In</button>';
+  out += '<section class="sec"><h2 class="lbl">Ratings</h2><div class="panel">' + Pass.GAME_ORDER.map(function (g) {
+    var r = record(myId(), g);
+    return '<div class="stat"><span class="g">' + Pass.GAMES[g].name + rt(myId(), g) + '</span><span class="wl">' + r.wins + ' W · ' + Math.max(0, r.games - r.wins) + ' L</span></div>';
+  }).join('') + '</div></section>';
+  if (H.loaded) out += vPass();
+  return out + '<button class="btn" data-act="signout">Sign Out</button>';
+}
+
+var VIEWS = { home: vHome, play: vPlay, friends: vFriends, profile: vProfile };
+function render() {
+  var keep = {};
+  ['customin', 'joinin', 'friendcode', 'namein'].forEach(function (id) { var el = document.getElementById(id); if (el && document.activeElement === el) keep[id] = [el.value, el.selectionStart]; });
+  $('#wrap').innerHTML = VIEWS[H.tab]();
+  Array.prototype.forEach.call(document.querySelectorAll('#tabs button'), function (b) { b.classList.toggle('on', b.dataset.tab === H.tab); });
+  Object.keys(keep).forEach(function (id) { var el = document.getElementById(id); if (el) { el.value = keep[id][0]; try { el.focus(); } catch (e) {} } });
+}
+function tab(t) { H.tab = t; render(); $('#view').scrollTop = 0; }
+
+/* ================= sign in ================= */
+var PENDING = null;
+function openSheet(html) { $('#sheet').innerHTML = html; $('#sheetwrap').classList.add('show'); }
+function closeSheet() { $('#sheetwrap').classList.remove('show'); ID.sheetOpen = false; }
+function openAuth(then) {
+  PENDING = typeof then === 'function' ? then : null;
+  ID.sheetOpen = true; ID.lastError = null;
+  drawAuth();
+}
+function drawAuth() {
+  var u = $('#acctuser'), p = $('#acctpass');
+  var uv = u ? u.value : '', pv = p ? p.value : '';
+  openSheet('<h3>Sign In</h3>' +
+    '<input id="acctuser" maxlength="16" placeholder="Username" autocomplete="username" autocapitalize="none" aria-label="Username">' +
+    '<input id="acctpass" type="password" maxlength="40" placeholder="Password" autocomplete="current-password" aria-label="Password">' +
+    (ID.lastError ? '<div class="err">' + esc(ID.lastError) + '</div>' : '') +
+    '<div class="two"><button class="btn" data-act="register">Create Account</button><button class="btn gold" data-act="dosignin">Sign In</button></div>');
+  $('#acctuser').value = uv; $('#acctpass').value = pv;
+}
+/* identity.js draws into Deal's markup; here it only tells us something changed */
+ID.renderProfile = function () { render(); };
+ID.renderFriends = function () { refresh(); };
+ID.renderProfileSheet = function () { if (ID.sheetOpen && !signedIn()) drawAuth(); else if (signedIn()) $('#sheetwrap').classList.remove('show'); };
+ID.acceptInvite = function (code, btn) {
+  var t = btn && btn.closest ? btn.closest('.invitetoast') : null;
+  if (t) t.remove();
+  NAV('../coastline/?join=' + encodeURIComponent(code) + '&from=home');
+};
+ID.invite = function (friendId) { NAV('../coastline/?invite=' + encodeURIComponent(friendId) + '&from=home'); };
+/* called by identity.js the moment a sign-in or registration succeeds */
+function accountReady() {
+  closeSheet();
+  var go = PENDING; PENDING = null;
+  refresh().then(function () { if (go) go(); });
+}
+/* Deal is rated, so its tables need an account; Settlers lets a guest sit down */
+function needAccount(go) {
+  if (signedIn()) { go(); return; }
+  openAuth(go);
+}
+
+/* ================= actions ================= */
+var ACT = {
+  tab: function (el) { tab(el.dataset.tab); },
+  game: function (el) { H.game = el.dataset.game; remember(); render(); },
+  pass: function () { tab('profile'); var s = document.getElementById('passsec'); if (s && s.scrollIntoView) s.scrollIntoView(); },
+  signin: function () { openAuth(); },
+  dosignin: function (el) { ID.signIn(el); },
+  register: function (el) { ID.register(el); },
+  signout: function () { H.loadout = {}; Pass.save({}); ID.signOut().then(refresh); },
+  nav: function (el) { NAV(el.dataset.url); },
+  pickgame: function (el) { H.game = el.dataset.v; remember(); render(); },
+  pickmode: function (el) { H.mode = el.dataset.v; render(); },
+  pickbots: function (el) { H.bots = +el.dataset.v; remember(); render(); },
+  pickroll: function (el) {
+    if (el.dataset.v === 'custom') { H.customOn = true; remember(); render(); var c = document.getElementById('customin'); if (c) { c.focus(); if (c.select) c.select(); } return; }
+    H.customOn = false; H.interval = +el.dataset.v; remember(); render();
+  },
+  start: function () {
+    if (H.game === 'settlers') { if (H.customOn && !customOk()) return; remember(); NAV(launchUrl()); return; }
+    needAccount(function () { NAV(launchUrl()); });
+  },
+  host: function () { needAccount(function () { NAV('../coastline/?host=1&from=home'); }); },
+  join: function () {
+    var code = (($('#joinin') || {}).value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== 4) { banner('4-Letter Code'); return; }
+    needAccount(function () { NAV('../coastline/?join=' + code + '&from=home'); });
+  },
+  challenge: function (el) {
+    var f = (ID.friends || []).filter(function (x) { return x.id === el.dataset.id; })[0];
+    openSheet('<h3>Challenge ' + esc(f ? f.name : '') + '</h3><button class="big" data-act="challengedeal" data-id="' + el.dataset.id + '">Deal</button>' +
+      '<button class="btn off">Settlers · Coming Soon</button>');
+  },
+  challengedeal: function (el) { closeSheet(); ID.invite(el.dataset.id); },
+  unfriend: function (el) { ID.removeFriend(el.dataset.id); },
+  addfriend: function () { ID.addFriend(); },
+  copycode: function () { try { navigator.clipboard.writeText(ID.profile.friend_code); banner('Code Copied'); } catch (e) {} },
+  equip: function (el) {
+    var it = Pass.item(el.dataset.id);
+    if (!it) return;
+    if (!Pass.owns(H.progress, it.id)) { banner('Unlocks At Tier ' + it.tier); haptic(12); return; }
+    var prev = H.loadout, next = {};
+    Object.keys(prev).forEach(function (k) { next[k] = prev[k]; });
+    if (next[it.slot] === it.id) delete next[it.slot]; else next[it.slot] = it.id;
+    H.loadout = next; Pass.save(next); haptic(8); render();
+    Account.setLoadout(next).then(function (r) {
+      if (r && r.ok) return;
+      H.loadout = prev; Pass.save(prev); render();
+      banner('Could Not Save');
+    });
+  }
+};
+document.addEventListener('click', function (ev) {
+  var el = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
+  if (el) { ACT[el.dataset.act](el); return; }
+  var t = ev.target && ev.target.closest ? ev.target.closest('#tabs button') : null;
+  if (t) { tab(t.dataset.tab); return; }
+  if (ev.target === $('#sheetwrap')) { PENDING = null; closeSheet(); }
+});
+document.addEventListener('input', function (ev) {
+  var el = ev.target;
+  if (el.id === 'customin') {
+    H.custom = el.value === '' ? NaN : Number(el.value);
+    var ok = customOk();
+    el.classList.toggle('bad', !ok);
+    var b = document.getElementById('startbtn'); if (b) b.classList.toggle('off', !ok);
+    if (ok) remember();
+  }
+});
+document.addEventListener('change', function (ev) {
+  var el = ev.target;
+  if (el.id !== 'namein') return;
+  var name = el.value.trim().slice(0, 12);
+  if (!name) return;
+  if (signedIn()) ID.saveName(name).then(render);
+  else { try { localStorage.setItem('it_name', name); } catch (e) {} render(); }
+});
+window.addEventListener('pageshow', function (ev) { if (ev.persisted) refresh(); });
+
+/* ---- boot ---- */
+(function () {
+  var q = new URLSearchParams(location.search || '');
+  if (Pass.GAMES[q.get('game')]) H.game = q.get('game');
+  render();
+  if (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) ID.init().then(refresh);
+})();
+</script>
+</body>
+</html>

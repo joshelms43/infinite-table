@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   COASTLINE — the Sunshine Coast property card game
-  Version: 0.14.7
+  Version: 0.15.0
   Single-file vanilla HTML/JS. No build step.
   v0.1.0 scope: local play, 1 human vs 2 AI opponents, full ruleset.
   Multiplayer (Supabase Realtime) planned for v0.2.0.
@@ -10,9 +10,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>M Deal — Infinite Table</title>
+<title>Deal — Infinite Table</title>
 <meta name="description" content="Build sets, charge rent, raid your mates. Solo or 2–4 online.">
-<meta property="og:title" content="M Deal — Infinite Table">
+<meta property="og:title" content="Deal — Infinite Table">
 <meta property="og:description" content="Build sets, charge rent, raid your mates. Pull up a chair.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="/icon-512.png">
@@ -814,11 +814,16 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
+<!-- launched from the home screen: the choices were made there, so this page's own menu is never shown -->
+<script>try{ if(new URLSearchParams(location.search||'').get('from')==='home') document.documentElement.classList.add('fromhome'); }catch(e){}</script>
+<style>
+.fromhome #homemain > .homebtn:not(#homeprimary):not(#rejoinbtn), .fromhome #onlinepanel, .fromhome #profmini{display:none!important}
+</style>
 </head>
 <body>
 <div id="myclock"></div>
 
-<script src="../shared/mdeal-rules.js?v=0.14.7"></script>
+<script src="../shared/mdeal-rules.js?v=0.15.0"></script>
 <script>
 /* ---- global error surface: masked "Script error" becomes a readable toast ---- */
 (function(){
@@ -848,10 +853,10 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <header>
   <div>
     <div class="eyebrow">SUNSHINE COAST</div>
-    <div class="logo" onclick="openHome()" style="cursor:pointer">M <span class="wave">DEAL</span></div>
+    <div class="logo" onclick="openHome()" style="cursor:pointer"><span class="wave">DEAL</span></div>
   </div>
   <div class="hdr-right">
-    <span class="ver">v0.14.7</span>
+    <span class="ver">v0.15.0</span>
     <button class="icon-btn" id="rulesbtn" title="How to play">?</button>
     <button class="icon-btn" id="sndbtn" title="Sound">🔊</button>
     <button class="icon-btn" id="logbtn" title="Game log">≡</button>
@@ -909,7 +914,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;padding:1
 <div id="home" class="show">
   <a class="backlink" href="../">‹ Infinite Table</a>
   <div class="homecard">
-    <div class="homelogo"><span style="color:var(--money-gold)">M</span> DEAL</div>
+    <div class="homelogo"><span style="color:var(--money-gold)">D</span>EAL</div>
     <div class="hometag">The property scramble</div>
     <div id="homemain">
       <button id="homeprimary" class="homebtn primary hero" onclick="playSolo()">Play Solo</button>
@@ -3305,9 +3310,10 @@ function doTakeover(fromIdx,toIdx,color){
 }
 </script>
 
-<script src="../shared/config.js?v=0.14.7"></script>
-<script src="../shared/tablekit.js?v=0.14.7"></script>
-<script src="../shared/identity.js?v=0.14.7"></script>
+<script src="../shared/config.js?v=0.15.0"></script>
+<script src="../shared/pass.js?v=0.15.0"></script>
+<script src="../shared/tablekit.js?v=0.15.0"></script>
+<script src="../shared/identity.js?v=0.15.0"></script>
 <script>
 /* ================= ONLINE (v0.3.0): host-authoritative over Supabase Realtime ================= */
 const SUPABASE_URL = (typeof window!=='undefined' && window.SUPABASE_URL) || '';
@@ -4095,7 +4101,7 @@ const NET = {
 function shareCode(){
   const code = NET.code; if(!code) return;
   const url = location.origin + location.pathname + '?join=' + code;
-  if(navigator.share){ navigator.share({ title:'M Deal', text:'Join my table: '+code, url }).catch(()=>{}); return; }
+  if(navigator.share){ navigator.share({ title:'Deal', text:'Join my table: '+code, url }).catch(()=>{}); return; }
   try{ navigator.clipboard.writeText(url); banner('LINK COPIED','var(--gold-money)'); }catch(e){}
 }
 let GAME_STARTED = false;
@@ -4107,7 +4113,7 @@ if(typeof TableKit!=='undefined') TableKit.watchErrors({   // headless harnesses
 function diagnostics(){
   const alive = (NET.tx && NET.tx.alive) ? (NET.tx.alive() ? 'alive' : 'DEAD') : 'none';
   const L = [
-    'M Deal v0.10.4',
+    'Deal v0.10.4',
     'mode ' + NET.mode + ' · room ' + (NET.code||'—') + ' · seat ' + MYSEAT + ' · socket ' + alive,
     'turn ' + G.turn + ' · plays ' + G.playsLeft + ' · round ' + G.turnCount + (G.over ? ' · OVER' : ''),
     'waiting on: ' + (Object.keys(NET.pendingAsks||{}).join(', ') || 'nobody'),
@@ -4233,7 +4239,7 @@ function promptAccount(go, why){
   PENDING_ENTRY = typeof go === 'function' ? go : null;
   const h = $('#home'); if(h && h.classList) h.classList.add('show');
   try{ banner(why || 'SIGN IN TO PLAY', 'var(--money-gold)'); }catch(e){}
-  try{ ID.openProfile('M Deal games are rated, so playing needs an account. It takes a username and a password — no email.'); }
+  try{ ID.openProfile('Deal games are rated, so playing needs an account. It takes a username and a password — no email.'); }
   catch(e){ try{ ID.openProfile(); }catch(_){} }
 }
 
@@ -5362,6 +5368,26 @@ function aiStep(p){
 }
 
 /* ================= BOOT ================= */
+/* from the home screen: the way back is the home screen, and the table wears
+   whatever the pass has unlocked and this device has equipped */
+try{
+  if(document.documentElement.classList.contains('fromhome')){
+    const bl = document.querySelector('#home .backlink');
+    if(bl){ bl.href = '../home/?game=deal'; bl.textContent = '‹ Home'; }
+  }
+  if(typeof Pass !== 'undefined'){
+    const felt = Pass.equipped('d_felt'), back = Pass.equipped('d_back');
+    const rs = document.documentElement.style;
+    if(felt && rs && rs.setProperty){
+      rs.setProperty('--felt-green', felt.felt); rs.setProperty('--felt-highlight', felt.hi); rs.setProperty('--table-night', felt.night);
+    }
+    if(back && document.head && document.createElement){
+      const tag = document.createElement('style');
+      tag.textContent = '.cardback{background:' + back.css + '!important}.cardback span{color:' + back.ink + '!important}';
+      document.head.appendChild(tag);
+    }
+  }
+}catch(e){}
 try{ fetch('value-net.json').then(function(r){return r.ok?r.json():null;}).then(function(w){ if(w && typeof loadValueNet==='function') loadValueNet(w); }).catch(function(){}); }catch(e){}
 newGame();
 try{ if(typeof ID!=='undefined'){ ID.renderProfile(); if(SUPABASE_URL) setTimeout(()=>ID.init(), 400); } }catch(e){}
