@@ -21,6 +21,7 @@ const PAGES = {
   penaltylab: 'penalty/lab/index.html',
   pool: 'pool/index.html',
   lastcard: 'lastcard/index.html',
+  headlands: 'headlands/index.html',
   lobby: 'index.html',
 };
 

@@ -1,0 +1,50 @@
+# Headlands — Changelog
+
+## v0.1.0 — 2026-11-20
+Rival towns on one coast. A faithful mechanical twin of the modern
+travel-sized Catan card duel, wearing entirely our own skin — original
+names, original card text, house theme. Same move as M Deal: the bones
+are fair game, the expression is ours.
+
+The game:
+- Five goods in the faithful counts (Clay 11, Timber 11, Wool 14, Cane 12,
+  Stone 13 — 61 total), no dice: everyone draws at harvest, the turn-holder
+  draws extra for Towns and Resorts.
+- The market row of five builds, refilled after every buy; five of a kind
+  flushes the lot back in.
+- Tracks ladder your swap rate 4:1 → 3:1 → 2:1 → 1:1 — one substitution per
+  turn, at most one good of a cost covered by it.
+- Every Shack makes a Headline (7 cards, 3 Raiders among them); King Tide
+  reshuffles the lot.
+- Towns over Shacks, Resorts over Towns; side A Resorts harvest 2, side B
+  harvest 1 with a trick each (build-draws per Track or Ranger, tie
+  priority for a token).
+- The Highway (first to 3 Tracks) and the Watch (first to 2 Rangers), 2
+  points each, moving on strictly more.
+- One player trade per turn; the partner draws a bonus card for saying yes.
+- First to 7 showing wins, immediately, on their turn.
+
+The build:
+- `shared/headlands-rules.js` — pure seeded engine, RULEBOOK
+  `2026-11-20-headlands-house`.
+- Practice vs 1–3 bots; online 2–4 over TableKit, host-authoritative with
+  per-seat private hands, presence-heal re-push, spoof/nack discipline —
+  the Last Card wire shape exactly.
+- Gates: `headlandssim` (census, payments and the swap ladder, every
+  Headline, both tokens incl. B-side tie priority, trades, harvest
+  arithmetic, the win, market flush, 90/90 decisive soak at 2/3/4 seats
+  with the 61 goods conserved throughout, seeded determinism) and
+  `headlandswire` (three page instances over a fake bus, truth equality
+  after every push, hand-drift zero, hostile intents bounced, a
+  human-shaped trade across the wire, cold-host safety, full practice
+  game).
+
+House v1 pragmatics (candidates for v0.2):
+- Raider discards and Whip-Round gifts are picked by the seeded rng, not
+  the player — counts faithful, agency later.
+- Substitution auto-picks the most abundant spare type (the engine takes a
+  `subFrom`; the sheet doesn't offer the choice yet).
+- The A/B Resort side is fixed to A for new tables (the engine and tests
+  cover B; a room toggle is the missing piece).
+- No touch-grammar suite yet — interactions are tap-sheets, covered by the
+  wire test's UI entry points.

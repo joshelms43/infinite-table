@@ -30,6 +30,7 @@ const PAGES = [
   { name: 'Penalty Lab', key: 'penaltylab', wants: ['Penalty'] },
   { name: 'Pool', key: 'pool', wants: ['NET', 'G', 'TableKit', 'PoolRules', 'PoolPhysics'] },
   { name: 'Last Card', key: 'lastcard', wants: ['TableKit', 'LastCard', 'sendMove', 'renderAll', 'startBot'] },
+  { name: 'Headlands', key: 'headlands', wants: ['TableKit', 'Headlands', 'sendMove', 'renderAll', 'startBot'] },
 ];
 
 const { partsFor } = require('./_document');
