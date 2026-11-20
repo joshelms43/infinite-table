@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Headlands — Infinite Table. Version: 0.2.0
+<!-- Headlands — Infinite Table. Version: 0.3.0
      Rival towns on one coast. Draw goods, work the market row, chain Tracks
      for cheaper swaps, raise Shacks (every one makes a Headline), stack Towns
      and Resorts, claim the Highway and the Watch. First to 7 showing wins.
@@ -258,12 +258,12 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
   <button id="menubtn">Menu</button>
 </div>
 
-<script src="../shared/config.js?v=0.2.0"></script>
-<script src="../shared/tablekit.js?v=0.2.0"></script>
-<script src="../shared/headlands-rules.js?v=0.2.0"></script>
+<script src="../shared/config.js?v=0.3.0"></script>
+<script src="../shared/tablekit.js?v=0.3.0"></script>
+<script src="../shared/headlands-rules.js?v=0.3.0"></script>
 <script>
 'use strict';
-var VERSION = '0.2.0';
+var VERSION = '0.3.0';
 TableKit.watchErrors({ game: 'headlands', version: VERSION, onError: function (m) { banner(m); } });
 
 function $(id) { return document.getElementById(id); }
@@ -398,7 +398,7 @@ function publicView(g, names) {
     eventsN: g.events.length, deckN: g.deck.length, goodsN: g.goods.length,
     market: g.market.slice(), subUsed: g.subUsed, tradeUsed: g.tradeUsed,
     pendingTrade: g.pendingTrade ? {
-      from: g.pendingTrade.from, to: g.pendingTrade.to,
+      from: g.pendingTrade.from, resp: g.pendingTrade.resp,
       give: g.pendingTrade.give.slice(), want: g.pendingTrade.want.slice()
     } : null,
     highway: g.highway, watch: g.watch,
@@ -543,7 +543,11 @@ function openSheet(html) {
   $('sheetwrap').classList.add('show');
 }
 function closeSheet() { $('sheetwrap').classList.remove('show'); }
-$('sheetwrap').addEventListener('click', function (e) { if (e.target === this) closeSheet(); });
+$('sheetwrap').addEventListener('click', function (e) {
+  if (e.target !== this) return;
+  closeSheet();
+  if (OFFER_OPEN) { OFFER_OPEN = false; sendMove({ t: 'tradeResp', accept: false }); }
+});
 
 function openBuildSheet(kind, slot) {
   var b = kind === 'resort' ? H.RESORT : H.BUILDS[kind];
@@ -590,29 +594,19 @@ $('resortcard').onclick = function () { sfx('tap'); openBuildSheet('resort', 're
 var TRADE = null;
 function openTradeSheet() {
   if ($('tradebtn').classList.contains('busy')) return;
-  TRADE = { give: [], want: [], to: -1 };
-  var others = V.players.map(function (p, s) { return s; })
-    .filter(function (s) { return s !== MYSEAT; });
-  TRADE.to = others[0];
-  var html = '<h3>Trade</h3><div class="sub">One deal a turn. They draw a bonus card for saying yes.</div>';
-  if (others.length > 1) {
-    html += '<div class="tlabel">With:</div><div class="tradegrid" id="whom">' +
-      others.map(function (s) {
-        return '<button data-s="' + s + '" class="whobtn">' + esc(V.players[s].name) + '</button>';
-      }).join('') + '</div>';
-  }
-  html += '<div class="tlabel">You give:</div><div class="tradegrid" id="giveg"></div>' +
+  TRADE = { give: [], want: [] };
+  var html = '<h3>Trade</h3>' +
+    '<div class="sub">The offer goes to the whole table — first to take it wins, ' +
+    'and they draw a bonus card for saying yes.</div>' +
+    '<div class="tlabel">You give:</div><div class="tradegrid" id="giveg"></div>' +
     '<div class="tlabel">You want:</div><div class="tradegrid" id="wantg"></div>' +
-    '<div class="opt" id="tradego"><span class="ol">Send the Offer</span><span class="oh" id="tradehint"></span></div>';
+    '<div class="opt" id="tradego"><span class="ol">Put It to the Table</span><span class="oh" id="tradehint"></span></div>';
   openSheet(html);
   renderTradeGrids();
-  Array.prototype.forEach.call(document.querySelectorAll('.whobtn'), function (el) {
-    el.onclick = function () { TRADE.to = +el.dataset.s; renderTradeGrids(); };
-  });
   $('tradego').onclick = function () {
     if (!TRADE.give.length || !TRADE.want.length) { banner('Pick both sides of the deal'); return; }
     closeSheet();
-    sendMove({ t: 'trade', to: TRADE.to, give: TRADE.give.slice(), want: TRADE.want.slice() });
+    sendMove({ t: 'trade', give: TRADE.give.slice(), want: TRADE.want.slice() });
   };
 }
 function renderTradeGrids() {
@@ -642,8 +636,7 @@ function renderTradeGrids() {
   var hint = $('tradehint');
   if (hint) hint.textContent = TRADE.give.length || TRADE.want.length ?
     TRADE.give.map(function (g) { return H.GOOD_META[g].n; }).join(' + ') + ' for ' +
-    TRADE.want.map(function (g) { return H.GOOD_META[g].n; }).join(' + ') +
-    (V.players[TRADE.to] ? ' — to ' + V.players[TRADE.to].name : '') : 'Tap goods on each side.';
+    TRADE.want.map(function (g) { return H.GOOD_META[g].n; }).join(' + ') : 'Tap goods on each side.';
 }
 $('tradebtn').onclick = function () { sfx('tap'); openTradeSheet(); };
 $('endbtn').onclick = function () {
@@ -652,16 +645,25 @@ $('endbtn').onclick = function () {
   sendMove({ t: 'end' });
 };
 
+var OFFER_OPEN = false;
+function haveAll(goods) {
+  var have = heldOf(MYHAND), need = {};
+  goods.forEach(function (g) { need[g] = (need[g] || 0) + 1; });
+  return Object.keys(need).every(function (g) { return have[g] >= need[g]; });
+}
 function openOfferSheet(tr) {
-  var html = '<h3>' + esc(V.players[tr.from].name) + ' offers a trade</h3>' +
+  var canTake = haveAll(tr.want);
+  var html = '<h3>' + esc(V.players[tr.from].name) + ' puts a trade to the table</h3>' +
     '<div class="sub">' + tr.give.map(function (g) { return H.GOOD_META[g].n; }).join(' + ') +
     ' for your ' + tr.want.map(function (g) { return H.GOOD_META[g].n; }).join(' + ') +
-    '. Accepting draws you a bonus card.</div>' +
-    '<div class="opt" id="tacc"><span class="ol">Accept</span></div>' +
-    '<div class="opt" id="tdec"><span class="ol">Decline</span></div>';
+    '. First to take it wins, and draws a bonus card.</div>' +
+    '<div class="opt' + (canTake ? '' : ' off') + '" id="tacc"><span class="ol">Take the Deal</span>' +
+    (canTake ? '' : '<span class="oh">You don\u2019t hold what they want.</span>') + '</div>' +
+    '<div class="opt" id="tdec"><span class="ol">Pass</span></div>';
+  OFFER_OPEN = true;
   openSheet(html);
-  $('tacc').onclick = function () { closeSheet(); sendMove({ t: 'tradeResp', accept: true }); };
-  $('tdec').onclick = function () { closeSheet(); sendMove({ t: 'tradeResp', accept: false }); };
+  $('tacc').onclick = function () { OFFER_OPEN = false; closeSheet(); sendMove({ t: 'tradeResp', accept: true }); };
+  $('tdec').onclick = function () { OFFER_OPEN = false; closeSheet(); sendMove({ t: 'tradeResp', accept: false }); };
 }
 
 /* ================= events at the glass ================= */
@@ -705,13 +707,15 @@ function sayEvents(evts) {
       banner('Swapped ' + e.k + ' ' + H.GOOD_META[e.from].n + ' for the ' + H.GOOD_META[e.forGood].n);
     else if (e.e === 'tradeoffer') {
       sfx('trade');
-      if (e.to === MYSEAT) openOfferSheet(e);
-      else if (e.from !== MYSEAT) banner(nameOf(e.from) + ' offers ' + nameOf(e.to) + ' a trade');
+      if (e.from !== MYSEAT) openOfferSheet(e);
     }
     else if (e.e === 'tradeout') {
-      banner(e.accept ? 'Deal done' : 'No deal');
+      if (OFFER_OPEN) { OFFER_OPEN = false; closeSheet(); }
+      banner(e.accept ? nameOf(e.by) + (e.by === MYSEAT ? ' take the deal' : ' takes the deal') : 'No takers');
       if (e.accept) sfx('trade');
-      if (!e.accept && V.pendingTrade == null && e.from === MYSEAT) {}
+    }
+    else if (e.e === 'tradepass') {
+      if (e.seat !== MYSEAT) banner(nameOf(e.seat) + ' passes');
     }
     else if (e.e === 'turn') {
       if (e.seat === MYSEAT) { banner('Your turn'); haptic(12); }
@@ -763,10 +767,15 @@ function syncFromEngine(evts) {
 function botClock() {
   clearTimeout(BOTCLOCK);
   if (MODE !== 'bot' || !ENGINE || ENGINE.over) return;
-  /* a bot with something to do: the turn-holder, or a trade target */
+  /* a bot with something to do: an unanswered offer first, then the turn-holder.
+     If only the human's answer is missing, the table waits for them. */
   var seat = -1;
-  if (ENGINE.pendingTrade && ENGINE.pendingTrade.to !== MYSEAT) seat = ENGINE.pendingTrade.to;
-  else if (ENGINE.turn !== MYSEAT) seat = ENGINE.turn;
+  var tr = ENGINE.pendingTrade;
+  if (tr) {
+    for (var s2 = 0; s2 < ENGINE.players.length; s2++) {
+      if (s2 !== MYSEAT && s2 !== tr.from && !tr.resp[s2]) { seat = s2; break; }
+    }
+  } else if (ENGINE.turn !== MYSEAT) seat = ENGINE.turn;
   if (seat < 0) return;
   BOTCLOCK = setTimeout(function () {
     var mv = H.botMove(ENGINE, seat);

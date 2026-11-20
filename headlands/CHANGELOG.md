@@ -1,5 +1,23 @@
 # Headlands — Changelog
 
+## v0.3.0 — 2026-11-20
+Trading goes to the whole table, and the bots join the haggling.
+- An offer no longer names one target: it stands before everyone, first
+  to take it wins (and draws the sweetener). One pass leaves it open for
+  the rest; when everyone passes it clears without burning your trade.
+  An acceptance you can't actually cover counts as a pass. Root cause of
+  the old shape: the trade intent carried a `to` seat copied from M
+  Deal's targeted actions, which made multi-seat tables wait on one
+  person who often had nothing to give.
+- Bots now float offers of their own — when they're exactly one good
+  short of their best build with real surplus to pay it, that good goes
+  to the table (once per turn; a declined offer isn't re-floated).
+  Soak-pinned: 90 bot games produce hundreds of offers, some taken.
+- The offer sheet shows everyone the deal, greys Take when you don't
+  hold what they want, and dismissing it passes — so the table never
+  waits on a closed sheet. Practice mode waits for your answer only
+  when every bot has already passed.
+
 ## v0.2.0 — 2026-11-20
 The design pass v0.1.0 shipped without. Root cause of the ugliness: the
 whole visual layer was programmer placeholder — unicode glyphs for art,

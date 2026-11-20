@@ -105,27 +105,41 @@ function goodsTotal(g) {
     g.players.reduce((s, p) => s + p.hand.length, 0);
 }
 
-/* ---- a human-shaped trade across the wire ---- */
+/* ---- a human-shaped trade across the wire: one offer, the whole table ---- */
 {
-  /* rig hands so the turn-holder can offer clay for stone */
-  const s = G.turn, t = (s + 1) % 3;
+  /* rig hands so the turn-holder can offer clay for stone, and only the
+     SECOND responder can actually take it */
+  const s = G.turn, t1 = (s + 1) % 3, t2 = (s + 2) % 3;
   G.players[s].hand.push(G.goods.splice(G.goods.indexOf('clay'), 1)[0]);
-  G.players[t].hand.push(G.goods.splice(G.goods.indexOf('stone'), 1)[0]);
+  G.players[t2].hand.push(G.goods.splice(G.goods.indexOf('stone'), 1)[0]);
+  G.players[t1].hand = G.players[t1].hand.filter(x => x !== 'stone');
+  while (G.players[t1].hand.length) G.goodsDiscard.push(G.players[t1].hand.pop());
   ctxs[0].hostPush([]);
-  ctxs[s].sendMove({ t: 'trade', to: t, give: ['clay'], want: ['stone'] });
-  T('the offer reaches every view', ctxs.every(c => c.V.pendingTrade &&
-    c.V.pendingTrade.from === s && c.V.pendingTrade.to === t));
-  ctxs[t].sendMove({ t: 'tradeResp', accept: true });
-  T('the accepted trade swaps goods and sweetens the partner over the wire',
+  ctxs[s].sendMove({ t: 'trade', give: ['clay'], want: ['stone'] });
+  T('the offer reaches every view, addressed to the table', ctxs.every(c => c.V.pendingTrade &&
+    c.V.pendingTrade.from === s && c.V.pendingTrade.to === undefined));
+  ctxs[t1].sendMove({ t: 'tradeResp', accept: false });
+  T('one pass leaves the offer standing for the rest', G.pendingTrade !== null &&
+    ctxs.every(c => c.V.pendingTrade && c.V.pendingTrade.resp &&
+      c.V.pendingTrade.resp[t1] === true));
+  ctxs[t2].sendMove({ t: 'tradeResp', accept: true });
+  T('the taker gets the swap and the sweetener over the wire',
     G.pendingTrade === null && G.tradeUsed === true &&
-    H.held(G.players[s]).stone >= 1 && H.held(G.players[t]).clay >= 1);
+    H.held(G.players[s]).stone >= 1 && H.held(G.players[t2]).clay >= 1);
   T('goods stayed at 61 through the trade', goodsTotal(G) === 61, String(goodsTotal(G)));
 }
 
 /* ---- a full game, every seat through its own UI, truth checked every push ---- */
 let mismatches = 0, handDrift = 0, guard = 6000, offTurnBounces = 0, conserved = true;
+function nextActor() {
+  const tr = G.pendingTrade;
+  if (tr) {
+    for (let s2 = 0; s2 < 3; s2++) if (s2 !== tr.from && !tr.resp[s2]) return s2;
+  }
+  return G.turn;
+}
 while (!G.over && guard-- > 0) {
-  const actor = G.pendingTrade ? G.pendingTrade.to : G.turn;
+  const actor = nextActor();
 
   if (!G.pendingTrade && G.turnCount % 9 === 4) {
     const rude = (G.turn + 1) % 3;
@@ -178,7 +192,14 @@ T('finished-game intents bounce', (() => {
   let g2 = 8000;
   while (!solo.ENGINE.over && g2-- > 0) {
     const E = solo.ENGINE;
-    const actor = E.pendingTrade ? E.pendingTrade.to : E.turn;
+    let actor = E.turn;
+    if (E.pendingTrade) {
+      actor = -1;
+      for (let s2 = 0; s2 < E.players.length; s2++) {
+        if (s2 !== E.pendingTrade.from && !E.pendingTrade.resp[s2]) { actor = s2; break; }
+      }
+      if (actor < 0) actor = E.turn;
+    }
     if (actor === 0) {
       const mv = H.botMove(E, 0);
       if (!mv) break;

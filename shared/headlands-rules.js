@@ -120,8 +120,8 @@
       highway: -1, watch: -1,             /* seat holding each token */
       turn: Math.floor(rng() * names.length),
       phase: 'action',
-      subUsed: false, tradeUsed: false,
-      pendingTrade: null,                 /* {from,to,give:[],want:[]} */
+      subUsed: false, tradeUsed: false, offered: false,
+      pendingTrade: null,                 /* {from,give:[],want:[],resp:{seat:true=declined}} */
       over: false, winner: -1,
       turnCount: 0
     };
@@ -337,21 +337,33 @@
     var p = g.players[seat];
     if (!p) return { ok: false, evts: evts };
 
-    /* a trade answer is the one move that isn't the turn-holder's */
+    /* a trade answer is the one move that isn't the turn-holder's. The offer
+       stands before the whole table: anyone may take it, first answer wins. */
     if (intent.t === 'tradeResp') {
       var tr = g.pendingTrade;
-      if (!tr || tr.to !== seat) return { ok: false, evts: evts };
-      g.pendingTrade = null;
-      if (!intent.accept) { evts.push({ e: 'tradeout', from: tr.from, to: tr.to, accept: false }); return { ok: true, evts: evts }; }
-      var A = g.players[tr.from], B = g.players[tr.to];
-      var okA = tr.give.every(function (good) { return held(A)[good] >= tr.give.filter(function (x) { return x === good; }).length; });
-      var okB = tr.want.every(function (good) { return held(B)[good] >= tr.want.filter(function (x) { return x === good; }).length; });
-      if (!okA || !okB) { evts.push({ e: 'tradeout', from: tr.from, to: tr.to, accept: false }); return { ok: true, evts: evts }; }
-      tr.give.forEach(function (good) { A.hand.splice(A.hand.indexOf(good), 1); B.hand.push(good); });
-      tr.want.forEach(function (good) { B.hand.splice(B.hand.indexOf(good), 1); A.hand.push(good); });
-      g.tradeUsed = true;
-      drawGoods(g, B, 1, evts);           /* the agreeing partner's sweetener */
-      evts.push({ e: 'tradeout', from: tr.from, to: tr.to, accept: true });
+      if (!tr || tr.from === seat || tr.resp[seat]) return { ok: false, evts: evts };
+      if (intent.accept) {
+        var A = g.players[tr.from], B = g.players[seat];
+        var okA = tr.give.every(function (good) { return held(A)[good] >= tr.give.filter(function (x) { return x === good; }).length; });
+        var okB = tr.want.every(function (good) { return held(B)[good] >= tr.want.filter(function (x) { return x === good; }).length; });
+        if (okA && okB) {
+          g.pendingTrade = null;
+          tr.give.forEach(function (good) { A.hand.splice(A.hand.indexOf(good), 1); B.hand.push(good); });
+          tr.want.forEach(function (good) { B.hand.splice(B.hand.indexOf(good), 1); A.hand.push(good); });
+          g.tradeUsed = true;
+          drawGoods(g, B, 1, evts);       /* the agreeing partner's sweetener */
+          evts.push({ e: 'tradeout', from: tr.from, by: seat, accept: true });
+          return { ok: true, evts: evts };
+        }
+        /* can't actually cover it — counts as passing */
+      }
+      tr.resp[seat] = true;
+      if (Object.keys(tr.resp).length >= g.players.length - 1) {
+        g.pendingTrade = null;
+        evts.push({ e: 'tradeout', from: tr.from, accept: false });
+      } else {
+        evts.push({ e: 'tradepass', seat: seat });
+      }
       return { ok: true, evts: evts };
     }
 
@@ -404,8 +416,6 @@
 
     if (intent.t === 'trade') {
       if (g.tradeUsed || g.pendingTrade) return { ok: false, evts: evts };
-      var to = intent.to;
-      if (to === seat || !g.players[to]) return { ok: false, evts: evts };
       if (!intent.give.length || !intent.want.length) return { ok: false, evts: evts };
       /* no like-for-like and nothing for free */
       if (intent.give.some(function (good) { return intent.want.indexOf(good) >= 0; })) return { ok: false, evts: evts };
@@ -413,15 +423,16 @@
       var need = {};
       intent.give.forEach(function (good) { need[good] = (need[good] || 0) + 1; });
       if (Object.keys(need).some(function (good) { return mine[good] < need[good]; })) return { ok: false, evts: evts };
-      g.pendingTrade = { from: seat, to: to, give: intent.give.slice(), want: intent.want.slice() };
-      evts.push({ e: 'tradeoffer', from: seat, to: to, give: intent.give.slice(), want: intent.want.slice() });
+      g.offered = true;
+      g.pendingTrade = { from: seat, give: intent.give.slice(), want: intent.want.slice(), resp: {} };
+      evts.push({ e: 'tradeoffer', from: seat, give: intent.give.slice(), want: intent.want.slice() });
       return { ok: true, evts: evts };
     }
 
     if (intent.t === 'end') {
       if (g.pendingTrade) { g.pendingTrade = null; }
       g.turn = (g.turn + 1) % g.players.length;
-      g.subUsed = false; g.tradeUsed = false;
+      g.subUsed = false; g.tradeUsed = false; g.offered = false;
       g.turnCount++;
       evts.push({ e: 'turn', seat: g.turn });
       runHarvest(g, evts);
@@ -432,17 +443,43 @@
   }
 
   /* ================= the bot ================= */
+  /* the trade a bot would float: the one good missing from its best build,
+     paid with its deepest surplus */
+  function botOffer(g, seat) {
+    var p = g.players[seat];
+    var have = held(p);
+    var wants = [];
+    if (uncovered(p, 'town') && g.resorts > 0) wants.push(RESORT.cost);
+    if (uncovered(p, 'shack')) wants.push(BUILDS.town.cost);
+    wants.push(BUILDS.shack.cost, BUILDS.ranger.cost, BUILDS.track.cost);
+    for (var i = 0; i < wants.length; i++) {
+      var cost = wants[i], missing = null, missN = 0;
+      Object.keys(cost).forEach(function (good) {
+        var short = cost[good] - Math.min(cost[good], have[good]);
+        if (short > 0) { missing = good; missN += short; }
+      });
+      if (!missing || missN !== 1) continue;
+      var give = null, best = 1;         /* only part with a real surplus */
+      GOODS.forEach(function (good) {
+        var spare = have[good] - (cost[good] || 0);
+        if (good !== missing && spare > best) { best = spare; give = good; }
+      });
+      if (give) return { t: 'trade', give: [give], want: [missing] };
+    }
+    return null;
+  }
+
   function botMove(g, seat) {
     if (g.over) return null;
     var p = g.players[seat];
-    if (g.pendingTrade && g.pendingTrade.to === seat) {
-      /* take a trade when it hands over more than it takes, or fills a gap */
-      var tr = g.pendingTrade;
+    var tr = g.pendingTrade;
+    if (tr && tr.from !== seat && !tr.resp[seat]) {
+      /* take a trade when it hands over more than it takes, or sheds a double */
       var good = tr.give.length > tr.want.length ||
         (tr.give.length === tr.want.length && tr.want.every(function (x) { return held(p)[x] >= 2; }));
       return { t: 'tradeResp', accept: !!good };
     }
-    if (seat !== g.turn || g.phase !== 'action') return null;
+    if (seat !== g.turn || g.phase !== 'action' || tr) return null;
     /* build the biggest thing we can, resorts first */
     var builds = legalBuilds(g, seat);
     if (builds.length) {
@@ -459,6 +496,10 @@
         if (g.resortBLeft.indexOf(pick.pick) < 0) pick.pick = g.resortBLeft[0];
       }
       return pick;
+    }
+    if (!g.tradeUsed && !g.offered) {
+      var offer = botOffer(g, seat);
+      if (offer) return offer;
     }
     return { t: 'end' };
   }
