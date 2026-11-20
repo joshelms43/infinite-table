@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Headlands — Infinite Table. Version: 0.6.0
+<!-- Headlands — Infinite Table. Version: 0.6.1
      Rival towns on one coast. Draw goods, work the market row, chain Tracks
      for cheaper swaps, raise Shacks (every one makes a Headline), stack Towns
      and Resorts, claim the Highway and the Watch. First to 7 showing wins.
@@ -224,7 +224,10 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
 @keyframes clouddrift{from{left:-20%}to{left:110%}}
 .waveband{animation:waveroll 7s linear infinite}
 @keyframes waveroll{from{transform:translateX(0)}to{transform:translateX(-48px)}}
-#game,.screen,#headlineflash,#sheetwrap,#banner,#over{z-index:1}
+/* only the two base surfaces sit just above the sky. The overlays (sheet 70,
+   banner 80, win screen 90, headline 60) keep their own layers: flattening
+   them here once put the menu above the bot picker and made it untappable. */
+#game{z-index:1}
 body.playing #sky{display:none}
 .screen{z-index:2}
 
@@ -329,12 +332,12 @@ body.playing #sky{display:none}
   <button id="menubtn">Menu</button>
 </div>
 
-<script src="../shared/config.js?v=0.6.0"></script>
-<script src="../shared/tablekit.js?v=0.6.0"></script>
-<script src="../shared/headlands-rules.js?v=0.6.0"></script>
+<script src="../shared/config.js?v=0.6.1"></script>
+<script src="../shared/tablekit.js?v=0.6.1"></script>
+<script src="../shared/headlands-rules.js?v=0.6.1"></script>
 <script>
 'use strict';
-var VERSION = '0.6.0';
+var VERSION = '0.6.1';
 TableKit.watchErrors({ game: 'headlands', version: VERSION, onError: function (m) { banner(m); } });
 
 function $(id) { return document.getElementById(id); }

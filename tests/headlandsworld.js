@@ -33,11 +33,35 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const run = code => vm.runInContext(code, ctx);
   const q = sel => doc.querySelectorAll(sel);
 
-  /* ---- a four-seat table, bots held still so the scene is ours to stage ---- */
-  win.startBot(3);
+  /* ---- start the way a player does: Practice, then pick the bots ----
+     Every earlier check staged the game by calling startBot() directly, so
+     nothing went through the menu — and from v0.5.0 to v0.6.0 the bot picker
+     sat UNDER the menu screen (one rule flattened every overlay to z-index 1,
+     the next lifted .screen to 2). It was visible and untappable: Practice
+     could not be started at all. jsdom has no hit-testing, so the stacking is
+     pinned through the cascade and the path through real clicks. */
+  const zi = id => parseInt(win.getComputedStyle(doc.getElementById(id)).zIndex, 10);
+  const zMenu = zi('menu'), zGame = zi('game');
+  T('the cascade resolves real layers for the page', zMenu > 0 && zGame > 0 && zi('sheetwrap') > 0,
+    'menu ' + zMenu + ' game ' + zGame + ' sheet ' + zi('sheetwrap'));
+  T('the sheet sits above the menu, so the bot picker can be tapped', zi('sheetwrap') > zMenu,
+    'sheet ' + zi('sheetwrap') + ' vs menu ' + zMenu);
+  T('the banner and the win screen sit above the menu and the table too',
+    zi('banner') > zMenu && zi('over') > zMenu && zi('banner') > zGame && zi('over') > zGame,
+    'banner ' + zi('banner') + ' over ' + zi('over'));
+  T('the Headline card sits above the table', zi('headlineflash') > zGame);
+  T('and the room screen is a screen like the menu', zi('room') === zMenu);
+
+  doc.getElementById('practicebtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true }));
+  T('Practice opens the bot picker with three choices',
+    doc.getElementById('sheetwrap').classList.contains('show') && q('#sheet .botn').length === 3);
+  T('nothing is dealt until a choice is made', run('ENGINE') === null && doc.getElementById('game').classList.contains('hidden'));
+  doc.querySelector('#sheet .botn[data-n="3"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true }));
   run('clearTimeout(BOTCLOCK)');
   const E = run('ENGINE');
-  T('practice dealt through the real DOM', !!E && E.players.length === 4);
+  T('picking three bots deals a four-seat table through the real menu', !!E && E.players.length === 4 &&
+    !doc.getElementById('game').classList.contains('hidden') && doc.getElementById('menu').classList.contains('hidden') &&
+    !doc.getElementById('sheetwrap').classList.contains('show'));
   T('the game is marked as playing, so the menu sky stands down', doc.body.classList.contains('playing'));
 
   /* a clean, fully-known position */

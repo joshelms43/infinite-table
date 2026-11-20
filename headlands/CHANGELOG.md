@@ -1,5 +1,29 @@
 # Headlands — Changelog
 
+## v0.6.1 — 2026-11-20
+Practice can be started again. Reported by Josh: "can't click on the
+bots" in the menu.
+- Root cause: a rule added with the sky in v0.5.0 —
+  `#game,.screen,#headlineflash,#sheetwrap,#banner,#over{z-index:1}` —
+  came after each overlay's own z-index and, at equal specificity,
+  overrode all of them to 1. The next rule lifted `.screen` to 2, which
+  put the menu ABOVE the bot picker. The sheet was visible through the
+  menu, but every tap landed on the menu's own inputs. Practice could
+  not be started from the menu from v0.5.0 through v0.6.0. (Hosting a
+  table was unaffected; it never opens a sheet over the menu.)
+- Fix: only `#game` takes the base layer; the sheet (70), banner (80),
+  win screen (90) and Headline card (60) keep their own.
+- Why it shipped twice: every screenshot and every test staged the game
+  by calling `startBot()` directly, so nothing went through the menu the
+  way a player does. The world gate now starts the game through the real
+  Practice button and bot picker, and pins that every overlay resolves
+  above the menu and the table. Mutation-checked: restoring the old rule
+  fails three pins ("sheet 1 vs menu 2").
+- Swept every other control with real touch taps at two phone sizes
+  (menu, bot picker, market, hand, Trade, End Turn, towns, build and
+  trade sheets, offer buttons, win screen): all reachable. That sweep
+  is a manual check, not part of the gate — jsdom has no hit-testing.
+
 ## v0.6.0 — 2026-11-20
 One world. The panels are gone: the top of the screen is a single bay,
 edge to edge, and everyone lives in it.
