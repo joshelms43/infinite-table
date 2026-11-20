@@ -31,6 +31,7 @@ const PAGES = [
   { name: 'Pool', key: 'pool', wants: ['NET', 'G', 'TableKit', 'PoolRules', 'PoolPhysics'] },
   { name: 'Last Card', key: 'lastcard', wants: ['TableKit', 'LastCard', 'sendMove', 'renderAll', 'startBot'] },
   { name: 'Headlands', key: 'headlands', wants: ['TableKit', 'Headlands', 'sendMove', 'renderAll', 'startBot'] },
+  { name: 'Settlers', key: 'settlers', wants: ['TableKit', 'Settlers', 'sendMove', 'renderAll', 'startBot', 'frame'] },
 ];
 
 const { partsFor } = require('./_document');
@@ -47,6 +48,7 @@ function stubBrowser() {
     Math, JSON, Date, Object, Array, Set, Map, Number, String, Boolean, Promise,
     isNaN, parseInt, parseFloat, RegExp, Error, TypeError, URLSearchParams,
     setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
+    requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},   // every browser has a frame clock; Settlers boots its loop on it
     document: {
       querySelector: () => el(), querySelectorAll: () => [], createElement: () => el(),
       getElementById: () => el(), addEventListener: () => {},

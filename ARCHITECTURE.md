@@ -9,6 +9,9 @@ coastline/index.html  M Deal — the flagship. Single file. URL path kept for hi
 mafia/index.html      Mafia — PARKED (no lobby card; the URL still works). Kept green in the gate.
 penalty/index.html    Penalty Shootout — Josh's alpha, live on the door. Offline for now; its
                       deterministic resolve(shot, dive, seed) is already online-shaped.
+settlers/index.html   Settlers — real-time island building vs bots. Canvas board + DOM HUD, one rAF loop.
+shared/settlers-rules.js  its engine: one state, one validated dispatcher, time enters only as a clock
+                      action — same seed + same action log = same game. Bots live here too.
 shared/tablekit.js    the platform layer: credentials, client, identity, room codes, channels
 shared/mdeal-rules.js THE rulebook. Official Monopoly Deal, pure, no DOM. Both this repo
                       and joshelms43/infinite-ai read it — two copies is a bug generator,

@@ -110,9 +110,19 @@ function goodsTotal(g) {
   /* rig hands so the turn-holder can offer clay for stone, and only the
      SECOND responder can actually take it */
   const s = G.turn, t1 = (s + 1) % 3, t2 = (s + 2) % 3;
-  G.players[s].hand.push(G.goods.splice(G.goods.indexOf('clay'), 1)[0]);
-  G.players[t2].hand.push(G.goods.splice(G.goods.indexOf('stone'), 1)[0]);
+  /* rig by MOVING goods, never minting or deleting them: a splice at
+     indexOf(...) without checking for -1 takes the wrong card when the pile
+     has none, so pull from the draw pile, then the discard, or say so. */
+  const pull = (good) => {
+    for (const pile of [G.goods, G.goodsDiscard]) {
+      const i = pile.indexOf(good);
+      if (i >= 0) return pile.splice(i, 1)[0];
+    }
+    throw new Error('rig: no ' + good + ' left in the piles');
+  };
   while (G.players[t1].hand.length) G.goodsDiscard.push(G.players[t1].hand.pop());
+  G.players[s].hand.push(pull('clay'));
+  G.players[t2].hand.push(pull('stone'));
   ctxs[0].hostPush([]);
   ctxs[s].sendMove({ t: 'trade', give: ['clay'], want: ['stone'] });
   T('the offer reaches every view, addressed to the table', ctxs.every(c => c.V.pendingTrade &&

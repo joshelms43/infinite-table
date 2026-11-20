@@ -15,7 +15,7 @@ function T(name, cond, detail) {
 }
 
 const ROOT = path.join(__dirname, '..');
-const HTML = ['index.html', 'coastline/index.html', 'mafia/index.html', 'pool/index.html', 'duel/index.html', 'lastcard/index.html', 'headlands/index.html'];
+const HTML = ['index.html', 'coastline/index.html', 'mafia/index.html', 'pool/index.html', 'duel/index.html', 'lastcard/index.html', 'headlands/index.html', 'settlers/index.html'];
 const SHARED = fs.readdirSync(path.join(ROOT, 'shared')).filter(f => f.endsWith('.js'));
 
 /* ---- shared modules must parse ---- */
@@ -96,6 +96,18 @@ HTML.forEach(rel => {
   T('the Last Card game reads the rulebook rather than carrying its own copy',
     !/const\s+(COLOURS|COLOUR_IDS|RULEBOOK)\s*=/.test(game));
   T('and it actually loads it', /shared\/lastcard-rules\.js/.test(game));
+}
+
+/* ---- the Settlers rulebook lives in exactly one place too ---- */
+{
+  const rb = require(path.join(ROOT, 'shared', 'settlers-rules.js'));
+  T('the Settlers rulebook is stamped', typeof rb.RULEBOOK === 'string' && rb.RULEBOOK.length > 0, rb.RULEBOOK);
+  T('the Settlers island is 19 hexes', rb.TOPO.hexes.length === 19);
+
+  const game = fs.readFileSync(path.join(ROOT, 'settlers', 'index.html'), 'utf8');
+  T('the Settlers page reads the rulebook rather than carrying its own copy',
+    !/(var|const|let)\s+(COST|PIECES|DEV_COUNT|TOKENS|TERRAIN_COUNT|RULEBOOK)\s*=/.test(game));
+  T('and it actually loads it', /shared\/settlers-rules\.js/.test(game));
 }
 
 console.log(fails === 0 ? 'LINT: ALL PASS' : 'LINT FAILURES: ' + fails);

@@ -22,6 +22,7 @@ const PAGES = {
   pool: 'pool/index.html',
   lastcard: 'lastcard/index.html',
   headlands: 'headlands/index.html',
+  settlers: 'settlers/index.html',
   lobby: 'index.html',
 };
 
