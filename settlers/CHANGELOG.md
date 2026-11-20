@@ -1,5 +1,23 @@
 # Settlers — Changelog
 
+## v0.2.1 — 2026-11-20
+Corners under the top bar can be tapped again.
+- Josh, mid-game on a laptop: "it isn't letting me place a settlement here".
+  His only legal corner was the end of his road on the top row, and the
+  board was zoomed in (a two-finger trackpad scroll zooms it), which put
+  that row under the opponent bar. Root cause: the bar's container
+  stretches the full width as a transparent strip, and it took pointer
+  events, so taps on the board beneath it never arrived. Only the chips and
+  the clock take taps now; the strip passes everything else through.
+  Measured in Chrome at his window size: 12–13 visible corners and edges
+  swallowed at zoom 1.45–2.2 before, none after. Pinned on the page and
+  mutation-proven.
+- A corner blocked by the distance rule now says Too Close To A Settlement.
+  It used to say Spot Taken (the engine had one code for both), which reads
+  as "someone beat you to it" on a corner that looks free. Spot Taken is now
+  reserved for a corner that really is occupied, e.g. a lost race. Engine
+  and page pins.
+
 ## v0.2.0 — 2026-11-20
 A custom roll clock.
 - Practice gets a fourth option beside 20s / 30s / 60s: Custom, with a

@@ -145,6 +145,22 @@ while (ev('G.phase') === 'setup' && frames < 20000) { step(50); if (frames % 4 =
 T('the draft completes with two settlements and two roads each', ev('G.phase') !== 'setup' &&
   [0, 1, 2, 3].every(s => ev('Settlers.settlesOf(G,' + s + ').length') === 2 && ev('G.eOwner.filter(o=>o===' + s + ').length') === 2));
 
+/* the top bar floats over the board: only its chips and clock may take taps,
+   or a zoomed board's top row becomes untappable under the see-through strip */
+{
+  const cs = el => w.getComputedStyle(el).pointerEvents;
+  T('the see-through top bar lets taps through to the board', cs($('top')) === 'none' && cs($('foes')) === 'none');
+  T('its chips and the clock still take taps', cs(w.document.querySelector('.foe')) === 'auto' && cs($('clockcol')) === 'auto');
+}
+/* a corner too close to a settlement says so, not Spot Taken */
+{
+  const G = ev('G');
+  const s1 = G.vOwner.findIndex(o => o >= 0);
+  const near = w.Settlers.TOPO.verts[s1].adj.find(a => G.vOwner[a] === -1);
+  w.sendMove({ t: 'settle', v: near });
+  T('a corner next to a settlement toasts Too Close, not Spot Taken',
+    Array.from(w.document.querySelectorAll('#toasts .toast')).some(el => el.textContent === 'Too Close To A Settlement'));
+}
 /* a claim on a taken corner says so and costs nothing */
 {
   const occupied = ev('G.vOwner.findIndex(o => o > 0)');

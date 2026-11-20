@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Settlers — Infinite Table. Version: 0.2.0
+<!-- Settlers — Infinite Table. Version: 0.2.1
      The island in real time. No turns: a shared roll lands on the clock and
      every matching hex pays everyone at once; between rolls the whole table
      builds and trades whenever it likes. First to 10.
@@ -47,6 +47,9 @@ input{font-family:inherit;font-size:16px;color:var(--text);background:rgba(255,2
 #hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:flex;flex-direction:column;
   padding:calc(env(safe-area-inset-top) + 8px) 8px calc(env(safe-area-inset-bottom) + 8px)}
 #hud > *{pointer-events:auto}
+/* the top bar is a see-through strip over the board: only the chips and the clock take taps */
+#hud > #top{pointer-events:none}
+#top .foe,#clockcol{pointer-events:auto}
 #top{display:flex;align-items:flex-start;gap:8px}
 #foes{flex:1;display:flex;gap:6px;flex-wrap:wrap;min-width:0}
 .foe{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;
@@ -268,12 +271,12 @@ table.coll td:first-child{text-align:left}
 <div id="sheetwrap"><div id="sheet"></div></div>
 <div id="victory" class="hidden"><div id="vcard"></div></div>
 
-<script src="../shared/config.js?v=0.2.0"></script>
-<script src="../shared/tablekit.js?v=0.2.0"></script>
-<script src="../shared/settlers-rules.js?v=0.2.0"></script>
+<script src="../shared/config.js?v=0.2.1"></script>
+<script src="../shared/tablekit.js?v=0.2.1"></script>
+<script src="../shared/settlers-rules.js?v=0.2.1"></script>
 <script>
 'use strict';
-var VERSION = '0.2.0';
+var VERSION = '0.2.1';
 TableKit.watchErrors({ game: 'settlers', version: VERSION, onError: function (m) { toast(m, 'warn'); } });
 
 var S = Settlers, TOPO = S.TOPO;
@@ -417,7 +420,7 @@ function sendMove(a) {
   return r;
 }
 var WHY = {
-  taken: 'Spot Taken', cost: 'Not Enough Cards', frozen: 'Hold On — The Robber', limit: 'No Pieces Left',
+  taken: 'Spot Taken', close: 'Too Close To A Settlement', cost: 'Not Enough Cards', frozen: 'Hold On — The Robber', limit: 'No Pieces Left',
   early: 'Bought This Roll', once: 'One Card Per Roll', gone: 'Offer Gone', illegal: 'Can’t Go There',
   empty: 'The Bank Is Out', over: 'Game Over', turn: 'Not Your Pick', phase: 'Not Now', notyours: 'Not Yours'
 };

@@ -250,8 +250,9 @@ pin('the distance rule: no settlement next to another, ours or anyone’s', M =>
   put(M, g, 1, { settles: [p[3]] });
   setHand(g, 0, { timber: 3, clay: 3, wool: 3, grain: 3 });
   /* p[1] is next to our own corner, p[2] next to the rival's */
-  return M.dispatch(g, 0, { t: 'settle', v: p[1] }).why === 'taken' &&
-    M.dispatch(g, 0, { t: 'settle', v: p[2] }).why === 'taken';
+  return M.dispatch(g, 0, { t: 'settle', v: p[1] }).why === 'close' &&
+    M.dispatch(g, 0, { t: 'settle', v: p[2] }).why === 'close' &&
+    M.dispatch(g, 0, { t: 'settle', v: p[0] }).why === 'taken';
 });
 pin('after the draft a settlement needs one of our roads', M => {
   const g = blank(M, 2);
@@ -874,7 +875,7 @@ function mutant(from, to) {
 }
 const MUTATIONS = [
   ['the distance rule: no settlement next to another, ours or anyone’s',
-    "for (var i = 0; i < adj.length; i++) if (g.vOwner[adj[i]] !== -1) return false;", ''],
+    "if (crowded(g, v)) return 'close';", ''],
   ['longest road: a tie leaves it with the holder',
     'if (h >= 0 && lens[h] >= LONGEST_MIN && lens[h] >= max) next = h;', 'if (false) next = h;'],
   ['longest road: cut below a rival, the rival takes it',
@@ -924,7 +925,7 @@ MUTATIONS.forEach(([name, from, to]) => {
 });
 /* and the race pins, against their own mutations */
 {
-  const M = mutant("if (!spotOpen(g, v)) return 'taken';", "if (g.vOwner[v] !== -1 && false) return 'taken';");
+  const M = mutant("if (g.vOwner[v] !== -1) return 'taken';", "if (g.vOwner[v] !== -1 && false) return 'taken';");
   const g = blank(M, 3);
   const v = M.TOPO.verts.findIndex(x => x.adj.length === 3);
   const [n0, n1] = M.TOPO.verts[v].adj;

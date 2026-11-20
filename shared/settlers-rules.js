@@ -270,6 +270,11 @@
   }
 
   /* distance rule: the corner is free and no neighbour is built on */
+  function crowded(g, v) {
+    var adj = TOPO.verts[v].adj;
+    for (var i = 0; i < adj.length; i++) if (g.vOwner[adj[i]] !== -1) return true;
+    return false;
+  }
   function spotOpen(g, v) {
     if (g.vOwner[v] !== -1) return false;
     var adj = TOPO.verts[v].adj;
@@ -283,7 +288,11 @@
   }
   function settleOk(g, seat, v) {
     if (v == null || v < 0 || v >= TOPO.verts.length) return 'illegal';
-    if (!spotOpen(g, v)) return 'taken';
+    /* 'taken' is someone on this very corner (a race lost); 'close' is the
+       distance rule — the toast must say which, or a free-looking corner reads
+       as stolen */
+    if (g.vOwner[v] !== -1) return 'taken';
+    if (crowded(g, v)) return 'close';
     if (g.phase !== 'setup' && !touchesOwnRoad(g, seat, v)) return 'illegal';
     return null;
   }
