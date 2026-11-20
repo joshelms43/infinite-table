@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Settlers — Infinite Table. Version: 0.2.1
+<!-- Settlers — Infinite Table. Version: 0.3.0
      The island in real time. No turns: a shared roll lands on the clock and
      every matching hex pays everyone at once; between rolls the whole table
      builds and trades whenever it likes. First to 10.
@@ -84,10 +84,18 @@ input{font-family:inherit;font-size:16px;color:var(--text);background:rgba(255,2
 .toast{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 13px;
   font-size:13px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.35);animation:tin .22s ease-out;max-width:94vw}
 .toast.warn{border-color:rgba(232,96,76,.6)}
-.toast.offer{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border-radius:14px}
-.toast.offer .who{display:flex;align-items:center;gap:6px;font-size:13px}
-.toast.offer .deal{display:flex;align-items:center;gap:4px}
-.toast.offer button{padding:8px 12px;font-size:13px;border-radius:10px}
+/* incoming offers: one card, one at a time, never a stack */
+#offercard{align-self:center;position:relative;display:flex;align-items:center;gap:8px;margin-top:8px;max-width:94vw;
+  background:var(--panel);border:1px solid rgba(242,193,78,.45);border-radius:14px;padding:7px 7px 9px 12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);overflow:hidden;animation:tin .22s ease-out}
+#offercard .who{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;white-space:nowrap}
+#offercard .deal{display:flex;align-items:center;gap:3px}
+#offercard .for{color:var(--dim);margin:0 3px;font-size:12px;font-weight:700}
+#offercard button{padding:8px 12px;font-size:13px;border-radius:10px}
+#offercard .more{font-size:11px;font-weight:800;color:var(--gold);background:rgba(242,193,78,.16);border-radius:999px;padding:2px 7px;white-space:nowrap}
+.countdown{position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--gold);opacity:.7;transform-origin:left;
+  animation-name:drain;animation-timing-function:linear;animation-fill-mode:forwards}
+@keyframes drain{from{transform:scaleX(var(--from,1))}to{transform:scaleX(0)}}
 .toast.out{opacity:0;transform:translateY(-6px);transition:all .2s}
 @keyframes tin{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:none}}
 .dot{width:10px;height:10px;border-radius:50%;flex:0 0 10px;box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.25)}
@@ -128,7 +136,7 @@ input{font-family:inherit;font-size:16px;color:var(--text);background:rgba(255,2
 .act.on{opacity:1;background:var(--gold);color:#1B1606;border-color:transparent}
 .act.shake{animation:shake .3s}
 @keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
-#myoffer{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:8px;
+#myoffer{position:relative;overflow:hidden;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:8px;
   background:rgba(242,193,78,.1);border:1px solid rgba(242,193,78,.35);border-radius:10px;padding:6px 6px 6px 10px}
 #myoffer button{margin-left:auto;padding:6px 10px;font-size:12px;border-radius:8px}
 
@@ -255,6 +263,7 @@ table.coll td:first-child{text-align:left}
     <div id="lastroll"></div>
     </div>
   </div>
+  <div id="offercard" class="hidden"></div>
   <div id="toasts"></div>
   <div id="spacer"></div>
   <div id="banner"></div>
@@ -271,12 +280,12 @@ table.coll td:first-child{text-align:left}
 <div id="sheetwrap"><div id="sheet"></div></div>
 <div id="victory" class="hidden"><div id="vcard"></div></div>
 
-<script src="../shared/config.js?v=0.2.1"></script>
-<script src="../shared/tablekit.js?v=0.2.1"></script>
-<script src="../shared/settlers-rules.js?v=0.2.1"></script>
+<script src="../shared/config.js?v=0.3.0"></script>
+<script src="../shared/tablekit.js?v=0.3.0"></script>
+<script src="../shared/settlers-rules.js?v=0.3.0"></script>
 <script>
 'use strict';
-var VERSION = '0.2.1';
+var VERSION = '0.3.0';
 TableKit.watchErrors({ game: 'settlers', version: VERSION, onError: function (m) { toast(m, 'warn'); } });
 
 var S = Settlers, TOPO = S.TOPO;
@@ -395,6 +404,7 @@ function startBot(nBots, interval) {
   }
   GAMEMS = 0; LASTPERF = performance.now(); RUNNING = true;
   G = S.newGame(NAMES, seed, { interval: interval, now: 0 });
+  OFFER_SEEN = {}; OFFER_SHOWN = 0; $('offercard').dataset.sig = '';
   BOTNEXT = NAMES.map(function (_, s) { return 900 + s * 300; });
   OVERAT = 0; VICTORY_SHOWN = false;
   resetFx();
@@ -516,18 +526,15 @@ function afterState(evts) {
         logLine(nm(e.seat) + ' ' + verb(e.seat, 'trade', 'trades') + ' ' + e.rate + ' ' + resWord(e.give) + ' for ' + resWord(e.get));
         break;
       case 'offer':
-        if (e.from !== MYSEAT) { offerToast(e); sfx('trade'); haptic(8); }
         logLine(nm(e.from) + ' ' + verb(e.from, 'offer', 'offers') + ' a trade');
         break;
       case 'declined':
         break;
       case 'offerGone':
-        dropOfferToast(e.id);
         if (e.from === MYSEAT && (e.why === 'declined' || e.why === 'expired')) toast('No Takers');
         if (e.from === MYSEAT && e.why === 'afford') toast('Offer Withdrawn');
         break;
       case 'trade':
-        dropOfferToast(e.id);
         if (e.from === MYSEAT) { toast(nm(e.by) + ' Takes Your Offer'); sfx('trade'); haptic(16); }
         else if (e.by === MYSEAT) { sfx('trade'); haptic(16); }
         logLine(nm(e.by) + ' ' + verb(e.by, 'trade', 'trades') + ' with ' + (e.from === MYSEAT ? 'you' : NAMES[e.from]));
@@ -604,38 +611,51 @@ function toast(text, cls) {
 }
 function trimToasts() {
   var box = $('toasts');
-  /* at most two notes at once, plus any standing offers */
-  var notes = box.querySelectorAll('.toast:not(.offer)');
+  /* at most two notes at once */
+  var notes = box.querySelectorAll('.toast');
   for (var i = 0; i < notes.length - 2; i++) box.removeChild(notes[i]);
-  var offers = box.querySelectorAll('.toast.offer');
-  for (var j = 0; j < offers.length - 3; j++) box.removeChild(offers[j]);
 }
 function clearToasts() { $('toasts').innerHTML = ''; }
-function offerToast(e) {
-  var d = document.createElement('div');
-  d.className = 'toast offer';
-  d.dataset.offer = e.id;
-  d.innerHTML = '<span class="who"><span class="dot" style="background:' + PCOL[e.from] + '"></span>' + esc(NAMES[e.from]) + '</span>' +
-    '<span class="deal">' + countsHtml(e.give) + '<span style="color:var(--dim);margin:0 3px">for</span>' + countsHtml(e.get) + '</span>' +
-    '<button class="primary acc">Accept</button><button class="dec">Decline</button>';
-  d.querySelector('.acc').onclick = function () { sfx('tap'); sendMove({ t: 'accept', id: e.id }); };
-  d.querySelector('.dec').onclick = function () { sfx('tap'); sendMove({ t: 'decline', id: e.id }); dropOfferToast(e.id); };
-  $('toasts').appendChild(d);
-  trimToasts();
-  syncOfferToasts();
-}
-function dropOfferToast(id) {
-  var el = document.querySelector('.toast.offer[data-offer="' + id + '"]');
-  if (el && el.parentNode) el.parentNode.removeChild(el);
-}
-function syncOfferToasts() {
-  if (!G) return;
-  Array.prototype.forEach.call(document.querySelectorAll('.toast.offer'), function (el) {
-    var id = +el.dataset.offer;
-    var o = G.offers.find(function (x) { return x.id === id; });
-    if (!o) { el.parentNode.removeChild(el); return; }
-    el.querySelector('.acc').classList.toggle('off', !S.canAfford(G.players[MYSEAT].hand, o.get) || G.phase !== 'play');
+/* the table's offers reach you as one card. Only offers you could actually
+   take make it: anything you can't cover, already passed on, or that a 7 has
+   frozen stays off your screen. More waiting shows as +N; answer and the next
+   one slides in. A sound only for an offer you haven't seen yet. */
+var OFFER_SEEN = {}, OFFER_SHOWN = 0;
+function liveOffers() {
+  if (!G || G.over || G.phase !== 'play') return [];
+  var h = G.players[MYSEAT].hand;
+  return G.offers.filter(function (o) {
+    return o.from !== MYSEAT && !o.declined[MYSEAT] && S.canAfford(h, o.get);
   });
+}
+function countdownHtml(o) {
+  var left = Math.max(0, o.expires - gameNow());
+  return '<i class="countdown" style="--from:' + (left / S.OFFER_MS).toFixed(3) + ';animation-duration:' + Math.round(left) + 'ms"></i>';
+}
+function renderOfferCard() {
+  var card = $('offercard'), list = liveOffers();
+  if (!list.length) {
+    if (!card.classList.contains('hidden')) card.classList.add('hidden');
+    OFFER_SHOWN = 0; card.dataset.sig = '';
+    return;
+  }
+  var o = list[0];
+  var sig = o.id + ':' + list.length;
+  if (card.dataset.sig === sig) return;
+  card.dataset.sig = sig;
+  card.innerHTML = '<span class="who"><span class="dot" style="background:' + PCOL[o.from] + '"></span>' + esc(NAMES[o.from]) + '</span>' +
+    '<span class="deal">' + countsHtml(o.give) + '<span class="for">for</span>' + countsHtml(o.get) + '</span>' +
+    (list.length > 1 ? '<span class="more">+' + (list.length - 1) + '</span>' : '') +
+    '<button class="primary acc">Accept</button><button class="dec">Pass</button>' + countdownHtml(o);
+  card.querySelector('.acc').onclick = function () { sfx('tap'); sendMove({ t: 'accept', id: o.id }); };
+  card.querySelector('.dec').onclick = function () { sfx('tap'); sendMove({ t: 'decline', id: o.id }); };
+  card.classList.remove('hidden');
+  if (OFFER_SHOWN !== o.id) {
+    /* re-run the slide-in for a new offer */
+    card.style.animation = 'none'; void card.offsetWidth; card.style.animation = '';
+    OFFER_SHOWN = o.id;
+  }
+  if (!OFFER_SEEN[o.id]) { OFFER_SEEN[o.id] = true; sfx('trade'); haptic(8); }
 }
 
 function shownHand(seat) {
@@ -696,7 +716,7 @@ function renderAll() {
 
   renderActions();
   renderMyOffer();
-  syncOfferToasts();
+  renderOfferCard();
   if (SHEET === 'trade') renderTrade();
   if (SHEET === 'cards') renderCards();
 }
@@ -771,7 +791,7 @@ function renderMyOffer() {
   if (el.dataset.id === String(o.id)) return;
   el.dataset.id = o.id;
   el.innerHTML = '<span>Your Offer</span>' + countsHtml(o.give) + '<span style="color:var(--dim)">for</span>' + countsHtml(o.get) +
-    '<button id="cancoffer">Cancel</button>';
+    '<button id="cancoffer">Cancel</button>' + countdownHtml(o);
   el.classList.remove('hidden');
   $('cancoffer').onclick = function () { sfx('tap'); sendMove({ t: 'cancel', id: o.id }); };
 }

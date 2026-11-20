@@ -1,5 +1,33 @@
 # Settlers — Changelog
 
+## v0.3.0 — 2026-11-20
+Trading, cleaned up: bots deal freely, and you only see what you can take.
+- Bots post an offer whenever they want a deal. The once-per-roll cap is
+  gone (Josh: "if they want the trade just let them send it"), along with
+  the trickle that held Builder and Expander back. Each bot still has at
+  most one standing offer, since the engine replaces rather than stacks.
+  Bot games: 20 → 36 offers and 1.9 → 3.3 completed trades per game; never
+  more than two offers up at once.
+- No repeats: a deal the whole table turned down, or that nobody took
+  before it expired, is remembered for the rest of the roll interval, so a
+  bot won't put the identical offer straight back up. A different deal, or
+  the same one after the next roll, is fine.
+- Incoming offers are one card, not a stack of toasts. It shows the oldest
+  offer you could actually take, with a +N pill when more are waiting;
+  Accept or Pass slides the next one in. Offers you can't cover, ones
+  you've passed on, and anything frozen by a 7 never reach your screen.
+  The sound and haptic fire only for an offer you haven't seen yet.
+- Every offer, and your own offer pill, shows a draining countdown to
+  expiry. The countdown is a CSS animation, so it costs no per-frame work.
+- Root cause of the noise the cap was papering over: every offer became its
+  own toast, including ones you couldn't take, so more bot offers meant
+  more clutter. Filtering to what you can take, and showing one at a time,
+  removes the clutter without throttling the bots.
+- Gates: engine pins for no cap and no repeat (proven against the old
+  capped engine, plus a mutation), soaks still finish with zero illegal
+  actions, and page pins for one card, oldest first, +N, the unaffordable
+  offer kept out, Pass to the next, and the countdown.
+
 ## v0.2.1 — 2026-11-20
 Corners under the top bar can be tapped again.
 - Josh, mid-game on a laptop: "it isn't letting me place a settlement here".

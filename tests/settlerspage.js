@@ -68,7 +68,7 @@ T('practice starts a four-seat game on a 20s clock', ev('G.players.length') === 
 T('the bots are the three personalities', JSON.stringify(ev('KINDS.slice(1).sort()')) === '["builder","expander","trader"]');
 
 /* your seat: a policy that uses the UI the way a player would */
-let uiBuilds = 0, uiDiscards = 0, uiRobbers = 0, uiTrades = 0, sawSpotTaken = false;
+let uiBuilds = 0, uiDiscards = 0, uiRobbers = 0, uiTrades = 0, uiAccepts = 0, sawSpotTaken = false;
 function mySeat() {
   const G = ev('G');
   if (G.over) return;
@@ -135,8 +135,8 @@ function mySeat() {
     return;
   }
   /* accept an offer that helps, from its toast */
-  const t = w.document.querySelector('.toast.offer .acc:not(.off)');
-  if (t && w.Math.random() < 0.5) click(t);
+  const t = w.document.querySelector('#offercard:not(.hidden) .acc');
+  if (t && w.Math.random() < 0.5) { const before = ev('G.actions'); click(t); if (ev('G.actions') > before) uiAccepts++; }
 }
 
 /* play the draft, then real time */
@@ -151,6 +151,36 @@ T('the draft completes with two settlements and two roads each', ev('G.phase') !
   const cs = el => w.getComputedStyle(el).pointerEvents;
   T('the see-through top bar lets taps through to the board', cs($('top')) === 'none' && cs($('foes')) === 'none');
   T('its chips and the clock still take taps', cs(w.document.querySelector('.foe')) === 'auto' && cs($('clockcol')) === 'auto');
+}
+/* offers reach you as one card, one at a time */
+{
+  const put = (seat, give, get) => {
+    const p = ev('G.players[' + seat + ']');
+    ev("(function(){ var p=G.players[" + seat + "]; " + Object.keys(give).map(r => "G.bank." + r + "-=" + give[r] + "; p.hand." + r + "+=" + give[r] + ";").join(' ') + " })()");
+    const r = w.Settlers.act(ev('G'), seat, { t: 'offer', give, get }, ev('GAMEMS'));
+    w.afterState(r.evts);
+    return r.evts.find(e => e.e === 'offer').id;
+  };
+  ev("(function(){ var p=G.players[0]; ['ore','grain'].forEach(function(r){ var n=Math.min(2,G.bank[r]); G.bank[r]-=n; p.hand[r]+=n; }); p.hand.clay=0; G.bank.clay+=0; })()");
+  const before = w.document.querySelectorAll('#toasts .toast').length;
+  const a = put(1, { wool: 1 }, { ore: 1 });
+  const b = put(2, { timber: 1 }, { grain: 1 });
+  /* this one wants clay you don't hold: it must never reach you */
+  ev("(function(){ var p=G.players[0]; G.bank.clay+=p.hand.clay; p.hand.clay=0; })()");
+  const c = put(3, { wool: 1 }, { clay: 1 });
+  const card = $('offercard');
+  const one = !card.classList.contains('hidden') && card.querySelectorAll('.acc').length === 1;
+  const cd = card.querySelector('.countdown');
+  const countdownOk = !!cd && /^\d+ms$/.test(cd.style.animationDuration) && parseInt(cd.style.animationDuration, 10) > 20000;
+  T('offers arrive as one card, not a stack of toasts', one && w.document.querySelectorAll('#toasts .toast').length <= before + 0);
+  T('it shows the oldest first, with +1 waiting (the clay one you can’t cover is left out)',
+    card.textContent.indexOf(ev('NAMES[1]')) >= 0 && card.querySelector('.more') && card.querySelector('.more').textContent === '+1');
+  click(card.querySelector('.dec'));
+  T('Pass brings the next one in', card.textContent.indexOf(ev('NAMES[2]')) >= 0 && !card.querySelector('.more'));
+  click(card.querySelector('.dec'));
+  T('and with nothing left you can take, the card goes away', card.classList.contains('hidden') && ev('G.offers.some(o => o.id === ' + c + ')'));
+  T('each offer has a draining countdown', countdownOk);
+  ev('G.offers.slice().forEach(function(o){ var r = Settlers.act(G, o.from, { t: "cancel", id: o.id }, GAMEMS); afterState(r.evts); })');
 }
 /* a corner too close to a settlement says so, not Spot Taken */
 {

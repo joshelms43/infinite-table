@@ -195,12 +195,12 @@
         return {
           name: nm, hand: emptyHand(), dev: [], devPlayedAt: -1, knights: 0,
           left: { road: PIECES.road, settle: PIECES.settle, city: PIECES.city },
-          roadLen: 0, collected: emptyHand(), offeredAt: -1
+          roadLen: 0, collected: emptyHand()
         };
       }),
       setup: null, discard: null, robberBy: -1, robberDeadline: 0,
       nextRollAt: 0, rollN: 0, lastRoll: null, hist: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      offers: [], offerSeq: 0,
+      offers: [], offerSeq: 0, spurned: {},
       longest: -1, army: -1,
       over: false, winner: -1, actions: 0
     };
@@ -495,9 +495,21 @@
     for (var i = g.offers.length - 1; i >= 0; i--) {
       var o = g.offers[i];
       var why = !canAfford(g.players[o.from].hand, o.give) ? 'afford' : (o.expires <= g.now ? 'expired' : null);
-      if (why) { g.offers.splice(i, 1); evts.push({ e: 'offerGone', id: o.id, from: o.from, why: why }); }
+      if (why) {
+        g.offers.splice(i, 1);
+        if (why === 'expired') spurn(g, o);
+        evts.push({ e: 'offerGone', id: o.id, from: o.from, why: why });
+      }
     }
   }
+  /* an offer the table turned down (everyone declined, or nobody took it in
+     time) is remembered for the rest of the roll interval, so a bot doesn't
+     put the identical deal straight back up */
+  function offerSig(from, give, get) {
+    return from + ':' + RES.map(function (r) { return give[r] || 0; }).join('') + '>' + RES.map(function (r) { return get[r] || 0; }).join('');
+  }
+  function spurn(g, o) { g.spurned[offerSig(o.from, o.give, o.get)] = g.rollN; }
+  function spurnedNow(g, from, give, get) { return g.spurned[offerSig(from, give, get)] === g.rollN; }
   function findOffer(g, id) {
     for (var i = 0; i < g.offers.length; i++) if (g.offers[i].id === id) return i;
     return -1;
@@ -740,7 +752,6 @@
             g.offers.splice(i, 1);
           }
         }
-        p.offeredAt = g.rollN;
         var o = { id: ++g.offerSeq, from: seat, give: give, get: get, at: g.now, expires: g.now + OFFER_MS, declined: {} };
         g.offers.push(o);
         evts.push({ e: 'offer', id: o.id, from: seat, give: give, get: get, expires: o.expires });
@@ -782,6 +793,7 @@
         evts.push({ e: 'declined', id: od.id, seat: seat });
         if (Object.keys(od.declined).length >= g.players.length - 1) {
           g.offers.splice(di, 1);
+          spurn(g, od);
           evts.push({ e: 'offerGone', id: od.id, from: od.from, why: 'declined' });
         }
         return null;
@@ -1098,11 +1110,13 @@
       var bt = bankTrade(g, seat, goal.cost);
       if (bt) return bt;
       /* or the table */
+      /* any bot that wants a deal puts it up — one standing offer each (the
+         engine replaces, never stacks), and never the exact deal the table
+         just turned down this roll */
       var mine = g.offers.some(function (x) { return x.from === seat; });
-      /* one offer per roll interval, so the table isn't a wall of toasts */
-      if (!mine && p.offeredAt < g.rollN && goal.short === 1 && trickle(g, seat, per)) {
+      if (!mine && goal.short === 1) {
         var off = makeOffer(g, seat, goal.cost);
-        if (off) return off;
+        if (off && !spurnedNow(g, seat, off.give, off.get)) return off;
       }
     }
     /* sitting on too many cards in front of a 7 is a gift to the table */
@@ -1114,11 +1128,6 @@
     return null;
   }
   function overLimit(p) { return handSize(p.hand) > DISCARD_OVER - 1; }
-  /* the bots don't all spam the table: Traders offer every think, others now and then */
-  function trickle(g, seat, per) {
-    if (per.trade >= 1.5) return true;
-    return ((g.actions + seat * 7 + g.rollN * 3) % 4) === 0;
-  }
   function planAction(pl) {
     if (pl.kind === 'city') return { t: 'city', v: pl.v };
     if (pl.kind === 'settle') return { t: 'settle', v: pl.v };

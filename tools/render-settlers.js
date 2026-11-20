@@ -98,8 +98,12 @@ const W = +(process.env.W || 390), H = +(process.env.H || 844);
   await page.evaluate(() => {
     const s = 1, p = G.players[s];
     p.hand.wool += 2; G.bank.wool -= 2;
-    sendMove; const r = Settlers.act(G, s, { t: 'offer', give: { wool: 2 }, get: { ore: 1 } }, GAMEMS);
+    const r = Settlers.act(G, s, { t: 'offer', give: { wool: 2 }, get: { ore: 1 } }, GAMEMS);
     afterState(r.evts);
+    /* a second offer waiting behind it, for the +1 */
+    const q = G.players[2]; q.hand.timber += 1; G.bank.timber -= 1;
+    const r2 = Settlers.act(G, 2, { t: 'offer', give: { timber: 1 }, get: { grain: 1 } }, GAMEMS);
+    afterState(r2.evts);
   });
   await wait(400);
   await shot('offer');

@@ -655,6 +655,41 @@ pin('offers expire on the clock', M => {
   return g.offers.length === 0;
 });
 
+/* a builder one ore short of a city, with a spare wool: it wants the table */
+function shortRig(M) {
+  const g = blank(M, 3);
+  put(M, g, 0, { settles: [0], roads: [M.TOPO.verts[0].edges[0]] });
+  setHand(g, 0, { grain: 2, ore: 2, wool: 1 });
+  return g;
+}
+pin('bots offer whenever they want a deal — no once-per-roll cap', M => {
+  const g = shortRig(M);
+  const a = M.botMove(g, 0, 'builder');
+  if (!a || a.t !== 'offer') return false;
+  const id = M.dispatch(g, 0, a).evts.find(e => e.e === 'offer').id;
+  setHand(g, 1, { ore: 1 });
+  const took = M.dispatch(g, 1, { t: 'accept', id }).ok;
+  /* still the same roll: short again, it offers again */
+  setHand(g, 0, { grain: 2, ore: 2, wool: 1 });
+  const b = M.botMove(g, 0, 'builder');
+  return took && b && b.t === 'offer' && g.rollN === 0;
+});
+pin('a deal the table turned down isn’t re-posted until the next roll', M => {
+  const g = shortRig(M);
+  const a = M.botMove(g, 0, 'builder');
+  const same = x => x && x.t === 'offer' && JSON.stringify(x.give) === JSON.stringify(a.give) && JSON.stringify(x.get) === JSON.stringify(a.get);
+  const id = M.dispatch(g, 0, a).evts.find(e => e.e === 'offer').id;
+  M.dispatch(g, 1, { t: 'decline', id }); M.dispatch(g, 2, { t: 'decline', id });
+  const declinedAgain = same(M.botMove(g, 0, 'builder'));
+  g.rollN++;
+  const nextRoll = M.botMove(g, 0, 'builder');
+  /* an offer nobody took before it expired counts as turned down too */
+  M.dispatch(g, 0, nextRoll);
+  M.act(g, -1, { t: 'clock', now: g.now + M.OFFER_MS }, g.now + M.OFFER_MS);
+  const expiredAgain = same(M.botMove(g, 0, 'builder'));
+  return same(a) && !declinedAgain && same(nextRoll) && g.offers.length === 0 && !expiredAgain;
+});
+
 /* ---- the win ---- */
 pin('ten points ends it on the spot; nothing moves after', M => {
   const g = blank(M, 2);
@@ -906,6 +941,8 @@ const MUTATIONS = [
   ['a custom clock: any whole second from 5s to 5 min, anything else falls back to 60s',
     'return typeof ms === \'number\' && ms % 1000 === 0 && ms >= MIN_INTERVAL && ms <= MAX_INTERVAL;',
     'return typeof ms === \'number\';'],
+  ['a deal the table turned down isn’t re-posted until the next roll',
+    'if (off && !spurnedNow(g, seat, off.give, off.get)) return off;', 'if (off) return off;'],
   ['real time starts after the draft: the first roll comes on the clock',
     'g.nextRollAt = g.now + FIRST_ROLL_MS;', 'g.nextRollAt = g.now;'],
   ['building costs exactly its price and a short hand changes nothing',
