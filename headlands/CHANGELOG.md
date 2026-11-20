@@ -1,5 +1,26 @@
 # Headlands — Changelog
 
+## v0.2.0 — 2026-11-20
+The design pass v0.1.0 shipped without. Root cause of the ugliness: the
+whole visual layer was programmer placeholder — unicode glyphs for art,
+flat panels with identical thin borders, cost dots with no meaning,
+goods as bare coloured rectangles.
+- An original drawn-miniature system: every good (clay pan, timber log,
+  wool bale, cane stalks, stone stack) and every build (winding track,
+  tin-roof shack, clustered town, ranger flag, beach resort) is one
+  inline SVG in the house palette, used everywhere — market cards, cost
+  rows, hand, stacks, sheets, trade tiles.
+- Market and goods became real cards: bone faces, ink linework, layered
+  shadows; affordable builds lift and glow gold.
+- Costs read as rows of mini good icons, dimmed where short.
+- My stacks show the covered build peeking out from under the top; foe
+  chips show the top alone (the peek mushed at 22px).
+- Headlines flash as a proper dealt card, tilted, gold-rimmed.
+- A drawn coastal masthead on the menu; felt vignette behind the whole
+  table; reduced-motion respected.
+Verified by phone-size screenshots of menu, table, build sheet, headline
+and win screens before shipping.
+
 ## v0.1.0 — 2026-11-20
 Rival towns on one coast. A faithful mechanical twin of the modern
 travel-sized Catan card duel, wearing entirely our own skin — original

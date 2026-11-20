@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Headlands — Infinite Table. Version: 0.1.0
+<!-- Headlands — Infinite Table. Version: 0.2.0
      Rival towns on one coast. Draw goods, work the market row, chain Tracks
      for cheaper swaps, raise Shacks (every one makes a Headline), stack Towns
      and Resorts, claim the Highway and the Watch. First to 7 showing wins.
@@ -15,20 +15,21 @@
 <title>Headlands — Infinite Table</title>
 <style>
 :root{
-  --felt:#101A16; --felt-2:#16241E; --panel:#1C2B24; --line:#2C4038;
-  --bone:#F2EEE2; --ink:#10100E; --dim:#9FB0A5;
+  --felt:#0E1814; --felt-2:#14211B; --panel:#1B2A23; --line:#2C4038;
+  --bone:#F2EEE2; --bone-2:#E7E0CC; --ink:#1C1A14; --dim:#93A69A;
   --coral:#E26A4B; --teal:#3B8B82; --gold:#E8C57A; --warn:#D9A03F;
-  --clay:#C96F4A; --timber:#6B8F4E; --wool:#E8E2D0; --cane:#E8C57A; --stone:#8B95A3;
+  --clay:#C96F4A; --timber:#6B8F4E; --wool:#EFE9D8; --cane:#E3B95E; --stone:#8B95A3;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;overflow:hidden}
-body{background:var(--felt);color:var(--bone);font-family:Georgia,'Times New Roman',serif;
+body{color:var(--bone);font-family:Georgia,'Times New Roman',serif;
+  background:radial-gradient(120% 90% at 50% 0%, #15241D 0%, var(--felt) 58%, #0A110E 100%);
   -webkit-user-select:none;user-select:none;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 .hidden{display:none!important}
 button{font-family:inherit;color:var(--bone);background:var(--panel);border:1px solid var(--line);
   border-radius:12px;padding:12px 18px;font-size:16px;cursor:pointer}
-button.primary{background:var(--coral);border-color:transparent;color:var(--ink);font-weight:700}
+button.primary{background:var(--gold);border-color:transparent;color:var(--ink);font-weight:700}
 button.busy{opacity:.45;pointer-events:none}
 input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt-2);
   border:1px solid var(--line);border-radius:10px;padding:12px;width:100%}
@@ -36,74 +37,99 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
 /* ---- menu + room ---- */
 .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:14px;padding:24px;text-align:center}
-.screen h1{font-size:34px;margin:0;letter-spacing:.5px}
+.screen h1{font-size:38px;margin:0;letter-spacing:.5px;color:var(--bone)}
 .screen .tag{color:var(--dim);margin:0 0 10px;font-style:italic}
 .col{display:flex;flex-direction:column;gap:10px;width:min(320px,86vw)}
 .code{font-size:40px;letter-spacing:10px;font-weight:700;color:var(--gold)}
 .seatrow{display:flex;align-items:center;gap:10px;background:var(--panel);
   border:1px solid var(--line);border-radius:10px;padding:10px 14px}
 .seatrow .dot{width:9px;height:9px;border-radius:50%;background:var(--teal)}
-.hosttag{margin-left:auto;font-size:11px;color:var(--gold);letter-spacing:1px}
+.hosttag{margin-left:auto;font-size:12px;color:var(--gold)}
 .err{color:var(--coral);min-height:20px}
 .hint{color:var(--dim);min-height:20px}
+#menuart{width:min(300px,78vw);margin-bottom:-6px}
 
 /* ---- the table ---- */
 #game{position:fixed;inset:0;display:flex;flex-direction:column;
-  padding:calc(env(safe-area-inset-top) + 6px) 10px calc(env(safe-area-inset-bottom) + 8px)}
+  padding:calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px)}
 #foes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-.foe{background:var(--panel);border:1.5px solid var(--line);border-radius:12px;
-  padding:7px 10px;min-width:96px;transition:border-color .25s}
-.foe.turn{border-color:var(--gold)}
-.foe .nm{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
-.foe .row{display:flex;gap:7px;align-items:center;margin-top:3px;font-size:12px;color:var(--dim)}
+.foe{background:linear-gradient(180deg,var(--panel),var(--felt-2));
+  border:1.5px solid var(--line);border-radius:14px;
+  padding:8px 11px;min-width:104px;transition:border-color .25s,box-shadow .25s}
+.foe.turn{border-color:var(--gold);box-shadow:0 0 14px rgba(232,197,122,.22)}
+.foe .nm{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;
+  display:flex;align-items:center;gap:6px}
+.foe .row{display:flex;gap:8px;align-items:center;margin-top:4px;font-size:12px;color:var(--dim)}
 .vpbadge{background:var(--gold);color:var(--ink);font-weight:700;border-radius:8px;
-  padding:0 6px;font-size:12px}
-.tok{font-size:10px;letter-spacing:.5px;background:var(--felt-2);border:1px solid var(--gold);
-  color:var(--gold);border-radius:7px;padding:1px 5px}
-.stackchips{display:flex;gap:3px;margin-top:4px}
-.sc{width:15px;height:19px;border-radius:4px;border:1px solid rgba(8,12,10,.5);
-  display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink)}
-.sc.shack{background:var(--teal)}.sc.town{background:var(--gold)}.sc.resort{background:var(--coral)}
+  padding:0 7px;font-size:13px;line-height:19px}
+.tok{font-size:11px;background:rgba(232,197,122,.14);border:1px solid var(--gold);
+  color:var(--gold);border-radius:7px;padding:1px 6px}
+.stackrow{display:flex;gap:6px;margin-top:6px;min-height:26px}
+.stackcell{position:relative;width:22px;height:26px}
+.stackcell svg{position:absolute;left:0;width:22px;height:22px;filter:drop-shadow(0 1px 1px rgba(8,10,8,.5))}
 
-#mid{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;min-height:0}
-#statusline{text-align:center;color:var(--dim);font-size:14px;min-height:18px}
-#market{display:flex;gap:7px;justify-content:center}
-.mcard{width:60px;height:84px;border-radius:10px;background:var(--panel);
-  border:1.5px solid var(--line);display:flex;flex-direction:column;align-items:center;
-  justify-content:space-between;padding:7px 4px;cursor:pointer;transition:transform .12s,border-color .2s}
+#mid{flex:1;display:flex;flex-direction:column;justify-content:center;gap:12px;min-height:0}
+#statusline{text-align:center;color:var(--dim);font-size:14px;min-height:18px;font-style:italic}
+#market{display:flex;gap:8px;justify-content:center;align-items:flex-end}
+.mcard{width:66px;height:96px;border-radius:9px;cursor:pointer;position:relative;
+  background:linear-gradient(170deg,var(--bone) 0%,var(--bone-2) 100%);
+  border:1px solid rgba(28,26,20,.55);
+  box-shadow:0 2px 0 rgba(8,10,8,.55), 0 6px 14px rgba(8,10,8,.4);
+  display:flex;flex-direction:column;align-items:center;padding:6px 4px 5px;
+  color:var(--ink);transition:transform .12s,box-shadow .2s}
 .mcard:active{transform:scale(.94)}
-.mcard.canbuy{border-color:var(--gold)}
-.mcard .glyph{font-size:24px;line-height:1}
-.mcard .mname{font-size:10px;letter-spacing:.3px}
-.mcard .pips{display:flex;gap:2px;flex-wrap:wrap;justify-content:center}
-.pip{width:8px;height:8px;border-radius:50%;border:1px solid rgba(8,12,10,.45)}
-#supply{display:flex;gap:14px;justify-content:center;align-items:center;color:var(--dim);font-size:12px}
-#supply .mcard{width:52px;height:72px}
-#headlineflash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-  background:rgba(8,12,10,.55);z-index:60;opacity:0;pointer-events:none;transition:opacity .25s}
-#headlineflash.show{opacity:1}
-#hcard{background:var(--panel);border:2px solid var(--gold);border-radius:16px;padding:22px 26px;
-  max-width:300px;text-align:center;transform:scale(.9);transition:transform .25s}
-#headlineflash.show #hcard{transform:scale(1)}
-#hcard .hn{font-size:22px;color:var(--gold);margin-bottom:8px}
-#hcard .hd{color:var(--bone);font-size:15px;line-height:1.4}
+.mcard.canbuy{box-shadow:0 2px 0 rgba(8,10,8,.55), 0 0 0 2px var(--gold), 0 6px 16px rgba(232,197,122,.3);
+  transform:translateY(-5px)}
+.mcard svg.art{width:44px;height:44px;margin-top:1px}
+.mcard .mname{font-size:11px;margin-top:auto;letter-spacing:.2px}
+.mcard .pips{display:flex;gap:2px;justify-content:center;margin-top:3px;min-height:12px}
+.mcard .pips svg{width:11px;height:11px}
+.mcard .pips svg.miss{opacity:.28}
+#supply{display:flex;gap:16px;justify-content:center;align-items:center;color:var(--dim);font-size:13px}
+#supply .counts{display:flex;flex-direction:column;gap:1px;text-align:left}
+#supply .counts b{color:var(--bone);font-weight:700}
+#resortcard.mcard{width:60px;height:86px}
+#resortcard svg.art{width:38px;height:38px}
 
-#mine{background:var(--felt-2);border:1.5px solid var(--line);border-radius:14px;
-  padding:9px 12px;transition:border-color .25s}
-#mine.turn{border-color:var(--gold)}
-#mytop{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--dim);flex-wrap:wrap}
-#mystacks{display:flex;gap:4px;margin:6px 0}
-#mystacks .sc{width:22px;height:28px;font-size:13px}
-#hand{display:flex;gap:8px;justify-content:center;margin-top:4px}
-.good{width:52px;height:60px;border-radius:10px;border:1.5px solid rgba(8,12,10,.5);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  color:var(--ink);cursor:pointer;transition:transform .12s;position:relative}
+#headlineflash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,12,10,.58);z-index:60;opacity:0;pointer-events:none;transition:opacity .25s}
+#headlineflash.show{opacity:1;pointer-events:auto}
+#hcard{background:linear-gradient(170deg,var(--bone),var(--bone-2));color:var(--ink);
+  border-radius:14px;padding:20px 24px 22px;max-width:300px;text-align:center;
+  border:1px solid rgba(28,26,20,.5);
+  box-shadow:0 0 0 3px var(--gold), 0 18px 44px rgba(8,10,8,.6);
+  transform:scale(.9) rotate(-1.5deg);transition:transform .25s}
+#headlineflash.show #hcard{transform:scale(1) rotate(-1.5deg)}
+#hcard .hrule{width:56px;height:2px;background:var(--ink);margin:0 auto 10px;opacity:.65}
+#hcard .hn{font-size:24px;margin-bottom:6px}
+#hcard .hd{font-size:15px;line-height:1.45;color:#3A362B}
+
+#mine{background:linear-gradient(180deg,var(--panel),var(--felt-2));
+  border:1.5px solid var(--line);border-radius:16px;
+  padding:10px 12px;transition:border-color .25s,box-shadow .25s}
+#mine.turn{border-color:var(--gold);box-shadow:0 0 18px rgba(232,197,122,.18)}
+#mytop{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dim);flex-wrap:wrap}
+#mystacks{display:flex;gap:9px;margin:8px 0 2px;min-height:34px}
+#mystacks .stackcell{width:30px;height:34px}
+#mystacks .stackcell svg{width:30px;height:30px}
+#hand{display:flex;gap:9px;justify-content:center;margin-top:6px}
+.good{width:56px;height:68px;border-radius:9px;cursor:pointer;position:relative;
+  background:linear-gradient(170deg,var(--bone) 0%,var(--bone-2) 100%);
+  border:1px solid rgba(28,26,20,.5);
+  box-shadow:0 2px 0 rgba(8,10,8,.5), 0 4px 10px rgba(8,10,8,.35);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  padding-top:7px;color:var(--ink);transition:transform .12s}
 .good:active{transform:scale(.93)}
-.good .gn{font-size:9px;letter-spacing:.4px;opacity:.75}
-.good .gc{font-size:21px;font-weight:700}
-.good.zero{opacity:.3}
-#actions{display:flex;gap:8px;margin-top:9px}
-#actions button{flex:1;padding:11px 0;font-size:15px}
+.good svg{width:30px;height:30px}
+.good .gn{font-size:10px;margin-top:2px;color:#4A4536}
+.good .gc{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;border-radius:11px;
+  background:var(--ink);color:var(--bone);font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;padding:0 5px;
+  border:1.5px solid var(--bone)}
+.good.zero{opacity:.32;filter:saturate(.4)}
+.good.zero .gc{display:none}
+#actions{display:flex;gap:8px;margin-top:11px}
+#actions button{flex:1;padding:12px 0;font-size:15px;border-radius:11px}
 
 /* ---- sheet ---- */
 #sheetwrap{position:fixed;inset:0;background:rgba(8,12,10,.5);z-index:70;display:flex;
@@ -113,22 +139,27 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
   width:100%;padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);
   transform:translateY(30px);transition:transform .2s;max-height:78vh;overflow-y:auto}
 #sheetwrap.show #sheet{transform:none}
-#sheet h3{margin:0 0 4px;font-size:20px}
-#sheet .sub{color:var(--dim);font-size:13px;margin-bottom:12px}
+#sheet h3{margin:0 0 4px;font-size:22px;display:flex;align-items:center;gap:10px}
+#sheet h3 svg{width:30px;height:30px}
+#sheet .sub{color:var(--dim);font-size:14px;margin-bottom:12px;line-height:1.4}
 .opt{display:flex;flex-direction:column;background:var(--felt-2);border:1px solid var(--line);
-  border-radius:12px;padding:12px 14px;margin-bottom:9px;cursor:pointer}
+  border-radius:12px;padding:13px 15px;margin-bottom:9px;cursor:pointer}
 .opt.off{opacity:.42;pointer-events:none}
 .opt .ol{font-size:16px}
-.opt .oh{font-size:12px;color:var(--dim);margin-top:2px}
-.costrow{display:flex;gap:5px;align-items:center;margin-top:6px}
-.costpip{width:14px;height:14px;border-radius:50%;border:1px solid rgba(8,12,10,.5)}
-.costpip.miss{opacity:.3;border-style:dashed}
+.opt .oh{font-size:13px;color:var(--dim);margin-top:3px}
+.costrow{display:flex;gap:4px;align-items:center;margin:2px 0 12px}
+.costrow svg{width:19px;height:19px}
+.costrow svg.miss{opacity:.3}
 .tradegrid{display:flex;gap:8px;justify-content:center;margin:8px 0}
-.tg{width:44px;height:52px;border-radius:9px;border:1.5px solid rgba(8,12,10,.5);color:var(--ink);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
-.tg .gc{font-weight:700;font-size:17px}
+.tg{width:48px;height:58px;border-radius:9px;cursor:pointer;position:relative;
+  background:linear-gradient(170deg,var(--bone),var(--bone-2));
+  border:1px solid rgba(28,26,20,.5);color:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.tg svg{width:24px;height:24px}
+.tg .gc{font-weight:700;font-size:13px}
 .tg.dis{opacity:.3;pointer-events:none}
-.tlabel{color:var(--dim);font-size:13px;margin:6px 0 2px}
+.whobtn{padding:8px 14px}
+.tlabel{color:var(--dim);font-size:13px;margin:8px 0 2px}
 
 #banner{position:fixed;top:calc(env(safe-area-inset-top) + 14px);left:50%;
   transform:translate(-50%,-10px);background:var(--panel);border:1px solid var(--line);
@@ -136,20 +167,34 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
   z-index:80;pointer-events:none;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
 #banner.show{opacity:1;transform:translate(-50%,0)}
 
-#over{position:fixed;inset:0;background:rgba(8,12,10,.72);z-index:90;display:flex;
+#over{position:fixed;inset:0;background:rgba(8,12,10,.78);z-index:90;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
 #over h2{font-size:32px;margin:0}
 #oversub{color:var(--dim)}
 .confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:95;pointer-events:none;
   animation:confall linear forwards}
 @keyframes confall{to{transform:translateY(105vh) rotate(560deg);opacity:.5}}
-.drawfly{position:fixed;z-index:65;width:30px;height:40px;border-radius:7px;pointer-events:none;
-  border:1.5px solid rgba(8,12,10,.4)}
+@media (prefers-reduced-motion: reduce){
+  .confetti{display:none}
+  .mcard,.good,#hcard,#sheet,#banner{transition:none}
+}
 </style>
 </head>
 <body>
 
 <div id="menu" class="screen">
+  <svg id="menuart" viewBox="0 0 300 120" fill="none" stroke="#1C1A14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="246" cy="30" r="14" fill="#E8C57A"/>
+    <path d="M0 86C40 60 70 40 96 44c20 3 28 20 46 24" fill="#3B8B82" stroke="none" opacity=".9"/>
+    <path d="M0 86C40 60 70 40 96 44c20 3 28 20 46 24" />
+    <path d="M62 54l10-9 10 9" fill="none"/>
+    <rect x="64.5" y="53" width="15" height="11" fill="#D98059"/>
+    <path d="M300 92c-44-22-76-40-104-38-24 2-34 22-54 28" fill="#6B8F4E" stroke="none" opacity=".9"/>
+    <path d="M300 92c-44-22-76-40-104-38-24 2-34 22-54 28"/>
+    <path d="M208 62V40" stroke-width="2.4"/><path d="M208 40h16l-4.5 5 4.5 5h-16" fill="#E26A4B"/>
+    <path d="M0 96c25-8 50-8 75 0s50 8 75 0 50-8 75 0 50 8 75 0" stroke="#3B8B82" stroke-width="2.6"/>
+    <path d="M0 108c25-8 50-8 75 0s50 8 75 0 50-8 75 0 50 8 75 0" stroke="#2C6B63" stroke-width="2.2" opacity=".7"/>
+  </svg>
   <h1>Headlands</h1>
   <p class="tag">Rival towns on one coast. First to seven.</p>
   <div class="col">
@@ -180,13 +225,13 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
     <div id="market"></div>
     <div id="supply">
       <div class="mcard" id="resortcard">
-        <span class="glyph">✴</span><span class="mname">Resort</span>
+        <span id="resortart"></span><span class="mname">Resort</span>
         <span class="pips" id="resortpips"></span>
       </div>
-      <div>
-        <div>Goods <b id="goodsn"></b></div>
-        <div>Builds <b id="deckn"></b></div>
-        <div>Headlines <b id="eventsn"></b></div>
+      <div class="counts">
+        <div><b id="goodsn"></b> goods left</div>
+        <div><b id="deckn"></b> builds left</div>
+        <div><b id="eventsn"></b> headlines</div>
       </div>
     </div>
   </div>
@@ -201,7 +246,7 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
   </div>
 </div>
 
-<div id="headlineflash"><div id="hcard"><div class="hn"></div><div class="hd"></div></div></div>
+<div id="headlineflash"><div id="hcard"><div class="hrule"></div><div class="hn"></div><div class="hd"></div></div></div>
 
 <div id="sheetwrap"><div id="sheet"></div></div>
 <div id="banner"></div>
@@ -213,12 +258,12 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
   <button id="menubtn">Menu</button>
 </div>
 
-<script src="../shared/config.js?v=0.1.0"></script>
-<script src="../shared/tablekit.js?v=0.1.0"></script>
-<script src="../shared/headlands-rules.js?v=0.1.0"></script>
+<script src="../shared/config.js?v=0.2.0"></script>
+<script src="../shared/tablekit.js?v=0.2.0"></script>
+<script src="../shared/headlands-rules.js?v=0.2.0"></script>
 <script>
 'use strict';
-var VERSION = '0.1.0';
+var VERSION = '0.2.0';
 TableKit.watchErrors({ game: 'headlands', version: VERSION, onError: function (m) { banner(m); } });
 
 function $(id) { return document.getElementById(id); }
@@ -287,10 +332,64 @@ var MODE = 'off';     // 'off' | 'bot' | 'host' | 'client'
 var ENGINE = null;
 var TX = null, HOSTING = false, CODE = '', ROSTER = null, ROSTER_NAMES = [];
 
-var GLYPH = { track: '≈', shack: '⌂', town: '▣', ranger: '⚑', resort: '✴' };
 var H = Headlands;
 
-function goodHex(g) { return H.GOOD_META[g].hex; }
+/* ---- the art: every good and build drawn once, used everywhere ---- */
+var CSSC = { clay:'#C96F4A', timber:'#6B8F4E', wool:'#EFE9D8', cane:'#E3B95E', stone:'#8B95A3' };
+function goodHex(g) { return CSSC[g] || H.GOOD_META[g].hex; }
+function svgWrap(inner, vb) {
+  return '<svg class="art" viewBox="' + (vb || '0 0 24 24') + '" fill="none" ' +
+    'stroke="#1C1A14" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+}
+var ART = {
+  clay: svgWrap('<ellipse cx="12" cy="16" rx="8" ry="4" fill="#C96F4A"/>' +
+    '<path d="M4 16c0-2 3.6-6 8-6s8 4 8 6" fill="#D98059"/>' +
+    '<path d="M8 13.5l2 1.8M13 12.8l2.2 2M10.5 17.5h3"/>'),
+  timber: svgWrap('<rect x="3" y="10" width="15" height="7" rx="3.5" fill="#8F6B42"/>' +
+    '<ellipse cx="18.5" cy="13.5" rx="2.6" ry="3.5" fill="#C9A26B"/>' +
+    '<ellipse cx="18.5" cy="13.5" rx="1.1" ry="1.6" fill="none"/>' +
+    '<path d="M6 12.5c2 .8 4-.8 6 0" stroke="#5E4428" stroke-width="1"/>' +
+    '<path d="M4 8l3-3M8.5 7l2-2" stroke="#6B8F4E"/>'),
+  wool: svgWrap('<path d="M6 9a3.2 3.2 0 0 1 3-4 3.4 3.4 0 0 1 6 .4A3.2 3.2 0 0 1 18 9a3.4 3.4 0 0 1-.6 6.2A3.3 3.3 0 0 1 12 17a3.3 3.3 0 0 1-5.4-1.8A3.4 3.4 0 0 1 6 9Z" fill="#F5F0E1"/>' +
+    '<circle cx="9.5" cy="10.5" r=".7" fill="#1C1A14" stroke="none"/><circle cx="14.5" cy="10.5" r=".7" fill="#1C1A14" stroke="none"/>' +
+    '<path d="M10.5 13.2c1 .8 2 .8 3 0"/><path d="M8 17.5v2.4M16 17.5v2.4"/>'),
+  cane: svgWrap('<path d="M7 20V7M12 20V5M17 20V8" stroke="#B98F3E" stroke-width="2.2"/>' +
+    '<path d="M7 11h.01M12 9h.01M17 12h.01" stroke="#8A6A2C" stroke-width="2.6"/>' +
+    '<path d="M7 7C5.5 5.5 5.8 4 7 2.8M12 5c-1.2-1.4-.8-2.6.4-3.4M12 5c1.4-1 2.8-.6 3.4.6M17 8c1.4-1.2 2.6-.9 3.2.3" stroke="#6B8F4E"/>'),
+  stone: svgWrap('<path d="M5 18l2-5 4 1 1.5-4.5L17 11l2 7Z" fill="#9AA4B0"/>' +
+    '<path d="M3.5 18h17" stroke-width="1.8"/>' +
+    '<path d="M8.5 13.8l-.8 4.2M13 10.2l1.4 2.2" stroke="#6E7884" stroke-width="1"/>'),
+  track: svgWrap('<path d="M4 20c6-1 3-7 8-8s3-7 8-8" stroke="#C9A26B" stroke-width="4.6"/>' +
+    '<path d="M4 20c6-1 3-7 8-8s3-7 8-8" stroke="#1C1A14" stroke-width="1" stroke-dasharray="2.4 2.6"/>'),
+  shack: svgWrap('<path d="M5 12l7-6 7 6" fill="none"/>' +
+    '<path d="M6.5 11v8h11v-8" fill="#D98059"/>' +
+    '<path d="M4.2 12.4L12 5.8l7.8 6.6" stroke-width="1.8"/>' +
+    '<rect x="10.3" y="14" width="3.4" height="5" fill="#8F6B42"/>' +
+    '<path d="M7.5 19h9" stroke-width="1.8"/>'),
+  town: svgWrap('<path d="M3.5 19v-6l3.5-3 3.5 3v6" fill="#3B8B82"/>' +
+    '<path d="M10.5 19V8l4-3.4L18.5 8v11" fill="#D98059"/>' +
+    '<path d="M2.5 19h19" stroke-width="1.8"/>' +
+    '<rect x="5.6" y="15" width="2.6" height="4" fill="#8F6B42"/>' +
+    '<rect x="13" y="10" width="2.8" height="2.6" fill="#F2EEE2"/>' +
+    '<path d="M14.5 4.6V2.6M14.5 2.6h2.6l-.8 1-.8-.4" fill="#E8C57A"/>'),
+  ranger: svgWrap('<path d="M6 20V5" stroke-width="2"/>' +
+    '<path d="M6 5h9l-2.4 2.8L15 10.5H6" fill="#E26A4B"/>' +
+    '<path d="M4 20h10" stroke-width="1.8"/>' +
+    '<circle cx="17.5" cy="15.5" r="2.8" fill="#E8C57A"/>' +
+    '<path d="M17.5 11.4v-1M17.5 20.6v-1M21.6 15.5h-1M14.4 15.5h-1" stroke="#B98F3E"/>'),
+  resort: svgWrap('<circle cx="17" cy="6" r="2.6" fill="#E8C57A"/>' +
+    '<path d="M3 11a7.5 7.5 0 0 1 13 0Z" fill="#E26A4B"/>' +
+    '<path d="M6.2 11a5 5 0 0 1 6.6 0M9.5 11V19" />' +
+    '<path d="M2.5 20c2-1.4 4-1.4 6 0s4 1.4 6 0 4-1.4 6 0" stroke="#3B8B82" stroke-width="1.8"/>')
+};
+function art(kind, px) {
+  var svg = ART[kind] || '';
+  if (px) svg = svg.replace('class="art"', 'class="art" style="width:' + px + 'px;height:' + px + 'px"');
+  return svg;
+}
+function goodPip(g, miss) {
+  return (ART[g] || '').replace('class="art"', 'class="' + (miss ? 'miss' : '') + '"');
+}
 
 function publicView(g, names) {
   return {
@@ -318,14 +417,20 @@ function costPips(cost, have) {
   Object.keys(cost).forEach(function (g) {
     for (var i = 0; i < cost[g]; i++) {
       var ok = have ? (have[g] || 0) > i : true;
-      html += '<span class="costpip' + (ok ? '' : ' miss') + '" style="background:' + goodHex(g) + '"></span>';
+      html += goodPip(g, !ok);
     }
   });
   return html;
 }
 
-function stackChip(st, big) {
-  return '<span class="sc ' + st.top + '" title="' + st.top + '">' + GLYPH[st.top] + '</span>';
+/* a stack drawn as what it is: on my board the covered build peeks out from
+   under the top; foe chips are too small for the peek and show the top alone */
+function stackCell(st, mine) {
+  var html = '<span class="stackcell">';
+  if (mine && st.top === 'town') html += '<span style="position:absolute;left:-4px;top:-5px;opacity:.5">' + art('shack') + '</span>';
+  if (mine && st.top === 'resort') html += '<span style="position:absolute;left:-4px;top:-5px;opacity:.5">' + art('town') + '</span>';
+  html += art(st.top) + '</span>';
+  return html;
 }
 
 function renderAll() {
@@ -338,11 +443,12 @@ function renderAll() {
     d.className = 'foe' + (V.turn === s && !V.over ? ' turn' : '');
     d.dataset.seat = s;
     d.innerHTML = '<div class="nm">' + esc(p.name) + ' <span class="vpbadge">' + p.vp + '</span></div>' +
-      '<div class="row"><span>✋' + p.handN + '</span><span>' + GLYPH.track + p.tracks + '</span>' +
-      '<span>' + GLYPH.ranger + p.rangers + '</span>' +
-      (V.highway === s ? '<span class="tok">HIGHWAY</span>' : '') +
-      (V.watch === s ? '<span class="tok">WATCH</span>' : '') + '</div>' +
-      '<div class="stackchips">' + p.stacks.map(stackChip).join('') + '</div>';
+      '<div class="row"><span>' + p.handN + ' cards</span>' +
+      '<span>' + art('track', 13) + ' ' + p.tracks + '</span>' +
+      '<span>' + art('ranger', 13) + ' ' + p.rangers + '</span>' +
+      (V.highway === s ? '<span class="tok">Highway</span>' : '') +
+      (V.watch === s ? '<span class="tok">Watch</span>' : '') + '</div>' +
+      '<div class="stackrow">' + p.stacks.map(function (st) { return stackCell(st, false); }).join('') + '</div>';
     foes.appendChild(d);
   });
 
@@ -353,13 +459,13 @@ function renderAll() {
     myTurn ? 'Your turn — build from the market, trade, or end.' :
     V.players[V.turn].name + ' is building.';
 
-  $('mytop').innerHTML = '<b style="color:var(--bone)">' + esc(me.name) + '</b>' +
-    '<span class="vpbadge">' + me.vp + ' / ' + H.WIN_VP + '</span>' +
-    '<span>' + GLYPH.track + ' ' + me.tracks + ' · swaps ' + ratioOf(me.tracks) + ':1</span>' +
-    '<span>' + GLYPH.ranger + ' ' + me.rangers + '</span>' +
-    (V.highway === MYSEAT ? '<span class="tok">HIGHWAY</span>' : '') +
-    (V.watch === MYSEAT ? '<span class="tok">WATCH</span>' : '');
-  $('mystacks').innerHTML = me.stacks.map(stackChip).join('');
+  $('mytop').innerHTML = '<b style="color:var(--bone);font-size:15px">' + esc(me.name) + '</b>' +
+    '<span class="vpbadge">' + me.vp + ' of ' + H.WIN_VP + '</span>' +
+    '<span>' + art('track', 14) + ' ' + me.tracks + ' — swaps ' + ratioOf(me.tracks) + ' for 1</span>' +
+    '<span>' + art('ranger', 14) + ' ' + me.rangers + '</span>' +
+    (V.highway === MYSEAT ? '<span class="tok">Highway</span>' : '') +
+    (V.watch === MYSEAT ? '<span class="tok">Watch</span>' : '');
+  $('mystacks').innerHTML = me.stacks.map(function (st) { return stackCell(st, true); }).join('');
 
   var have = heldOf(MYHAND);
   var hand = $('hand');
@@ -367,8 +473,8 @@ function renderAll() {
   H.GOODS.forEach(function (g) {
     var d = document.createElement('div');
     d.className = 'good' + (have[g] ? '' : ' zero');
-    d.style.background = goodHex(g);
-    d.innerHTML = '<span class="gc">' + have[g] + '</span><span class="gn">' + H.GOOD_META[g].n.toUpperCase() + '</span>';
+    d.innerHTML = art(g) + '<span class="gn">' + H.GOOD_META[g].n + '</span>' +
+      '<span class="gc">' + have[g] + '</span>';
     hand.appendChild(d);
   });
 
@@ -379,13 +485,13 @@ function renderAll() {
     var can = myTurn && !!payCheck(b.cost, kind);
     var d = document.createElement('div');
     d.className = 'mcard' + (can ? ' canbuy' : '');
-    d.innerHTML = '<span class="glyph">' + GLYPH[kind] + '</span>' +
-      '<span class="mname">' + b.n + '</span>' +
+    d.innerHTML = art(kind) + '<span class="mname">' + b.n + '</span>' +
       '<span class="pips">' + costPips(b.cost, have) + '</span>';
     d.onclick = function () { sfx('tap'); openBuildSheet(kind, i); };
     mk.appendChild(d);
   });
 
+  if (!$('resortart').innerHTML) $('resortart').innerHTML = art('resort');
   $('resortpips').innerHTML = costPips(H.RESORT.cost, have);
   $('resortcard').style.opacity = V.resorts > 0 ? 1 : 0.3;
   $('resortcard').classList.toggle('canbuy',
@@ -450,7 +556,8 @@ function openBuildSheet(kind, slot) {
     !pc ? 'You can’t cover the cost' + (V.subUsed ? ' (swap already used this turn).' : '.') : '';
   var subNote = pc && pc.sub ?
     'Swaps ' + pc.sub.k + ' ' + H.GOOD_META[pc.sub.from].n + ' for the ' + H.GOOD_META[pc.sub.forGood].n + '.' : '';
-  var html = '<h3>' + b.n + '</h3><div class="sub">' + esc(b.d) + '</div>' +
+  var html = '<h3>' + art(kind === 'resort' ? 'resort' : kind) + ' ' + b.n + '</h3>' +
+    '<div class="sub">' + esc(b.d) + '</div>' +
     '<div class="costrow">' + costPips(b.cost, have) + '</div>' +
     '<div class="opt' + (why ? ' off' : '') + '" id="buildgo"><span class="ol">Build</span>' +
     '<span class="oh">' + esc(why || subNote || 'Paid exactly.') + '</span></div>';
@@ -520,8 +627,7 @@ function renderTradeGrids() {
       var d = document.createElement('div');
       var dis = limitFn(g) || (other[g] || 0) > 0;
       d.className = 'tg' + (dis ? ' dis' : '');
-      d.style.background = goodHex(g);
-      d.innerHTML = '<span class="gc">' + (counts[g] || 0) + '</span>';
+      d.innerHTML = art(g, 24) + '<span class="gc">' + (counts[g] || 0) + '</span>';
       d.onclick = function () {
         sfx('tap');
         var list = host === 'giveg' ? TRADE.give : TRADE.want;
