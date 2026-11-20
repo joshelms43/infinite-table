@@ -1,5 +1,20 @@
 # Headlands — Changelog
 
+## v0.5.0 — 2026-11-20
+The table comes to life.
+- Every player's position is now drawn as a living stretch of coast:
+  Shacks sit on the headland with smoke wisping from the chimneys,
+  Towns rise over them, Resorts take the waterfront with a swaying
+  umbrella, Rangers plant flags on the point, and the Track winds
+  further along the shore with every one laid. Foe panels are little
+  dioramas; your own board is the wide one.
+- A sky behind the felt: layered headland silhouettes, rolling wave
+  bands, faint drifting clouds — and the sun climbs as the leading
+  score rises, with dusk gathering as anyone closes on seven, so the
+  endgame plays out in golden hour.
+- Idle life throughout: chimney smoke, umbrella sway, a glint moving
+  on the water. All CSS loops, all stilled under reduced-motion.
+
 ## v0.4.0 — 2026-11-20
 Trades are an auction now, not a race.
 - The offer still goes to the whole table, but nobody wins by answering

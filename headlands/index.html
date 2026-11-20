@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Headlands — Infinite Table. Version: 0.4.0
+<!-- Headlands — Infinite Table. Version: 0.5.0
      Rival towns on one coast. Draw goods, work the market row, chain Tracks
      for cheaper swaps, raise Shacks (every one makes a Headline), stack Towns
      and Resorts, claim the Highway and the Watch. First to 7 showing wins.
@@ -174,13 +174,65 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
 .confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:95;pointer-events:none;
   animation:confall linear forwards}
 @keyframes confall{to{transform:translateY(105vh) rotate(560deg);opacity:.5}}
+/* ---- the sky behind the table ---- */
+#sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+#sky .sun{position:absolute;left:9%;top:calc(58% - var(--sunp,0) * 38%);
+  width:46px;height:46px;border-radius:50%;
+  background:radial-gradient(circle at 42% 38%, #F0D08A 0%, #D9A03F 70%, rgba(217,160,63,0) 72%);
+  opacity:calc(.25 + var(--sunp,0) * .45);transition:top 1.2s ease,opacity 1.2s ease}
+#sky .dusk{position:absolute;inset:0;
+  background:linear-gradient(180deg, rgba(226,106,75,0) 30%, rgba(226,106,75,.22) 100%);
+  opacity:var(--duskp,0);transition:opacity 1.2s ease}
+#sky svg{position:absolute;left:0;bottom:0;width:100%;height:46%}
+#sky .cloud{position:absolute;width:120px;height:26px;opacity:.05;
+  background:radial-gradient(ellipse at 30% 60%, var(--bone) 0%, transparent 70%),
+    radial-gradient(ellipse at 65% 40%, var(--bone) 0%, transparent 70%);
+  animation:clouddrift 110s linear infinite}
+#sky .cloud.c2{top:14%;animation-duration:150s;animation-delay:-70s;width:170px;opacity:.04}
+#sky .cloud.c1{top:7%}
+@keyframes clouddrift{from{left:-20%}to{left:110%}}
+.waveband{animation:waveroll 7s linear infinite}
+@keyframes waveroll{from{transform:translateX(0)}to{transform:translateX(-48px)}}
+#game,.screen,#headlineflash,#sheetwrap,#banner,#over{z-index:1}
+.screen{z-index:2}
+
+/* ---- idle life on the coastlines ---- */
+.smoke{animation:smokeup 3.4s ease-out infinite}
+@keyframes smokeup{0%{transform:translateY(0);opacity:0}25%{opacity:.4}
+  100%{transform:translateY(-9px);opacity:0}}
+.sway{animation:sway 5s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes sway{0%,100%{transform:rotate(-3.5deg)}50%{transform:rotate(3.5deg)}}
+.glint{animation:glint 6s ease-in-out infinite}
+@keyframes glint{0%,78%,100%{opacity:0}86%{opacity:.6}}
+
+/* ---- the living coastline boards ---- */
+.coast{display:block;width:100%;height:auto;margin-top:6px;
+  filter:drop-shadow(0 2px 3px rgba(8,10,8,.45))}
+.foe .coast{width:132px}
+#mycoast .coast{width:min(100%, 360px);margin:4px auto 0}
+
 @media (prefers-reduced-motion: reduce){
   .confetti{display:none}
-  .mcard,.good,#hcard,#sheet,#banner{transition:none}
+  .mcard,.good,#hcard,#sheet,#banner,#sky .sun,#sky .dusk{transition:none}
+  .smoke,.sway,.glint,.waveband,#sky .cloud{animation:none}
 }
 </style>
 </head>
 <body>
+
+<div id="sky" aria-hidden="true">
+  <div class="cloud c1"></div><div class="cloud c2"></div>
+  <span class="sun"></span>
+  <svg viewBox="0 0 400 120" preserveAspectRatio="xMidYMax slice" fill="none">
+    <path d="M0 78C56 46 108 30 150 36c34 5 52 26 82 32 44 9 102-18 168-8v60H0Z" fill="#132019"/>
+    <path d="M0 96C70 72 150 60 226 70c66 9 120 2 174 14v36H0Z" fill="#0E1813"/>
+    <g class="waveband" stroke="#2C6B63" stroke-width="2" stroke-linecap="round" opacity=".5">
+      <path d="M-48 104c8-5 16-5 24 0s16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0"/>
+      <path d="M-48 114c8-5 16-5 24 0s16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0 16-5 24 0 16 5 24 0" opacity=".6"/>
+    </g>
+  </svg>
+  <div class="dusk"></div>
+</div>
 
 <div id="menu" class="screen">
   <svg id="menuart" viewBox="0 0 300 120" fill="none" stroke="#1C1A14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -258,12 +310,12 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
   <button id="menubtn">Menu</button>
 </div>
 
-<script src="../shared/config.js?v=0.4.0"></script>
-<script src="../shared/tablekit.js?v=0.4.0"></script>
-<script src="../shared/headlands-rules.js?v=0.4.0"></script>
+<script src="../shared/config.js?v=0.5.0"></script>
+<script src="../shared/tablekit.js?v=0.5.0"></script>
+<script src="../shared/headlands-rules.js?v=0.5.0"></script>
 <script>
 'use strict';
-var VERSION = '0.4.0';
+var VERSION = '0.5.0';
 TableKit.watchErrors({ game: 'headlands', version: VERSION, onError: function (m) { banner(m); } });
 
 function $(id) { return document.getElementById(id); }
@@ -423,14 +475,63 @@ function costPips(cost, have) {
   return html;
 }
 
-/* a stack drawn as what it is: on my board the covered build peeks out from
-   under the top; foe chips are too small for the peek and show the top alone */
-function stackCell(st, mine) {
-  var html = '<span class="stackcell">';
-  if (mine && st.top === 'town') html += '<span style="position:absolute;left:-4px;top:-5px;opacity:.5">' + art('shack') + '</span>';
-  if (mine && st.top === 'resort') html += '<span style="position:absolute;left:-4px;top:-5px;opacity:.5">' + art('town') + '</span>';
-  html += art(st.top) + '</span>';
-  return html;
+/* ---- the living coastline: a player's whole position drawn as a little
+   stretch of coast. Shacks sit on the headland, Towns rise over them,
+   Resorts take the waterfront, Rangers plant flags on the point, and the
+   Track winds further along the shore with every one laid. ---- */
+function coastScene(p, seat) {
+  var W = 164, Hh = 46;
+  var out = '<svg class="coast" viewBox="0 0 ' + W + ' ' + Hh + '" fill="none" ' +
+    'stroke="#1C1A14" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">';
+  /* the headland, sloping into water on the right */
+  out += '<path d="M0 37C18 32 44 29 72 30c26 1 40 5 52 9l-2 9H0Z" fill="#23402F" stroke="none"/>' +
+    '<path d="M0 37C18 32 44 29 72 30c26 1 40 5 52 9" stroke="#2E5038" stroke-width="1.6"/>' +
+    '<path d="M124 39c6 2 10 3 14 3" stroke="#2E5038"/>' +
+    '<path d="M122 42c8-3 14-3 20 0s12 3 18 0" stroke="#3B8B82" stroke-width="1.6"/>' +
+    '<ellipse class="glint" cx="146" cy="40.5" rx="5" ry="1" fill="#7FD0C6" stroke="none"' +
+    ' style="animation-delay:' + ((seat * 1.7) % 5) + 's"/>';
+  /* the track winds along the shore — longer with every one laid */
+  var tlen = Math.min(p.tracks, 6) / 6;
+  if (p.tracks > 0) {
+    out += '<path d="M4 36C22 32 48 29.5 72 30.5c22 1 36 4 48 7.5" stroke="#C9A26B" stroke-width="2.6" ' +
+      'pathLength="100" stroke-dasharray="' + Math.round(8 + tlen * 92) + ' 100"/>';
+  }
+  /* buildings along the slots */
+  var slots = [12, 40, 68, 96, 120];
+  var extra = 0;
+  p.stacks.forEach(function (st, i) {
+    if (i >= slots.length) { extra++; return; }
+    var x = slots[i];
+    var gy = 37 - (i < 3 ? (3 - i) : 0) * 1.4;      /* follow the hill */
+    if (st.top === 'shack') {
+      out += '<g><path d="M' + (x - 6) + ' ' + (gy - 4) + 'l6-5 6 5" fill="none"/>' +
+        '<path d="M' + (x - 5) + ' ' + (gy - 4.4) + 'v4.4h10v-4.4" fill="#D98059"/>' +
+        '<path d="M' + (x - 7) + ' ' + (gy - 3.6) + 'L' + x + ' ' + (gy - 9.6) + 'l7 6" stroke-width="1.5"/>' +
+        '<circle class="smoke" cx="' + (x + 3.4) + '" cy="' + (gy - 10.6) + '" r="1.5" fill="#B9B2A0" stroke="none"' +
+        ' style="animation-delay:' + ((i * 1.3 + seat) % 3.2) + 's"/></g>';
+    } else if (st.top === 'town') {
+      out += '<path d="M' + (x - 8) + ' ' + gy + 'v-6l3.4-3 3.4 3v6" fill="#3B8B82"/>' +
+        '<path d="M' + (x - 1) + ' ' + gy + 'v-9.6l4-3.4 4 3.4V' + gy + '" fill="#D98059"/>' +
+        '<rect x="' + (x + 1.6) + '" y="' + (gy - 7.6) + '" width="2.8" height="2.4" fill="#F2EEE2"/>' +
+        '<circle class="smoke" cx="' + (x + 3) + '" cy="' + (gy - 14) + '" r="1.5" fill="#B9B2A0" stroke="none"' +
+        ' style="animation-delay:' + ((i * 1.9 + seat) % 3.4) + 's"/>';
+    } else {
+      out += '<g class="sway" style="animation-delay:' + ((i * 2.1 + seat) % 5) + 's">' +
+        '<path d="M' + x + ' ' + (gy - 1) + 'V' + (gy - 9) + '"/>' +
+        '<path d="M' + (x - 6) + ' ' + (gy - 8) + 'a6.4 6.4 0 0 1 12 0Z" fill="#E26A4B"/></g>' +
+        '<path d="M' + (x - 7) + ' ' + gy + 'h14" stroke-width="1.5"/>' +
+        '<rect x="' + (x + 4) + '" y="' + (gy - 4.6) + '" width="5" height="4.6" rx="1" fill="#F2EEE2"/>';
+    }
+  });
+  if (extra > 0) out += '<text x="138" y="33" font-size="8" fill="#F2EEE2" stroke="none" font-family="Georgia">+' + extra + '</text>';
+  /* rangers hold the point */
+  for (var r = 0; r < Math.min(p.rangers, 3); r++) {
+    var rx = 136 + r * 9;
+    out += '<path d="M' + rx + ' 40V31.6" stroke-width="1.4"/>' +
+      '<path d="M' + rx + ' 31.6h5.4l-1.6 1.8 1.6 1.8h-5.4" fill="#E26A4B"/>';
+  }
+  if (p.rangers > 3) out += '<text x="160" y="38" font-size="7" fill="#F2EEE2" stroke="none" font-family="Georgia" text-anchor="end">+' + (p.rangers - 3) + '</text>';
+  return out + '</svg>';
 }
 
 function renderAll() {
@@ -448,7 +549,7 @@ function renderAll() {
       '<span>' + art('ranger', 13) + ' ' + p.rangers + '</span>' +
       (V.highway === s ? '<span class="tok">Highway</span>' : '') +
       (V.watch === s ? '<span class="tok">Watch</span>' : '') + '</div>' +
-      '<div class="stackrow">' + p.stacks.map(function (st) { return stackCell(st, false); }).join('') + '</div>';
+      coastScene(p, s);
     foes.appendChild(d);
   });
 
@@ -465,7 +566,7 @@ function renderAll() {
     '<span>' + art('ranger', 14) + ' ' + me.rangers + '</span>' +
     (V.highway === MYSEAT ? '<span class="tok">Highway</span>' : '') +
     (V.watch === MYSEAT ? '<span class="tok">Watch</span>' : '');
-  $('mystacks').innerHTML = me.stacks.map(function (st) { return stackCell(st, true); }).join('');
+  $('mystacks').innerHTML = '<span id="mycoast">' + coastScene(me, MYSEAT) + '</span>';
 
   var have = heldOf(MYHAND);
   var hand = $('hand');
@@ -502,6 +603,16 @@ function renderAll() {
 
   $('tradebtn').classList.toggle('busy', !myTurn || V.tradeUsed || !!V.pendingTrade);
   $('endbtn').classList.toggle('busy', !myTurn);
+
+  /* the sun climbs with the leader; dusk gathers near seven */
+  var lead = 0;
+  V.players.forEach(function (pp) { lead = Math.max(lead, pp.vp); });
+  var prog = Math.min(1, lead / H.WIN_VP);
+  var sky = $('sky');
+  if (sky && sky.style && sky.style.setProperty) {
+    sky.style.setProperty('--sunp', prog.toFixed(3));
+    sky.style.setProperty('--duskp', (prog * prog * 0.85).toFixed(3));
+  }
 
   /* a healed or rejoined client reopens whichever trade sheet truth demands */
   var tr2 = V.pendingTrade;
