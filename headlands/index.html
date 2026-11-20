@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Headlands — Infinite Table. Version: 0.5.0
+<!-- Headlands — Infinite Table. Version: 0.6.0
      Rival towns on one coast. Draw goods, work the market row, chain Tracks
      for cheaper swaps, raise Shacks (every one makes a Headline), stack Towns
      and Resorts, claim the Highway and the Watch. First to 7 showing wins.
@@ -52,48 +52,82 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
 /* ---- the table ---- */
 #game{position:fixed;inset:0;display:flex;flex-direction:column;
   padding:calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px)}
-#foes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-.foe{background:linear-gradient(180deg,var(--panel),var(--felt-2));
-  border:1.5px solid var(--line);border-radius:14px;
-  padding:8px 11px;min-width:104px;transition:border-color .25s,box-shadow .25s}
-.foe.turn{border-color:var(--gold);box-shadow:0 0 14px rgba(232,197,122,.22)}
-.foe .nm{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;
-  display:flex;align-items:center;gap:6px}
-.foe .row{display:flex;gap:8px;align-items:center;margin-top:4px;font-size:12px;color:var(--dim)}
 .vpbadge{background:var(--gold);color:var(--ink);font-weight:700;border-radius:8px;
   padding:0 7px;font-size:13px;line-height:19px}
 .tok{font-size:11px;background:rgba(232,197,122,.14);border:1px solid var(--gold);
   color:var(--gold);border-radius:7px;padding:1px 6px}
-.stackrow{display:flex;gap:6px;margin-top:6px;min-height:26px}
-.stackcell{position:relative;width:22px;height:26px}
-.stackcell svg{position:absolute;left:0;width:22px;height:22px;filter:drop-shadow(0 1px 1px rgba(8,10,8,.5))}
 
-#mid{flex:1;display:flex;flex-direction:column;justify-content:center;gap:12px;min-height:0}
+/* ---- the world: one bay, edge to edge, fading into the table ---- */
+#worldwrap{position:relative;flex:1 1 0;min-height:120px;width:calc(100% + 20px);
+  margin:calc(-8px - env(safe-area-inset-top)) -10px 0;overflow:hidden;
+  -webkit-mask-image:linear-gradient(180deg,#000 93%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 93%,transparent 100%)}
+#worldwrap svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+#worldbg,#world,#worldfx{pointer-events:none}
+#world text,#worldfx text{font-family:Georgia,'Times New Roman',serif}
+#world [data-seat]{cursor:pointer;pointer-events:all}
+.cloud{animation:wclouds 130s linear infinite}
+@keyframes wclouds{from{transform:translateX(-70px)}to{transform:translateX(430px)}}
+.twinkle{animation:twinkle 3.6s ease-in-out infinite}
+@keyframes twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+.ripple{animation:ripple 8s ease-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes ripple{0%,70%{transform:scale(.2);opacity:0}76%{opacity:.7}100%{transform:scale(2.4);opacity:0}}
+.bob{animation:bob 3.2s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-2.5deg)}50%{transform:translateY(-1.2px) rotate(2.5deg)}}
+.blink{animation:blink 2.4s steps(1) infinite}
+@keyframes blink{0%,60%{opacity:.15}61%,100%{opacity:1}}
+.leap{animation:leap 11s linear infinite;stroke-dashoffset:26;opacity:0}
+@keyframes leap{0%,86%{stroke-dashoffset:26;opacity:0}87%{opacity:.9}99%{stroke-dashoffset:-100;opacity:.9}100%{opacity:0}}
+.flag{animation:flagwave 2.6s ease-in-out infinite;transform-box:fill-box;transform-origin:0 50%}
+@keyframes flagwave{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.82) skewY(4deg)}}
+.beam{opacity:.13;animation:beam 8s ease-in-out infinite;transform-origin:0 0}
+@keyframes beam{0%,100%{transform:rotate(-34deg)}50%{transform:rotate(34deg)}}
+.turnglow{opacity:.07;animation:turnglow 2.6s ease-in-out infinite}
+@keyframes turnglow{0%,100%{opacity:.04}50%{opacity:.11}}
+.popin{animation:popin .55s cubic-bezier(.3,1.6,.5,1);transform-box:fill-box;transform-origin:50% 100%}
+@keyframes popin{from{transform:scale(.1)}to{transform:scale(1)}}
+.fxsail{animation:fxsail 2.6s ease-in-out forwards}
+@keyframes fxsail{0%{transform:translate(0,0);opacity:0}9%{opacity:1}90%{opacity:1}
+  100%{transform:translate(var(--dx),var(--dy));opacity:0}}
+.fxbubble{animation:fxbubble 1.6s ease-out forwards}
+@keyframes fxbubble{0%{transform:translateY(4px);opacity:0}16%{opacity:1}70%{opacity:1}
+  100%{transform:translateY(-22px);opacity:0}}
+.fxpuff{animation:fxpuff .8s ease-out forwards;transform-box:fill-box;transform-origin:center}
+@keyframes fxpuff{from{transform:scale(.25);opacity:.85}to{transform:scale(2.3);opacity:0}}
+.fxring{animation:fxring 1.2s ease-out forwards;transform-box:fill-box;transform-origin:center}
+@keyframes fxring{from{transform:scale(.3);opacity:.9}to{transform:scale(3);opacity:0}}
+/* the whole bay answers a Headline */
+#worldwrap.tide .tidewash{animation:tidewash 3s ease-in-out}
+@keyframes tidewash{0%,100%{opacity:0;transform:translateY(0)}45%,60%{opacity:.5;transform:translateY(-20px)}}
+#worldwrap.tide #world{animation:tidelift 3s ease-in-out}
+@keyframes tidelift{0%,100%{transform:translateY(0)}45%,60%{transform:translateY(2px)}}
+#worldwrap.season .sunglow{animation:sunpulse 2.8s ease-in-out;transform-box:fill-box;transform-origin:center}
+@keyframes sunpulse{0%,100%{transform:scale(1);opacity:.16}40%{transform:scale(3.4);opacity:.5}}
+
+#mid{flex:0 0 auto;display:flex;flex-direction:column;justify-content:center;gap:11px;padding:10px 0 12px}
 #statusline{text-align:center;color:var(--dim);font-size:14px;min-height:18px;font-style:italic}
-#market{display:flex;gap:8px;justify-content:center;align-items:flex-end}
-.mcard{width:66px;height:96px;border-radius:9px;cursor:pointer;position:relative;
+#market{display:flex;gap:6px;justify-content:center;align-items:flex-end}
+.mcard{flex:1 1 0;min-width:0;max-width:62px;aspect-ratio:62/92;border-radius:9px;cursor:pointer;position:relative;
   background:linear-gradient(170deg,var(--bone) 0%,var(--bone-2) 100%);
   border:1px solid rgba(28,26,20,.55);
   box-shadow:0 2px 0 rgba(8,10,8,.55), 0 6px 14px rgba(8,10,8,.4);
-  display:flex;flex-direction:column;align-items:center;padding:6px 4px 5px;
+  display:flex;flex-direction:column;align-items:center;padding:5px 2px 4px;
   color:var(--ink);transition:transform .12s,box-shadow .2s}
 .mcard:active{transform:scale(.94)}
 .mcard.canbuy{box-shadow:0 2px 0 rgba(8,10,8,.55), 0 0 0 2px var(--gold), 0 6px 16px rgba(232,197,122,.3);
   transform:translateY(-5px)}
-.mcard svg.art{width:44px;height:44px;margin-top:1px}
-.mcard .mname{font-size:11px;margin-top:auto;letter-spacing:.2px}
-.mcard .pips{display:flex;gap:2px;justify-content:center;margin-top:3px;min-height:12px}
-.mcard .pips svg{width:11px;height:11px}
+.mcard.standing{margin-left:5px;background:linear-gradient(170deg,#F6EBCB 0%,#E9D9A8 100%)}
+.mcard.gone{opacity:.3}
+.mcard svg.art{width:62%;height:auto;aspect-ratio:1;margin-top:1px}
+.mcard .mname{font-size:10.5px;margin-top:auto;letter-spacing:.1px}
+.mcard .pips{display:flex;gap:1px;justify-content:center;margin-top:2px;min-height:8px;width:100%;padding:0 1px}
+.mcard .pips svg{flex:0 1 9px;min-width:0;width:9px;height:auto;aspect-ratio:1}
 .mcard .pips svg.miss{opacity:.28}
-#supply{display:flex;gap:16px;justify-content:center;align-items:center;color:var(--dim);font-size:13px}
-#supply .counts{display:flex;flex-direction:column;gap:1px;text-align:left}
-#supply .counts b{color:var(--bone);font-weight:700}
-#resortcard.mcard{width:60px;height:86px}
-#resortcard svg.art{width:38px;height:38px}
+#counts{text-align:center;color:var(--dim);font-size:12px}
 
-#headlineflash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-  background:rgba(8,12,10,.58);z-index:60;opacity:0;pointer-events:none;transition:opacity .25s}
-#headlineflash.show{opacity:1;pointer-events:auto}
+#headlineflash{position:fixed;left:0;right:0;top:46vh;display:flex;justify-content:center;
+  z-index:60;opacity:0;pointer-events:none;transition:opacity .25s}
+#headlineflash.show{opacity:1}
 #hcard{background:linear-gradient(170deg,var(--bone),var(--bone-2));color:var(--ink);
   border-radius:14px;padding:20px 24px 22px;max-width:300px;text-align:center;
   border:1px solid rgba(28,26,20,.5);
@@ -109,11 +143,8 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
   padding:10px 12px;transition:border-color .25s,box-shadow .25s}
 #mine.turn{border-color:var(--gold);box-shadow:0 0 18px rgba(232,197,122,.18)}
 #mytop{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dim);flex-wrap:wrap}
-#mystacks{display:flex;gap:9px;margin:8px 0 2px;min-height:34px}
-#mystacks .stackcell{width:30px;height:34px}
-#mystacks .stackcell svg{width:30px;height:30px}
-#hand{display:flex;gap:9px;justify-content:center;margin-top:6px}
-.good{width:56px;height:68px;border-radius:9px;cursor:pointer;position:relative;
+#hand{display:flex;gap:8px;justify-content:center;margin-top:8px}
+.good{flex:1 1 0;min-width:0;max-width:58px;height:66px;border-radius:9px;cursor:pointer;position:relative;
   background:linear-gradient(170deg,var(--bone) 0%,var(--bone-2) 100%);
   border:1px solid rgba(28,26,20,.5);
   box-shadow:0 2px 0 rgba(8,10,8,.5), 0 4px 10px rgba(8,10,8,.35);
@@ -194,6 +225,7 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
 .waveband{animation:waveroll 7s linear infinite}
 @keyframes waveroll{from{transform:translateX(0)}to{transform:translateX(-48px)}}
 #game,.screen,#headlineflash,#sheetwrap,#banner,#over{z-index:1}
+body.playing #sky{display:none}
 .screen{z-index:2}
 
 /* ---- idle life on the coastlines ---- */
@@ -205,16 +237,10 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
 .glint{animation:glint 6s ease-in-out infinite}
 @keyframes glint{0%,78%,100%{opacity:0}86%{opacity:.6}}
 
-/* ---- the living coastline boards ---- */
-.coast{display:block;width:100%;height:auto;margin-top:6px;
-  filter:drop-shadow(0 2px 3px rgba(8,10,8,.45))}
-.foe .coast{width:132px}
-#mycoast .coast{width:min(100%, 360px);margin:4px auto 0}
-
 @media (prefers-reduced-motion: reduce){
   .confetti{display:none}
   .mcard,.good,#hcard,#sheet,#banner,#sky .sun,#sky .dusk{transition:none}
-  .smoke,.sway,.glint,.waveband,#sky .cloud{animation:none}
+  .smoke,.sway,.glint,.waveband,#sky .cloud,.cloud,.twinkle,.ripple,.bob,.flag,.beam,.turnglow,.popin,.blink,.leap{animation:none}
 }
 </style>
 </head>
@@ -271,25 +297,18 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
 </div>
 
 <div id="game" class="hidden">
-  <div id="foes"></div>
+  <div id="worldwrap">
+    <svg id="worldbg" viewBox="0 0 360 296" preserveAspectRatio="xMidYMax meet"></svg>
+    <svg id="world" viewBox="0 0 360 296" preserveAspectRatio="xMidYMax meet"></svg>
+    <svg id="worldfx" viewBox="0 0 360 296" preserveAspectRatio="xMidYMax meet"></svg>
+  </div>
   <div id="mid">
     <div id="statusline"></div>
     <div id="market"></div>
-    <div id="supply">
-      <div class="mcard" id="resortcard">
-        <span id="resortart"></span><span class="mname">Resort</span>
-        <span class="pips" id="resortpips"></span>
-      </div>
-      <div class="counts">
-        <div><b id="goodsn"></b> goods left</div>
-        <div><b id="deckn"></b> builds left</div>
-        <div><b id="eventsn"></b> headlines</div>
-      </div>
-    </div>
+    <div id="counts"></div>
   </div>
   <div id="mine">
     <div id="mytop"></div>
-    <div id="mystacks"></div>
     <div id="hand"></div>
     <div id="actions">
       <button id="tradebtn">Trade</button>
@@ -310,12 +329,12 @@ input{font-family:inherit;font-size:16px;color:var(--bone);background:var(--felt
   <button id="menubtn">Menu</button>
 </div>
 
-<script src="../shared/config.js?v=0.5.0"></script>
-<script src="../shared/tablekit.js?v=0.5.0"></script>
-<script src="../shared/headlands-rules.js?v=0.5.0"></script>
+<script src="../shared/config.js?v=0.6.0"></script>
+<script src="../shared/tablekit.js?v=0.6.0"></script>
+<script src="../shared/headlands-rules.js?v=0.6.0"></script>
 <script>
 'use strict';
-var VERSION = '0.5.0';
+var VERSION = '0.6.0';
 TableKit.watchErrors({ game: 'headlands', version: VERSION, onError: function (m) { banner(m); } });
 
 function $(id) { return document.getElementById(id); }
@@ -475,83 +494,404 @@ function costPips(cost, have) {
   return html;
 }
 
-/* ---- the living coastline: a player's whole position drawn as a little
-   stretch of coast. Shacks sit on the headland, Towns rise over them,
-   Resorts take the waterfront, Rangers plant flags on the point, and the
-   Track winds further along the shore with every one laid. ---- */
-function coastScene(p, seat) {
-  var W = 164, Hh = 46;
-  var out = '<svg class="coast" viewBox="0 0 ' + W + ' ' + Hh + '" fill="none" ' +
-    'stroke="#1C1A14" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">';
-  /* the headland, sloping into water on the right */
-  out += '<path d="M0 37C18 32 44 29 72 30c26 1 40 5 52 9l-2 9H0Z" fill="#23402F" stroke="none"/>' +
-    '<path d="M0 37C18 32 44 29 72 30c26 1 40 5 52 9" stroke="#2E5038" stroke-width="1.6"/>' +
-    '<path d="M124 39c6 2 10 3 14 3" stroke="#2E5038"/>' +
-    '<path d="M122 42c8-3 14-3 20 0s12 3 18 0" stroke="#3B8B82" stroke-width="1.6"/>' +
-    '<ellipse class="glint" cx="146" cy="40.5" rx="5" ry="1" fill="#7FD0C6" stroke="none"' +
-    ' style="animation-delay:' + ((seat * 1.7) % 5) + 's"/>';
-  /* the track winds along the shore — longer with every one laid */
-  var tlen = Math.min(p.tracks, 6) / 6;
-  if (p.tracks > 0) {
-    out += '<path d="M4 36C22 32 48 29.5 72 30.5c22 1 36 4 48 7.5" stroke="#C9A26B" stroke-width="2.6" ' +
-      'pathLength="100" stroke-dasharray="' + Math.round(8 + tlen * 92) + ' 100"/>';
+/* ================= the world =================
+   One bay, everybody in it. My town stands on the near shore; every rival's
+   town stands on the far shore across the same water. Three stacked layers
+   share one viewBox: the backdrop (sky, sea, the things that drift — built
+   once so nothing resets), the land (shores, towns, labels — rebuilt only
+   when the position changes) and the fx layer (boats, raiders, splashes —
+   transient, driven by the event stream). */
+var WORLD = { sig: '', bgFor: '', prev: {}, vh: 296, far: 100, near: 266 };
+var SEATCOL = ['#E26A4B', '#3B8B82', '#E8C57A', '#5BB7E0'];
+var SVGNS = 'http://www.w3.org/2000/svg';
+
+function farY(x) { return WORLD.far + 4 * Math.sin(x / 46) + 2.5 * Math.sin(x / 19 + 1); }
+function nearY(x) { return WORLD.near - 6 * Math.sin((x + 30) / 66); }
+/* the scene takes the frame's own proportions: a taller phone gets a deeper
+   bay, not an emptier sky. Far shore a third of the way down, mine at the foot. */
+function sizeWorld() {
+  var wrap = $('worldwrap'), vh = 296;
+  if (wrap && wrap.getBoundingClientRect) {
+    var r = wrap.getBoundingClientRect();
+    if (r && r.width > 0 && r.height > 0) vh = Math.max(226, Math.min(440, Math.round(360 * r.height / r.width)));
   }
-  /* buildings along the slots */
-  var slots = [12, 40, 68, 96, 120];
-  var extra = 0;
-  p.stacks.forEach(function (st, i) {
-    if (i >= slots.length) { extra++; return; }
-    var x = slots[i];
-    var gy = 37 - (i < 3 ? (3 - i) : 0) * 1.4;      /* follow the hill */
-    if (st.top === 'shack') {
-      out += '<g><path d="M' + (x - 6) + ' ' + (gy - 4) + 'l6-5 6 5" fill="none"/>' +
-        '<path d="M' + (x - 5) + ' ' + (gy - 4.4) + 'v4.4h10v-4.4" fill="#D98059"/>' +
-        '<path d="M' + (x - 7) + ' ' + (gy - 3.6) + 'L' + x + ' ' + (gy - 9.6) + 'l7 6" stroke-width="1.5"/>' +
-        '<circle class="smoke" cx="' + (x + 3.4) + '" cy="' + (gy - 10.6) + '" r="1.5" fill="#B9B2A0" stroke="none"' +
-        ' style="animation-delay:' + ((i * 1.3 + seat) % 3.2) + 's"/></g>';
-    } else if (st.top === 'town') {
-      out += '<path d="M' + (x - 8) + ' ' + gy + 'v-6l3.4-3 3.4 3v6" fill="#3B8B82"/>' +
-        '<path d="M' + (x - 1) + ' ' + gy + 'v-9.6l4-3.4 4 3.4V' + gy + '" fill="#D98059"/>' +
-        '<rect x="' + (x + 1.6) + '" y="' + (gy - 7.6) + '" width="2.8" height="2.4" fill="#F2EEE2"/>' +
-        '<circle class="smoke" cx="' + (x + 3) + '" cy="' + (gy - 14) + '" r="1.5" fill="#B9B2A0" stroke="none"' +
-        ' style="animation-delay:' + ((i * 1.9 + seat) % 3.4) + 's"/>';
+  if (vh === WORLD.vh && WORLD.sized) return false;
+  WORLD.sized = true;
+  WORLD.vh = vh; WORLD.far = Math.round(vh * 0.335); WORLD.near = vh - 30;
+  ['worldbg', 'world', 'worldfx'].forEach(function (id) {
+    var e = $(id);
+    if (e && e.setAttribute) e.setAttribute('viewBox', '0 0 360 ' + vh);
+  });
+  return true;
+}
+function ridge(fn, x0, x1, step) {
+  var d = 'M' + x0 + ' ' + fn(x0).toFixed(1);
+  for (var x = x0 + step; x < x1; x += step) d += 'L' + x + ' ' + fn(x).toFixed(1);
+  return d + 'L' + x1 + ' ' + fn(x1).toFixed(1);
+}
+
+/* where everyone lives: seat -> span of shore, scale, dock on the bay */
+function worldLayout() {
+  var n = V.players.length, out = {}, foes = [];
+  for (var i = 1; i < n; i++) foes.push((MYSEAT + i) % n);
+  var spans = foes.length === 1 ? [[104, 256]] :
+    foes.length === 2 ? [[22, 168], [192, 338]] : [[6, 116], [125, 235], [244, 354]];
+  foes.forEach(function (s, k) {
+    var sp = spans[k], mid = (sp[0] + sp[1]) / 2;
+    out[s] = { far: true, x0: sp[0], x1: sp[1], sc: foes.length === 3 ? 0.74 : 0.95,
+      mid: mid, fn: farY, dock: { x: mid, y: farY(mid) + 24 } };
+  });
+  out[MYSEAT] = { far: false, x0: 62, x1: 354, sc: 1.7, mid: 206, fn: nearY,
+    dock: { x: 24, y: WORLD.near - 28 } };
+  return out;
+}
+function slotX(L, i) { var step = (L.x1 - L.x0) * 0.64 / 5; return L.x0 + step * 0.55 + i * step; }
+
+/* one building, drawn at its ground point in the owner's roof colour */
+function bldg(kind, x, gy, sc, col, lit, pop, delay) {
+  var win = (lit ? '#F6D77A' : '#33463D') + '" class="win' + (lit ? ' lit' : '');
+  var g = '<g transform="translate(' + x.toFixed(1) + ' ' + gy.toFixed(1) + ') scale(' + sc + ')" ' +
+    'stroke-width="' + (1.05 / sc).toFixed(2) + '"><g class="' + (pop ? 'popin' : '') + '">';
+  if (kind === 'shack') {
+    g += '<rect x="2.4" y="-10.4" width="1.7" height="4" fill="#8F6B42"/>' +
+      '<circle class="smoke" cx="3.3" cy="-11.6" r="1.4" fill="#CFC8B6" stroke="none" style="animation-delay:' + delay + 's"/>' +
+      '<path d="M-5 0v-4.6h10V0Z" fill="#EFE7D2"/>' +
+      '<path d="M-7 -4L0 -10l7 6Z" fill="' + col + '"/>' +
+      '<rect x="-3.6" y="-3.4" width="2" height="1.8" fill="' + win + '" stroke="none"/>' +
+      '<rect x=".4" y="-3.4" width="2.4" height="3.4" fill="#6B4E2E" stroke="none"/>';
+  } else if (kind === 'town') {
+    g += '<rect x="5.4" y="-16.6" width="1.7" height="4.4" fill="#8F6B42"/>' +
+      '<circle class="smoke" cx="6.3" cy="-17.8" r="1.5" fill="#CFC8B6" stroke="none" style="animation-delay:' + delay + 's"/>' +
+      '<path d="M-10 0v-6h8V0Z" fill="#EFE7D2"/><path d="M-11.6 -5.6L-6 -10.4l5.6 4.8Z" fill="' + col + '"/>' +
+      '<path d="M-1 0v-10h10V0Z" fill="#E7DDC4"/><path d="M-2.8 -9.6L4 -15.8l6.8 6.2Z" fill="' + col + '"/>' +
+      '<rect x="-7.4" y="-4.4" width="2" height="1.8" fill="' + win + '" stroke="none"/>' +
+      '<rect x=".8" y="-8.2" width="2.1" height="2.1" fill="' + win + '" stroke="none"/>' +
+      '<rect x="5" y="-8.2" width="2.1" height="2.1" fill="' + win + '" stroke="none"/>' +
+      '<rect x="2.8" y="-3.8" width="2.6" height="3.8" fill="#6B4E2E" stroke="none"/>';
+  } else {
+    g += '<path d="M1 0v-8h11V0Z" fill="#F2EEE2"/><path d="M0 -8h13" stroke-width="' + (1.5 / sc).toFixed(2) + '"/>' +
+      '<rect x="3" y="-6.2" width="2" height="2" fill="' + win + '" stroke="none"/>' +
+      '<rect x="7.6" y="-6.2" width="2" height="2" fill="' + win + '" stroke="none"/>' +
+      '<rect x="5" y="-3.2" width="2.4" height="3.2" fill="#6B4E2E" stroke="none"/>' +
+      '<g class="sway" style="animation-delay:' + delay + 's"><path d="M-6 0V-10"/>' +
+      '<path d="M-12.4 -8.6a6.4 6.4 0 0 1 12.8 0Z" fill="' + col + '"/>' +
+      '<path d="M-8.6 -8.6a2.6 4.6 0 0 1 5.2 0" stroke="#F2EEE2" stroke-width="' + (0.8 / sc).toFixed(2) + '"/></g>';
+  }
+  return g + '</g></g>';
+}
+
+function boatShape(col, dark) {
+  return '<g class="bob"><path d="M-8 0h16l-3 4.4h-10Z" fill="' + (dark ? '#1C1A14' : '#8F6B42') + '"/>' +
+    '<path d="M0 0V-12" stroke-width="1"/>' +
+    '<path d="M.8 -11.4L8 -2.6H.8Z" fill="' + (dark ? '#3A2E2A' : col) + '"/>' +
+    (dark ? '<path d="M-5.6 -9.6L-.6 -2.6h-5Z" fill="#3A2E2A"/>' : '') + '</g>';
+}
+
+/* ---- backdrop: built once per table, then only the sun and dusk move ---- */
+function worldBackdrop() {
+  var n = V.players.length, F = WORLD.far, N = WORLD.near, VH = WORLD.vh;
+  var sunX = n === 3 ? 180 : n === 2 ? 304 : 121;
+  var wave = function (y, o, dur) {
+    var d = 'M-336 ' + y.toFixed(1);
+    for (var x = -336; x < 696; x += 48) d += 'q12 -5 24 0t24 0';
+    return '<path class="waveband" style="animation-duration:' + dur + 's" d="' + d + '" stroke="#5FB5AA" stroke-width="1.4" opacity="' + o + '"/>';
+  };
+  var stars = '';
+  [[30, 14], [88, 30], [150, 10], [214, 26], [262, 12], [330, 34], [348, 8], [58, 44], [120, 52], [300, 58],
+    [44, -22], [120, -40], [196, -14], [300, -30], [246, -58], [80, -76], [338, -84], [160, -100]].forEach(function (p, i) {
+    stars += '<circle class="twinkle" cx="' + p[0] + '" cy="' + (p[1] * F / 100).toFixed(1) + '" r=".9" fill="#F2EEE2" stroke="none" style="animation-delay:' + (i * 0.7) + 's"/>';
+  });
+  var w0 = F + 34, w1 = N - 42, ws = (w1 - w0) / 3;
+  var bm = F + (N - F) * 0.42;
+  return '<defs>' +
+    '<linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0C1A1E"/><stop offset=".72" stop-color="#143035"/><stop offset="1" stop-color="#2F6660"/></linearGradient>' +
+    '<linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#235750"/><stop offset="1" stop-color="#11302D"/></linearGradient>' +
+    '<linearGradient id="wdusk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A2440" stop-opacity=".5"/><stop offset=".7" stop-color="#5A3550" stop-opacity=".55"/><stop offset=".9" stop-color="#E26A4B" stop-opacity=".5"/><stop offset="1" stop-color="#E8C57A" stop-opacity=".2"/></linearGradient>' +
+    '</defs>' +
+    '<g fill="none" stroke="#1C1A14" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="-300" y="-400" width="960" height="' + (F + 410) + '" fill="url(#wsky)" stroke="none"/>' +
+    '<g id="wstars" opacity="0">' + stars + '</g>' +
+    '<rect id="wdusk2" x="-300" y="-400" width="960" height="' + (F + 410) + '" fill="url(#wdusk)" stroke="none" opacity="0"/>' +
+    '<circle id="wsunglow" class="sunglow" cx="' + sunX + '" cy="30" r="22" fill="#F0D08A" stroke="none" opacity=".16"/>' +
+    '<circle id="wsun" cx="' + sunX + '" cy="30" r="11" fill="#F0D08A" stroke="none"/>' +
+    '<g class="cloud" style="animation-duration:130s"><ellipse cx="0" cy="' + (F * 0.22).toFixed(1) + '" rx="26" ry="6" fill="#F2EEE2" stroke="none" opacity=".1"/><ellipse cx="16" cy="' + (F * 0.18).toFixed(1) + '" rx="16" ry="5" fill="#F2EEE2" stroke="none" opacity=".1"/></g>' +
+    '<g class="cloud" style="animation-duration:190s;animation-delay:-90s"><ellipse cx="0" cy="' + (F * 0.46).toFixed(1) + '" rx="34" ry="6" fill="#F2EEE2" stroke="none" opacity=".07"/></g>' +
+    '<g data-toy="gull" stroke="#F2EEE2" stroke-width="1.1"><path d="M-4 0q2 -3 4 0q2 -3 4 0"/>' +
+    '<animateMotion dur="26s" repeatCount="indefinite" path="M70 ' + (F * 0.44).toFixed(1) + 'c40 -26 110 -26 150 0s-110 30 -150 0Z"/></g>' +
+    '<g data-toy="gull" stroke="#F2EEE2" stroke-width="1" opacity=".8"><path d="M-3 0q1.5 -2.4 3 0q1.5 -2.4 3 0"/>' +
+    '<animateMotion dur="34s" repeatCount="indefinite" path="M290 ' + (F * 0.3).toFixed(1) + 'c-50 -18 -120 0 -150 22s100 6 150 -22Z"/></g>' +
+    '<rect x="-300" y="' + F + '" width="960" height="' + (VH - F + 60) + '" fill="url(#wsea)" stroke="none"/>' +
+    '<ellipse id="wglow" cx="' + sunX + '" cy="' + (F + 56) + '" rx="13" ry="50" fill="#F0D08A" stroke="none" opacity=".07"/>' +
+    (function () {
+      var n = Math.max(3, Math.round((w1 - w0) / 34)), out2 = '';
+      for (var i = 0; i <= n; i++) out2 += wave(w0 + (w1 - w0) * i / n, (0.2 + 0.22 * i / n).toFixed(2), 6 + ((i * 3) % 5));
+      return out2;
+    })() +
+    /* the channel buoy, blinking mid-bay, and a fish that leaps now and then */
+    '<g data-toy="buoy" style="pointer-events:all" transform="translate(196 ' + (F + (N - F) * 0.56).toFixed(1) + ')"><g class="bob">' +
+    '<path d="M-3.4 0h6.8l-1.4 -7h-4Z" fill="#E26A4B"/><path d="M0 -7v-4"/>' +
+    '<circle class="blink" cx="0" cy="-12" r="1.7" fill="#F6D77A" stroke="none"/>' +
+    '<rect x="-9" y="-16" width="18" height="20" fill="transparent" stroke="none"/></g></g>' +
+    '<g transform="translate(120 ' + (F + (N - F) * 0.7).toFixed(1) + ')"><path class="leap" d="M-7 0q7 -13 14 0" stroke="#9FE0D6" stroke-width="1.6" pathLength="100" stroke-dasharray="26 100"/></g>' +
+    '<ellipse class="ripple" cx="254" cy="' + (F + (N - F) * 0.64).toFixed(1) + '" rx="7" ry="2" stroke="#9FE0D6" stroke-width="1"/>' +
+    '<ellipse class="ripple" cx="96" cy="' + (F + (N - F) * 0.3).toFixed(1) + '" rx="6" ry="1.8" stroke="#9FE0D6" stroke-width="1" style="animation-delay:-4s"/>' +
+    '<g data-toy="boat" style="pointer-events:all">' + boatShape('#F2EEE2', false) +
+    '<rect x="-12" y="-14" width="24" height="22" fill="transparent" stroke="none"/>' +
+    '<animateMotion dur="58s" repeatCount="indefinite" path="M52 ' + bm.toFixed(1) + 'C120 ' + (bm - 22).toFixed(1) + ' 236 ' + (bm + 24).toFixed(1) + ' 312 ' + (bm - 4).toFixed(1) +
+    'C236 ' + (bm + 34).toFixed(1) + ' 120 ' + (bm + 28).toFixed(1) + ' 52 ' + bm.toFixed(1) + 'Z"/></g>' +
+    '<rect class="tidewash" x="-300" y="' + (F - 4) + '" width="960" height="' + (VH + 20) + '" fill="#3FA094" stroke="none" opacity="0"/>' +
+    '</g>';
+}
+
+/* ---- the land: shores, towns, docks, names ---- */
+function worldLand(L, lit) {
+  var out = '<g fill="none" stroke="#1C1A14" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round">';
+  /* the far shore runs the whole horizon; the near shore the whole foreground */
+  out += '<path d="' + ridge(farY, -296, 656, 8) + 'V' + (WORLD.far + 22) + 'H-296Z" fill="#1C3527" stroke="none"/>' +
+    '<path d="' + ridge(farY, -296, 656, 8) + '" stroke="#2F5A3C" stroke-width="1.6"/>' +
+    '<path d="M-300 ' + (WORLD.far + 21) + 'q30 4 60 0t60 0 60 0 60 0 60 0 60 0 60 0 60 0 60 0 60 0 60 0 60 0 60 0 60 0 60 0 60 0" stroke="#5FB5AA" stroke-width="1" opacity=".5"/>';
+  var near = '<path d="' + ridge(nearY, -296, 656, 8) + 'V' + (WORLD.vh + 50) + 'H-296Z" fill="#234331" stroke="none"/>' +
+    '<path d="' + ridge(nearY, -296, 656, 8) + '" stroke="#3B6B49" stroke-width="2"/>';
+  var farBits = '', nearBits = '', labels = '', hits = '';
+
+  V.players.forEach(function (p, s) {
+    var Ls = L[s], col = SEATCOL[s % 4], sc = Ls.sc, fn = Ls.fn, bits = '';
+    var isTurn = V.turn === s && !V.over;
+    if (isTurn) {
+      bits += '<ellipse class="turnglow" cx="' + ((Ls.x0 + Ls.x1) / 2) + '" cy="' + (fn(Ls.mid) - 4 * sc).toFixed(1) +
+        '" rx="' + ((Ls.x1 - Ls.x0) / 2) + '" ry="' + (20 * sc) + '" fill="#E8C57A" stroke="none"/>';
+    }
+    /* the dock and the boat moored at it */
+    if (Ls.far) {
+      bits += '<path d="M' + Ls.dock.x + ' ' + (fn(Ls.dock.x) + 2).toFixed(1) + 'V' + (Ls.dock.y - 3).toFixed(1) + '" stroke="#8F6B42" stroke-width="3.2"/>' +
+        '<g transform="translate(' + (Ls.dock.x + 9) + ' ' + (Ls.dock.y - 5).toFixed(1) + ') scale(.62)">' + boatShape(col, false) + '</g>';
     } else {
-      out += '<g class="sway" style="animation-delay:' + ((i * 2.1 + seat) % 5) + 's">' +
-        '<path d="M' + x + ' ' + (gy - 1) + 'V' + (gy - 9) + '"/>' +
-        '<path d="M' + (x - 6) + ' ' + (gy - 8) + 'a6.4 6.4 0 0 1 12 0Z" fill="#E26A4B"/></g>' +
-        '<path d="M' + (x - 7) + ' ' + gy + 'h14" stroke-width="1.5"/>' +
-        '<rect x="' + (x + 4) + '" y="' + (gy - 4.6) + '" width="5" height="4.6" rx="1" fill="#F2EEE2"/>';
+      bits += '<path d="M' + Ls.dock.x + ' ' + nearY(Ls.dock.x).toFixed(1) + 'V' + Ls.dock.y + '" stroke="#8F6B42" stroke-width="6"/>' +
+        '<path d="M' + (Ls.dock.x - 5) + ' ' + Ls.dock.y + 'h10" stroke="#6B4E2E" stroke-width="2.4"/>' +
+        '<g transform="translate(' + (Ls.dock.x + 16) + ' ' + (Ls.dock.y - 1) + ') scale(1.05)">' + boatShape(col, false) + '</g>';
+    }
+    /* the track: longer with each one laid; the Highway is gold and busy */
+    if (p.tracks > 0) {
+      var tEnd = Ls.x0 + 3 + (Ls.x1 - Ls.x0 - 6) * (0.16 + 0.84 * Math.min(p.tracks, 6) / 6);
+      var td = ridge(function (x) { return fn(x) + 1.6 * sc; }, Ls.x0 + 3, Math.round(tEnd), 6);
+      var hw = V.highway === s;
+      bits += '<path d="' + td + '" stroke="#1C1A14" stroke-width="' + (4.4 * sc).toFixed(1) + '"/>' +
+        '<path d="' + td + '" stroke="' + (hw ? '#E8C57A' : '#C9A26B') + '" stroke-width="' + (3 * sc).toFixed(1) + '"/>';
+      if (hw) {
+        bits += '<g><g transform="scale(' + sc + ')"><rect x="-3.4" y="-5.6" width="6.8" height="3.6" rx=".8" fill="#E26A4B" stroke-width="' + (1 / sc).toFixed(2) + '"/>' +
+          '<circle cx="-2" cy="-1.4" r="1.3" fill="#1C1A14" stroke="none"/><circle cx="2" cy="-1.4" r="1.3" fill="#1C1A14" stroke="none"/></g>' +
+          '<animateMotion dur="' + (5 + p.tracks) + 's" repeatCount="indefinite" calcMode="linear" keyPoints="0;1;0" keyTimes="0;0.5;1" path="' + td + '"/></g>';
+      }
+    }
+    /* the buildings */
+    var prev = WORLD.prev[s] || [], extra = 0;
+    p.stacks.forEach(function (st, i) {
+      if (i >= 5) { extra++; return; }
+      var x = slotX(Ls, i), gy = fn(x);
+      var fresh = WORLD.prev[s] && prev[i] !== st.top;
+      bits += bldg(st.top, x, gy, sc, col, lit, fresh, ((i * 1.3 + s * 0.7) % 3.2).toFixed(1));
+      if (fresh) WORLD.puffs.push({ x: x, y: gy - 6 * sc, r: 9 * sc });
+    });
+    if (extra > 0) {
+      bits += '<text x="' + (slotX(Ls, 4) + 14 * sc).toFixed(1) + '" y="' + (fn(slotX(Ls, 4)) - 4 * sc).toFixed(1) +
+        '" font-size="' + (7 * sc + 3).toFixed(1) + '" fill="#F2EEE2" stroke="none">+' + extra + '</text>';
+    }
+    /* rangers hold the point; the Watch is a lighthouse sweeping the bay */
+    var rx0 = Ls.x0 + (Ls.x1 - Ls.x0) * 0.7;
+    for (var r = 0; r < Math.min(p.rangers, 3); r++) {
+      var rx = rx0 + r * 7.5 * sc, ry = fn(rx);
+      bits += '<g transform="translate(' + rx.toFixed(1) + ' ' + ry.toFixed(1) + ') scale(' + sc + ')" stroke-width="' + (1.05 / sc).toFixed(2) + '">' +
+        '<path d="M0 0V-11"/><path class="flag" d="M0 -11h6l-1.8 2 1.8 2H0Z" fill="' + col + '"/></g>';
+    }
+    if (p.rangers > 3) {
+      bits += '<text x="' + (rx0 + 24 * sc).toFixed(1) + '" y="' + (fn(rx0) - 3 * sc).toFixed(1) + '" font-size="' + (6 * sc + 3).toFixed(1) +
+        '" fill="#F2EEE2" stroke="none">+' + (p.rangers - 3) + '</text>';
+    }
+    if (V.watch === s) {
+      var lx = Ls.x1 - 9 * sc, ly = fn(lx);
+      bits += '<g transform="translate(' + lx.toFixed(1) + ' ' + ly.toFixed(1) + ') scale(' + sc + ')" stroke-width="' + (1.05 / sc).toFixed(2) + '">' +
+        '<g transform="translate(0 -19) rotate(' + (Ls.far ? 90 : -90) + ')"><path class="beam" d="M0 0L' + (Ls.far ? 84 : 120) + ' -15V15Z" fill="#F6D77A" stroke="none"/></g>' +
+        '<path d="M-3.4 0L-2.2 -16h4.4L3.4 0Z" fill="#F2EEE2"/><path d="M-2.9 -6h5.8M-2.5 -11h5" stroke="' + col + '" stroke-width="' + (2.2 / sc).toFixed(2) + '"/>' +
+        '<rect x="-3" y="-21" width="6" height="5" rx="1" fill="#F6D77A"/><path d="M-4 -21h8L0 -25Z" fill="' + col + '"/></g>';
+    }
+    if (Ls.far) farBits += bits; else nearBits += bits;
+
+    /* names ride above the far towns; tap a town for the full story */
+    if (Ls.far) {
+      var ly2 = farY(Ls.mid) - 22 * sc - 8;
+      var nm = esc(p.name.length > 9 ? p.name.slice(0, 8) + '…' : p.name);
+      labels += '<g' + (isTurn ? ' class="nameturn"' : '') + '>' +
+        '<circle cx="' + (Ls.mid - 30) + '" cy="' + (ly2 - 3.6).toFixed(1) + '" r="3.2" fill="' + col + '" stroke="#1C1A14" stroke-width=".8"/>' +
+        '<text x="' + (Ls.mid - 24) + '" y="' + ly2.toFixed(1) + '" font-size="11.5" fill="' + (isTurn ? '#E8C57A' : '#F2EEE2') + '" stroke="none" font-weight="700">' + nm + '</text>' +
+        '<rect x="' + (Ls.mid + 22) + '" y="' + (ly2 - 10.4).toFixed(1) + '" width="16" height="13" rx="4" fill="#E8C57A" stroke="none"/>' +
+        '<text x="' + (Ls.mid + 30) + '" y="' + (ly2 - .4).toFixed(1) + '" font-size="10.5" fill="#1C1A14" stroke="none" font-weight="700" text-anchor="middle">' + p.vp + '</text>' +
+        '<text x="' + Ls.mid + '" y="' + (ly2 - 14).toFixed(1) + '" font-size="8.6" fill="#B9C9BE" stroke="none" text-anchor="middle">' + p.handN + (p.handN === 1 ? ' card' : ' cards') + '</text></g>';
+      hits += '<rect data-seat="' + s + '" x="' + Ls.x0 + '" y="' + (ly2 - 26).toFixed(1) + '" width="' + (Ls.x1 - Ls.x0) + '" height="' + (farY(Ls.mid) - ly2 + 52).toFixed(1) + '" fill="transparent" stroke="none"/>';
+    } else {
+      hits += '<rect data-seat="' + s + '" x="0" y="' + (WORLD.near - 34) + '" width="360" height="90" fill="transparent" stroke="none"/>';
     }
   });
-  if (extra > 0) out += '<text x="138" y="33" font-size="8" fill="#F2EEE2" stroke="none" font-family="Georgia">+' + extra + '</text>';
-  /* rangers hold the point */
-  for (var r = 0; r < Math.min(p.rangers, 3); r++) {
-    var rx = 136 + r * 9;
-    out += '<path d="M' + rx + ' 40V31.6" stroke-width="1.4"/>' +
-      '<path d="M' + rx + ' 31.6h5.4l-1.6 1.8 1.6 1.8h-5.4" fill="#E26A4B"/>';
+  return out + farBits + near + nearBits + labels + hits + '</g>';
+}
+
+function renderWorld() {
+  var wrap = $('worldwrap');
+  if (!wrap) return;
+  var lead = 0;
+  V.players.forEach(function (pp) { lead = Math.max(lead, pp.vp); });
+  var prog = Math.min(1, lead / H.WIN_VP);
+  var lit = prog >= 0.57;
+
+  /* backdrop: once per table and frame shape */
+  sizeWorld();
+  var bgKey = V.players.length + ':' + MYSEAT + ':' + WORLD.vh;
+  if (WORLD.bgFor !== bgKey) {
+    WORLD.bgFor = bgKey; WORLD.sig = ''; WORLD.prev = {};
+    $('worldbg').innerHTML = worldBackdrop();
   }
-  if (p.rangers > 3) out += '<text x="160" y="38" font-size="7" fill="#F2EEE2" stroke="none" font-family="Georgia" text-anchor="end">+' + (p.rangers - 3) + '</text>';
-  return out + '</svg>';
+  /* the sun sinks as the leader closes on seven; dusk and stars follow */
+  var sy = (WORLD.far * (0.24 + prog * 0.7)).toFixed(1);
+  var set = function (id, k, v) { var e = $(id); if (e && e.setAttribute) e.setAttribute(k, v); };
+  set('wsun', 'cy', sy); set('wsunglow', 'cy', sy);
+  set('wdusk2', 'opacity', (prog * prog * 0.9).toFixed(2));
+  set('wstars', 'opacity', Math.max(0, (prog - 0.6) * 2.2).toFixed(2));
+  set('wglow', 'opacity', (0.05 + prog * 0.16).toFixed(2));
+
+  var sig = JSON.stringify([V.turn, V.over, V.highway, V.watch, lit, V.players.map(function (p) {
+    return [p.name, p.vp, p.handN, p.tracks, p.rangers, p.stacks.map(function (st) { return st.top[0]; }).join('')];
+  })]);
+  if (sig === WORLD.sig) return;
+  WORLD.sig = sig;
+  WORLD.puffs = [];
+  $('world').innerHTML = worldLand(worldLayout(), lit);
+  V.players.forEach(function (p, s) { WORLD.prev[s] = p.stacks.map(function (st) { return st.top; }); });
+  WORLD.puffs.forEach(function (pf) { fxPuff(pf, pf.r, '#EFE7D2'); sfx('build'); });
+}
+
+/* ---- the fx layer: things that happen between the towns ---- */
+function fxNode(html, life) {
+  var host = $('worldfx');
+  if (!host || !document.createElementNS || !host.appendChild) return null;
+  try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return null; } catch (e) {}
+  var g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('fill', 'none'); g.setAttribute('stroke', '#1C1A14');
+  g.setAttribute('stroke-width', '1'); g.setAttribute('stroke-linejoin', 'round'); g.setAttribute('stroke-linecap', 'round');
+  g.innerHTML = html;
+  host.appendChild(g);
+  setTimeout(function () { if (g.remove) g.remove(); }, life || 3000);
+  return g;
+}
+function dockOf(seat) { var L = worldLayout()[seat]; return L ? L.dock : { x: 180, y: 170 }; }
+function crownOf(seat) {
+  var L = worldLayout()[seat];
+  if (!L) return { x: 180, y: 120 };
+  return { x: L.mid, y: L.fn(L.mid) - (L.far ? 26 * L.sc + 26 : 44) };
+}
+function fxBoat(a, b, col, dark, ms, sc) {
+  var dx = b.x - a.x, dy = b.y - a.y;
+  return fxNode('<g transform="translate(' + a.x.toFixed(1) + ' ' + a.y.toFixed(1) + ')">' +
+    '<g class="fxsail" style="--dx:' + dx.toFixed(1) + 'px;--dy:' + dy.toFixed(1) + 'px;animation-duration:' + ms + 'ms">' +
+    '<g transform="scale(' + ((dx < 0 ? -1 : 1) * (sc || 1)) + ' ' + (sc || 1) + ')">' + boatShape(col, dark) + '</g></g></g>', ms + 200);
+}
+function fxBubble(pt, text, col, delay) {
+  setTimeout(function () {
+    fxNode('<text class="fxbubble" x="' + pt.x.toFixed(1) + '" y="' + pt.y.toFixed(1) + '" font-size="12" font-weight="700" ' +
+      'text-anchor="middle" fill="' + (col || '#F2EEE2') + '" stroke="#1C1A14" stroke-width="2.4" paint-order="stroke">' + esc(text) + '</text>', 1700);
+  }, delay || 0);
+}
+function fxPuff(pt, r, col, delay) {
+  setTimeout(function () {
+    fxNode('<circle class="fxpuff" cx="' + pt.x.toFixed(1) + '" cy="' + pt.y.toFixed(1) + '" r="' + (r || 8) + '" fill="' + (col || '#F2EEE2') + '" stroke="none"/>', 900);
+  }, delay || 0);
+}
+function fxRings(pt, col) {
+  [0, 260, 520].forEach(function (d) {
+    setTimeout(function () {
+      fxNode('<circle class="fxring" cx="' + pt.x.toFixed(1) + '" cy="' + pt.y.toFixed(1) + '" r="10" stroke="' + (col || '#E8C57A') + '" stroke-width="1.6"/>', 1300);
+    }, d);
+  });
+}
+function fxFireworks(pt) {
+  var cols = ['#E26A4B', '#E8C57A', '#3B8B82', '#5BB7E0', '#F2EEE2'];
+  for (var i = 0; i < 9; i++) {
+    fxPuff({ x: pt.x + (Math.random() - 0.5) * 120, y: pt.y - 10 - Math.random() * 50 }, 9 + Math.random() * 8, cols[i % 5], i * 230);
+  }
+}
+function worldMood(cls, ms) {
+  var w = $('worldwrap');
+  if (!w || !w.classList) return;
+  w.classList.remove(cls); void (w.offsetWidth || 0); w.classList.add(cls);
+  setTimeout(function () { if (w.classList) w.classList.remove(cls); }, ms);
+}
+
+/* the event stream, played out on the water */
+function worldEvents(evts) {
+  if (!V || !evts || !evts.length) return;
+  var raidedAny = evts.some(function (e) { return e.e === 'raided'; });
+  evts.forEach(function (e) {
+    if (e.e === 'draw') fxBubble(dockOf(e.seat), '+' + e.n, '#9FE0D6', 120 * e.seat);
+    else if (e.e === 'tradeoffer') { fxRings(dockOf(e.from), SEATCOL[e.from % 4]); fxBubble(crownOf(e.from), 'Trade?', '#E8C57A'); }
+    else if (e.e === 'tradein') fxBubble(crownOf(e.seat), 'In', '#E8C57A');
+    else if (e.e === 'tradepass') fxBubble(crownOf(e.seat), 'Pass', '#B9C9BE');
+    else if (e.e === 'tradeout' && e.accept) {
+      fxBoat(dockOf(e.from), dockOf(e.by), SEATCOL[e.from % 4], false, 2600);
+      fxBoat(dockOf(e.by), dockOf(e.from), SEATCOL[e.by % 4], false, 2600);
+    }
+    else if (e.e === 'gift') fxBoat(dockOf(e.from), dockOf(e.to), SEATCOL[e.from % 4], false, 2400, 0.8);
+    else if (e.e === 'headline') {
+      if (e.id === 'tide') worldMood('tide', 3000);
+      if (e.id === 'season') {
+        worldMood('season', 2800);
+        for (var i = 0; i < 6; i++) {
+          fxNode('<g transform="translate(-20 ' + (WORLD.far * 0.3 + i * 9).toFixed(1) + ')"><g class="fxsail" style="--dx:420px;--dy:' + (i % 2 ? -14 : 10) + 'px;animation-duration:' + (2600 + i * 180) + 'ms">' +
+            '<path d="M-4 0q2 -3 4 0q2 -3 4 0" stroke="#F2EEE2" stroke-width="1.2"/></g></g>', 3800);
+        }
+      }
+      if (e.id === 'raiders' && !raidedAny) fxBoat({ x: 384, y: WORLD.far + 70 }, { x: -24, y: WORLD.far + 52 }, '', true, 4200, 1.3);
+    }
+    else if (e.e === 'raided') {
+      var d = dockOf(e.seat);
+      fxBoat({ x: 384, y: WORLD.far + 62 }, d, '', true, 2000, 1.3);
+      fxPuff(d, 16, '#E26A4B', 1950);
+      fxBubble(crownOf(e.seat), '−' + e.n, '#E26A4B', 1950);
+    }
+    else if (e.e === 'token') fxBubble(crownOf(e.seat), e.which === 'highway' ? 'Highway' : 'Watch', '#E8C57A', 200);
+    else if (e.e === 'win') fxFireworks(crownOf(e.seat));
+  });
+}
+
+/* tap a town for its story; tap the things that drift for a hello */
+function openPlayerSheet(seat) {
+  var p = V.players[seat];
+  if (!p) return;
+  var count = function (k) { return p.stacks.filter(function (st) { return st.top === k; }).length; };
+  var row = function (label, val) { return '<div class="opt" style="flex-direction:row;justify-content:space-between;cursor:default"><span class="ol">' + label + '</span><span class="ol">' + val + '</span></div>'; };
+  openSheet('<h3><span style="width:14px;height:14px;border-radius:50%;background:' + SEATCOL[seat % 4] + ';display:inline-block;border:1.5px solid #1C1A14"></span> ' +
+    esc(seat === MYSEAT ? 'Your town' : p.name) + '</h3>' +
+    '<div class="sub">' + p.vp + ' of ' + H.WIN_VP + ' points showing, ' + p.handN + (p.handN === 1 ? ' card' : ' cards') + ' in hand.</div>' +
+    row(art('shack', 20) + ' Shacks', count('shack')) + row(art('town', 20) + ' Towns', count('town')) +
+    row(art('resort', 20) + ' Resorts', count('resort')) +
+    row(art('track', 20) + ' Tracks', p.tracks + ' — swaps ' + ratioOf(p.tracks) + ' for 1') +
+    row(art('ranger', 20) + ' Rangers', p.rangers + ' — keeps ' + (H.HAND_LIMIT + p.rangers) + ' from Raiders') +
+    (V.highway === seat ? row('The Highway', '+2') : '') + (V.watch === seat ? row('The Watch', '+2') : ''));
+}
+function worldTap(e) {
+  var t = e && e.target;
+  if (!t || !t.closest || !V) return;
+  var toy = t.closest('[data-toy]');
+  if (toy) {
+    if (toy.dataset.toy === 'boat') { sfx('trade'); banner('Ahoy'); }
+    else if (toy.dataset.toy === 'buoy') { sfx('token'); fxRings({ x: 196, y: WORLD.far + (WORLD.near - WORLD.far) * 0.56 }, '#F6D77A'); }
+    else sfx('draw');
+    return;
+  }
+  var hit = t.closest('[data-seat]');
+  if (hit) { sfx('tap'); openPlayerSheet(+hit.dataset.seat); }
 }
 
 function renderAll() {
   if (!V) return;
-  var foes = $('foes');
-  foes.innerHTML = '';
-  V.players.forEach(function (p, s) {
-    if (s === MYSEAT) return;
-    var d = document.createElement('div');
-    d.className = 'foe' + (V.turn === s && !V.over ? ' turn' : '');
-    d.dataset.seat = s;
-    d.innerHTML = '<div class="nm">' + esc(p.name) + ' <span class="vpbadge">' + p.vp + '</span></div>' +
-      '<div class="row"><span>' + p.handN + ' cards</span>' +
-      '<span>' + art('track', 13) + ' ' + p.tracks + '</span>' +
-      '<span>' + art('ranger', 13) + ' ' + p.rangers + '</span>' +
-      (V.highway === s ? '<span class="tok">Highway</span>' : '') +
-      (V.watch === s ? '<span class="tok">Watch</span>' : '') + '</div>' +
-      coastScene(p, s);
-    foes.appendChild(d);
-  });
+  renderWorld();
 
   var me = V.players[MYSEAT];
   var myTurn = V.turn === MYSEAT && !V.over;
@@ -566,7 +906,6 @@ function renderAll() {
     '<span>' + art('ranger', 14) + ' ' + me.rangers + '</span>' +
     (V.highway === MYSEAT ? '<span class="tok">Highway</span>' : '') +
     (V.watch === MYSEAT ? '<span class="tok">Watch</span>' : '');
-  $('mystacks').innerHTML = '<span id="mycoast">' + coastScene(me, MYSEAT) + '</span>';
 
   var have = heldOf(MYHAND);
   var hand = $('hand');
@@ -592,27 +931,18 @@ function renderAll() {
     mk.appendChild(d);
   });
 
-  if (!$('resortart').innerHTML) $('resortart').innerHTML = art('resort');
-  $('resortpips').innerHTML = costPips(H.RESORT.cost, have);
-  $('resortcard').style.opacity = V.resorts > 0 ? 1 : 0.3;
-  $('resortcard').classList.toggle('canbuy',
-    myTurn && V.resorts > 0 && hasOpen('town') && !!payCheck(H.RESORT.cost, 'resort'));
-  $('goodsn').textContent = V.goodsN;
-  $('deckn').textContent = V.deckN;
-  $('eventsn').textContent = V.eventsN;
+  /* the Resort is always on offer: the sixth card, marked apart */
+  var rc = document.createElement('div');
+  var canR = myTurn && V.resorts > 0 && hasOpen('town') && !!payCheck(H.RESORT.cost, 'resort');
+  rc.className = 'mcard standing' + (canR ? ' canbuy' : '') + (V.resorts > 0 ? '' : ' gone');
+  rc.innerHTML = art('resort') + '<span class="mname">Resort</span>' +
+    '<span class="pips">' + costPips(H.RESORT.cost, have) + '</span>';
+  rc.onclick = function () { sfx('tap'); openBuildSheet('resort', 'resort'); };
+  mk.appendChild(rc);
+  $('counts').textContent = V.goodsN + ' goods, ' + V.deckN + ' builds and ' + V.eventsN + ' headlines left';
 
   $('tradebtn').classList.toggle('busy', !myTurn || V.tradeUsed || !!V.pendingTrade);
   $('endbtn').classList.toggle('busy', !myTurn);
-
-  /* the sun climbs with the leader; dusk gathers near seven */
-  var lead = 0;
-  V.players.forEach(function (pp) { lead = Math.max(lead, pp.vp); });
-  var prog = Math.min(1, lead / H.WIN_VP);
-  var sky = $('sky');
-  if (sky && sky.style && sky.style.setProperty) {
-    sky.style.setProperty('--sunp', prog.toFixed(3));
-    sky.style.setProperty('--duskp', (prog * prog * 0.85).toFixed(3));
-  }
 
   /* a healed or rejoined client reopens whichever trade sheet truth demands */
   var tr2 = V.pendingTrade;
@@ -706,7 +1036,9 @@ function openBuildSheet(kind, slot) {
     };
   });
 }
-$('resortcard').onclick = function () { sfx('tap'); openBuildSheet('resort', 'resort'); };
+window.addEventListener('resize', function () { if (V && sizeWorld()) { WORLD.sig = ''; renderAll(); } });
+$('world').addEventListener('click', worldTap);
+$('worldbg').addEventListener('click', worldTap);
 
 /* ---- trading ---- */
 var TRADE = null;
@@ -819,11 +1151,11 @@ function flashHeadline(id) {
   clearTimeout(HFLASHT);
   HFLASHT = setTimeout(function () { f.classList.remove('show'); }, 2100);
 }
-$('headlineflash').onclick = function () { this.classList.remove('show'); };
 
 function nameOf(s) { return s === MYSEAT ? 'You' : (V.players[s] ? V.players[s].name : '?'); }
 function sayEvents(evts) {
   if (!V) return;
+  worldEvents(evts);
   (evts || []).forEach(function (e) {
     if (e.e === 'headline') flashHeadline(e.id);
     else if (e.e === 'built') {
@@ -831,7 +1163,7 @@ function sayEvents(evts) {
         e.kind === 'town' ? 'a Town' : e.kind === 'shack' ? 'a Shack' :
         e.kind === 'ranger' ? 'a Ranger' : 'a Track';
       if (e.seat !== MYSEAT) banner(nameOf(e.seat) + ' raises ' + nm);
-      sfx('build');
+      if (e.kind === 'track' || e.kind === 'ranger') sfx('build');
     }
     else if (e.e === 'token') {
       banner(nameOf(e.seat) + (e.seat === MYSEAT ? ' take the ' : ' takes the ') +
@@ -904,6 +1236,7 @@ function startBot(n) {
   ROSTER_NAMES = [myName()].concat(['Sandy', 'Reef', 'Dune'].slice(0, n));
   ENGINE = H.newGame(ROSTER_NAMES, (Math.random() * 1e9) | 0);
   hide('menu'); hide('over'); show('game');
+  document.body.classList.add('playing');
   syncFromEngine([]);
   botClock();
 }
@@ -996,6 +1329,7 @@ function onWire(ev, m) {
     MYSEAT = m.roster.findIndex(function (r) { return r.key === TX.key; });
     if (MYSEAT < 0) { banner('The table filled without you'); return; }
     MODE = 'client';
+    document.body.classList.add('playing');
     hide('room'); show('game'); hide('over');
     closeSheet();
   } else if (ev === 'state') {
@@ -1081,6 +1415,7 @@ function hostDeal() {
   MODE = 'host';
   ENGINE = H.newGame(ROSTER_NAMES, (Math.random() * 1e9) | 0);
   TX.send('start', { roster: ROSTER });
+  document.body.classList.add('playing');
   hide('room'); show('game'); hide('over');
   closeSheet();
   hostPush([]);

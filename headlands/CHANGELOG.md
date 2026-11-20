@@ -1,5 +1,47 @@
 # Headlands — Changelog
 
+## v0.6.0 — 2026-11-20
+One world. The panels are gone: the top of the screen is a single bay,
+edge to edge, and everyone lives in it.
+- My town stands on the near shore; every rival's town stands on the far
+  shore across the same water, each in its own roof colour, named and
+  scored where it stands. Tap any town for its full story.
+- Things now happen *between* the towns. A completed trade sends a boat
+  each way across the bay. An offer rings out from the offerer's dock and
+  bids answer from the others. Raiders sail in from open sea to the towns
+  they hit (and cross empty-handed when nobody is over the limit). King
+  Tide lifts the whole bay at once. Good Season lights the sky and sends
+  a flock across. A Whip-Round gift rows over. Every harvest rises from
+  the dock it lands at.
+- Tokens are things you can see: the Highway holder's road turns gold
+  with a cart running it, the Watch holder gets a lighthouse sweeping the
+  bay. Steal one and it moves.
+- The day follows the score: the sun sinks as the leader closes on
+  seven, dusk and stars come in, and every window in every town lights.
+- New buildings pop up where they're built, with a puff of dust.
+- The bay has its own life: a fishing boat on its rounds, gulls, a
+  channel buoy that blinks (and answers a tap), a fish that leaps.
+- The scene takes the phone's own shape — a taller screen gets a deeper
+  bay rather than empty sky — and the Resort joins the market row as a
+  sixth standing card, which frees a whole row for the world.
+- Built in three layers so nothing resets: the backdrop is drawn once
+  per table, the land redraws only when a position changes, and effects
+  live on their own layer and clean up after themselves.
+
+Fixed along the way: on a 320-wide phone the market row overflowed the
+screen and End Turn was pushed off the bottom (cards were fixed-width
+since v0.2.0). Cards and cost pips now flex to the width.
+
+New gate `headlandsworld` (41 pins, real jsdom, real clicks) covers the
+scene, tokens, dusk, pop-ins, every water effect, taps, the
+never-rebuilt backdrop and hostile names. Six of its pins were
+mutation-checked; one ("windows light at dusk") was vacuous as first
+written — it matched the lighthouse lamp's colour — and was rewritten to
+count the windows themselves.
+
+Not verified in motion: everything was checked as still frames at
+three phone sizes and through DOM assertions, not watched animating.
+
 ## v0.5.0 — 2026-11-20
 The table comes to life.
 - Every player's position is now drawn as a living stretch of coast:
