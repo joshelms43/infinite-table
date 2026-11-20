@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- Settlers — Infinite Table. Version: 0.1.0
+<!-- Settlers — Infinite Table. Version: 0.2.0
      The island in real time. No turns: a shared roll lands on the clock and
      every matching hex pays everyone at once; between rolls the whole table
      builds and trades whenever it likes. First to 10.
@@ -168,6 +168,10 @@ input{font-family:inherit;font-size:16px;color:var(--text);background:rgba(255,2
 .seg{display:flex;gap:6px;margin-bottom:14px}
 .seg button{flex:1;padding:12px 0}
 .seg button.sel{background:var(--gold);color:#1B1606;border-color:transparent}
+.customrow{display:flex;align-items:center;gap:10px;margin:-4px 0 14px}
+.customrow input{flex:1;font-size:20px;font-weight:800;padding:11px}
+.customrow input.bad{border-color:var(--coral)}
+.customrow span{font-size:16px;font-weight:800;color:var(--dim)}
 .tbar{height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden;margin:-4px 0 14px}
 .tbar i{display:block;height:100%;background:var(--coral);width:100%;transform-origin:left}
 
@@ -264,12 +268,12 @@ table.coll td:first-child{text-align:left}
 <div id="sheetwrap"><div id="sheet"></div></div>
 <div id="victory" class="hidden"><div id="vcard"></div></div>
 
-<script src="../shared/config.js?v=0.1.0"></script>
-<script src="../shared/tablekit.js?v=0.1.0"></script>
-<script src="../shared/settlers-rules.js?v=0.1.0"></script>
+<script src="../shared/config.js?v=0.2.0"></script>
+<script src="../shared/tablekit.js?v=0.2.0"></script>
+<script src="../shared/settlers-rules.js?v=0.2.0"></script>
 <script>
 'use strict';
-var VERSION = '0.1.0';
+var VERSION = '0.2.0';
 TableKit.watchErrors({ game: 'settlers', version: VERSION, onError: function (m) { toast(m, 'warn'); } });
 
 var S = Settlers, TOPO = S.TOPO;
@@ -354,7 +358,7 @@ function sfx(kind) {
 
 /* ================= the game the page runs ================= */
 var G = null, MYSEAT = 0, NAMES = [], KINDS = [], MODE = 'off';
-var SETTINGS = { bots: 2, interval: 60000 };
+var SETTINGS = { bots: 2, interval: 60000, custom: 45 };
 var GAMEMS = 0, LASTPERF = 0, RUNNING = false;
 var BOTNEXT = [];
 var OVERAT = 0, VICTORY_SHOWN = false;
@@ -1084,16 +1088,44 @@ function openVictims(hex, vs) {
 /* ---- practice setup ---- */
 $('practicebtn').onclick = function () {
   sfx('tap');
+  /* presets, or Custom: any whole number of seconds the engine accepts */
+  var custom = S.INTERVALS.indexOf(SETTINGS.interval) < 0;
+  var customOk = function () { return S.validInterval(Math.round(SETTINGS.custom) * 1000) && SETTINGS.custom === Math.round(SETTINGS.custom); };
   var draw = function () {
     var html = '<h3>Practice</h3><div class="lbl">Bots</div><div class="seg">' + [1, 2, 3].map(function (n) {
       return '<button class="sb' + (SETTINGS.bots === n ? ' sel' : '') + '" data-n="' + n + '">' + n + '</button>';
     }).join('') + '</div><div class="lbl">Roll Every</div><div class="seg">' + S.INTERVALS.map(function (ms) {
-      return '<button class="si' + (SETTINGS.interval === ms ? ' sel' : '') + '" data-ms="' + ms + '">' + (ms / 1000) + 's</button>';
-    }).join('') + '</div><div class="row2"><button class="primary" id="gobtn">Start</button></div>';
+      return '<button class="si' + (!custom && SETTINGS.interval === ms ? ' sel' : '') + '" data-ms="' + ms + '">' + (ms / 1000) + 's</button>';
+    }).join('') + '<button class="si' + (custom ? ' sel' : '') + '" data-ms="custom">Custom</button></div>' +
+      (custom ? '<div class="customrow"><input id="customin" type="number" inputmode="numeric" min="' + (S.MIN_INTERVAL / 1000) +
+        '" max="' + (S.MAX_INTERVAL / 1000) + '" step="1" value="' + SETTINGS.custom + '" placeholder="' + (S.MIN_INTERVAL / 1000) + '–' + (S.MAX_INTERVAL / 1000) +
+        '"' + (customOk() ? '' : ' class="bad"') + '><span>Seconds</span></div>' : '') +
+      '<div class="row2"><button class="primary' + (custom && !customOk() ? ' off' : '') + '" id="gobtn">Start</button></div>';
     openSheet('practice', html);
     Array.prototype.forEach.call(document.querySelectorAll('.sb'), function (b) { b.onclick = function () { sfx('tap'); SETTINGS.bots = +b.dataset.n; draw(); }; });
-    Array.prototype.forEach.call(document.querySelectorAll('.si'), function (b) { b.onclick = function () { sfx('tap'); SETTINGS.interval = +b.dataset.ms; draw(); }; });
-    $('gobtn').onclick = function () { closeSheet(); try { localStorage.setItem('it_settlers', JSON.stringify(SETTINGS)); } catch (e) {} startBot(SETTINGS.bots, SETTINGS.interval); };
+    Array.prototype.forEach.call(document.querySelectorAll('.si'), function (b) {
+      b.onclick = function () {
+        sfx('tap');
+        if (b.dataset.ms === 'custom') { custom = true; draw(); var ci = $('customin'); if (ci && ci.focus) { ci.focus(); if (ci.select) ci.select(); } return; }
+        custom = false; SETTINGS.interval = +b.dataset.ms; draw();
+      };
+    });
+    var cin = $('customin');
+    if (cin) cin.oninput = function () {
+      SETTINGS.custom = cin.value === '' ? NaN : Number(cin.value);
+      var ok = customOk();
+      cin.classList.toggle('bad', !ok);
+      $('gobtn').classList.toggle('off', !ok);
+    };
+    $('gobtn').onclick = function () {
+      if (custom) {
+        if (!customOk()) { refused('illegal'); return; }
+        SETTINGS.interval = SETTINGS.custom * 1000;
+      }
+      closeSheet();
+      try { localStorage.setItem('it_settlers', JSON.stringify(SETTINGS)); } catch (e) {}
+      startBot(SETTINGS.bots, SETTINGS.interval);
+    };
   };
   draw();
 };
@@ -1796,7 +1828,8 @@ function renderLastRoll() {
   try {
     var st = JSON.parse(localStorage.getItem('it_settlers') || 'null');
     if (st && [1, 2, 3].indexOf(st.bots) >= 0) SETTINGS.bots = st.bots;
-    if (st && S.INTERVALS.indexOf(st.interval) >= 0) SETTINGS.interval = st.interval;
+    if (st && S.validInterval(st.interval)) SETTINGS.interval = st.interval;
+    if (st && S.validInterval(st.custom * 1000)) SETTINGS.custom = st.custom;
   } catch (e) {}
   requestAnimationFrame(frame);
 })();

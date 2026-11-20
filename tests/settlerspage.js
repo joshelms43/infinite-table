@@ -192,6 +192,32 @@ T('Play Again deals a fresh island', (() => {
   click($('vagain'));
   return ev('G.phase') === 'setup' && ev('G.seed') !== seed && $('victory').classList.contains('hidden');
 })());
+/* a custom roll clock, through the practice sheet */
+{
+  click($('practicebtn'));
+  click(w.document.querySelector('.si[data-ms="custom"]'));
+  const cin = $('customin');
+  const typeIn = (v) => { cin.value = v; cin.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  typeIn('3');
+  const tooFast = $('gobtn').classList.contains('off') && cin.classList.contains('bad');
+  typeIn('400');
+  const tooSlow = $('gobtn').classList.contains('off');
+  typeIn('12.5');
+  const fraction = $('gobtn').classList.contains('off');
+  typeIn('45');
+  const fine = !$('gobtn').classList.contains('off') && !cin.classList.contains('bad');
+  T('Custom refuses too fast, too slow and part-seconds', tooFast && tooSlow && fraction);
+  click($('gobtn'));
+  T('Custom 45 seconds deals a game on a 45s clock', fine && ev('G.interval') === 45000 && ev('G.phase') === 'setup');
+  const saved = JSON.parse(w.localStorage.getItem('it_settlers') || '{}');
+  T('the custom clock is remembered', saved.interval === 45000 && saved.custom === 45);
+  click($('practicebtn'));
+  T('and the sheet reopens on Custom with 45 in the box',
+    w.document.querySelector('.si.sel').dataset.ms === 'custom' && $('customin').value === '45');
+  click(w.document.querySelector('.si[data-ms="30000"]'));
+  T('a preset still clears Custom', !$('customin') && w.document.querySelector('.si.sel').dataset.ms === '30000');
+  w.closeSheet();
+}
 T('no page errors through a whole game', errors.length === 0, errors.slice(0, 3).join(' | '));
 T('the error ledger stayed empty', (w.localStorage.getItem('it_errors') || '[]') === '[]', w.localStorage.getItem('it_errors'));
 

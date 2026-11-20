@@ -1,5 +1,20 @@
 # Settlers — Changelog
 
+## v0.2.0 — 2026-11-20
+A custom roll clock.
+- Practice gets a fourth option beside 20s / 30s / 60s: Custom, with a
+  seconds box. Any whole number of seconds from 5 to 300 works; Start greys
+  out (and the box turns red) for anything faster, slower or fractional.
+  The choice is remembered, and the sheet reopens on it.
+- Root cause of the limit: the engine accepted only the three presets and
+  quietly fell back to 60s for anything else. It now validates a range
+  (`validInterval`: whole seconds, 5s–5min) instead of a list, still falling
+  back to 60s for junk — pinned and mutation-proven. The ring, the bots and
+  the robber's clock restart all read the game's interval, so nothing else
+  needed to change.
+- Gates: two new engine pins (accepted range and fallback; a 45s game rolls
+  on its own rhythm) and five page pins for the Custom flow.
+
 ## v0.1.0 — 2026-11-20
 The island in real time. No turns: a shared roll lands on the clock (20s,
 30s or 60s) and every matching hex pays everyone at once. Between rolls the

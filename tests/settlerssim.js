@@ -154,8 +154,23 @@ pin('first to 10, discards above 9, robber and discard timers 15s', M =>
   M.WIN_VP === 10 && M.DISCARD_OVER === 9 && M.DISCARD_MS === 15000 && M.ROBBER_MS === 15000);
 pin('roll intervals 20s / 30s / 60s, default 60s', M =>
   M.INTERVALS.join(',') === '20000,30000,60000' && M.DEFAULT_INTERVAL === 60000 &&
-  M.newGame(['A', 'B'], 1).interval === 60000 && M.newGame(['A', 'B'], 1, { interval: 20000 }).interval === 20000 &&
-  M.newGame(['A', 'B'], 1, { interval: 12345 }).interval === 60000);
+  M.newGame(['A', 'B'], 1).interval === 60000 && M.newGame(['A', 'B'], 1, { interval: 20000 }).interval === 20000);
+pin('a custom clock: any whole second from 5s to 5 min, anything else falls back to 60s', M => {
+  const iv = ms => M.newGame(['A', 'B'], 1, { interval: ms }).interval;
+  return iv(5000) === 5000 && iv(45000) === 45000 && iv(300000) === 300000 &&
+    iv(4000) === 60000 && iv(301000) === 60000 && iv(12345) === 60000 &&
+    iv('45000') === 60000 && iv(NaN) === 60000 && iv(-20000) === 60000 &&
+    M.MIN_INTERVAL === 5000 && M.MAX_INTERVAL === 300000;
+});
+pin('a custom clock rolls on its own rhythm', M => {
+  const g = blank(M, 2);
+  g.interval = 45000; g.nextRollAt = g.now + 45000;
+  const t0 = g.nextRollAt;
+  M.act(g, -1, { t: 'clock', now: t0 - 1 }, t0 - 1);
+  const none = g.rollN === 0;
+  M.act(g, -1, { t: 'clock', now: t0 }, t0);
+  return none && g.rollN === 1 && (g.phase !== 'play' || g.nextRollAt === t0 + 45000);
+});
 
 /* ---- the draft ---- */
 pin('the draft snakes: every seat, then back again', M => {
@@ -887,6 +902,9 @@ const MUTATIONS = [
     "else if (p.type === res) best = 2;", "else if (p.type === res) best = Math.min(best, 3);"],
   ['piece limits: a 16th road, a 6th settlement, a 5th city are refused',
     "if (p.left.settle <= 0) return 'limit';", ''],
+  ['a custom clock: any whole second from 5s to 5 min, anything else falls back to 60s',
+    'return typeof ms === \'number\' && ms % 1000 === 0 && ms >= MIN_INTERVAL && ms <= MAX_INTERVAL;',
+    'return typeof ms === \'number\';'],
   ['real time starts after the draft: the first roll comes on the clock',
     'g.nextRollAt = g.now + FIRST_ROLL_MS;', 'g.nextRollAt = g.now;'],
   ['building costs exactly its price and a short hand changes nothing',

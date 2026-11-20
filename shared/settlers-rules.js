@@ -53,7 +53,8 @@
   var DISCARD_OVER = 9;          /* hands above this lose half on a 7 */
   var LONGEST_MIN = 5;
   var ARMY_MIN = 3;
-  var INTERVALS = [20000, 30000, 60000];
+  var INTERVALS = [20000, 30000, 60000];   /* the presets */
+  var MIN_INTERVAL = 5000, MAX_INTERVAL = 300000;   /* a custom clock: whole seconds, 5s to 5 min */
   var DEFAULT_INTERVAL = 60000;
   var SETUP_MS = 30000;          /* per placement in the draft */
   var FIRST_ROLL_MS = 4000;      /* from the end of the draft to the first roll */
@@ -133,6 +134,9 @@
     }
     return arr;
   }
+  function validInterval(ms) {
+    return typeof ms === 'number' && ms % 1000 === 0 && ms >= MIN_INTERVAL && ms <= MAX_INTERVAL;
+  }
   function pips(n) { return n ? 6 - Math.abs(7 - n) : 0; }
   function emptyHand() { return { timber: 0, clay: 0, wool: 0, grain: 0, ore: 0 }; }
   function handSize(h) { return h.timber + h.clay + h.wool + h.grain + h.ore; }
@@ -178,7 +182,7 @@
       rulebook: RULEBOOK,
       seed: seed == null ? 1 : seed,
       rs: (seed == null ? 1 : seed) | 0,
-      interval: INTERVALS.indexOf(opts.interval) >= 0 ? opts.interval : DEFAULT_INTERVAL,
+      interval: validInterval(opts.interval) ? opts.interval : DEFAULT_INTERVAL,
       now: opts.now || 0,
       phase: 'setup',
       hexes: null, ports: null, robber: 0,
@@ -1263,7 +1267,7 @@
   var api = {
     RULEBOOK: RULEBOOK, RES: RES, RES_META: RES_META, COST: COST, PIECES: PIECES,
     DEV_COUNT: DEV_COUNT, DEV_META: DEV_META, WIN_VP: WIN_VP, DISCARD_OVER: DISCARD_OVER,
-    INTERVALS: INTERVALS, DEFAULT_INTERVAL: DEFAULT_INTERVAL, SETUP_MS: SETUP_MS,
+    INTERVALS: INTERVALS, DEFAULT_INTERVAL: DEFAULT_INTERVAL, MIN_INTERVAL: MIN_INTERVAL, MAX_INTERVAL: MAX_INTERVAL, validInterval: validInterval, SETUP_MS: SETUP_MS,
     FIRST_ROLL_MS: FIRST_ROLL_MS, DISCARD_MS: DISCARD_MS, ROBBER_MS: ROBBER_MS, OFFER_MS: OFFER_MS,
     LONGEST_MIN: LONGEST_MIN, ARMY_MIN: ARMY_MIN, TERRAIN_COUNT: TERRAIN_COUNT, TOKENS: TOKENS,
     TOPO: TOPO, PERSONAS: PERSONAS,
